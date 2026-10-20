@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         MacGlyphs.install()
         root = AppRoot(workspace: workspace)
         window = LaminaWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 1011),
+            contentRect: NSRect(x: 0, y: 0, width: WorkspaceMetrics.windowWidth, height: WorkspaceMetrics.windowHeight),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -33,8 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.delegate = self
         window.initialFirstResponder = root.editor.canvas.drawing
         window.autorecalculatesKeyViewLoop = false
-        window.minSize = NSSize(width: 1100, height: 720)
+        window.minSize = NSSize(width: 960, height: 700)
         window.setFrameAutosaveName("LaminaMain")
+        window.setContentSize(NSSize(width: WorkspaceMetrics.windowWidth, height: WorkspaceMetrics.windowHeight))
         window.center()
         // Only the title-bar strip calls performWindowDrag. A pen (or any tool)
         // drag on the canvas must not move the window.
@@ -162,7 +163,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .replacingOccurrences(of: " ", with: "_")
             .replacingOccurrences(of: "\n", with: "_")
         let canvas = root.editor.canvas.drawing
-        let mid = NSPoint(x: canvas.bounds.midX, y: canvas.bounds.midY)
+        let clear = Self.canvasPoints(in: canvas.bounds)
         let line = [
             "rev=\(keyRevision)",
             "phase=\(phase)",
@@ -181,17 +182,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "new=\(Self.cg(root.home, root.home.newButtonCenter()))",
             "create=\(Self.cg(root.dialog, root.dialog.createButtonCenter()))",
             "field=\(Self.cg(root.editor.dock, root.editor.dock.nudgeFieldCenter()))",
-            "down=\(Self.cg(canvas, NSPoint(x: mid.x + 260, y: mid.y - 400)))",
-            "pen=\(Self.cg(canvas, NSPoint(x: mid.x + 300, y: mid.y - 360)))",
-            "drag=\(Self.cg(canvas, NSPoint(x: mid.x + 400, y: mid.y - 320)))",
-            "penA=\(Self.cg(canvas, NSPoint(x: mid.x + 180, y: mid.y - 420)))",
-            "penB=\(Self.cg(canvas, NSPoint(x: mid.x + 220, y: mid.y - 340)))",
-            "penC=\(Self.cg(canvas, NSPoint(x: mid.x + 160, y: mid.y - 260)))"
+            "down=\(Self.cg(canvas, clear.down))",
+            "pen=\(Self.cg(canvas, clear.pen))",
+            "drag=\(Self.cg(canvas, clear.drag))",
+            "penA=\(Self.cg(canvas, clear.penA))",
+            "penB=\(Self.cg(canvas, clear.penB))",
+            "penC=\(Self.cg(canvas, clear.penC))"
         ].joined(separator: " ")
         let data = Data((line + "\n").utf8)
         try? keyLog.seekToEnd()
         try? keyLog.write(contentsOf: data)
         try? keyLog.synchronize()
+    }
+
+    /// Clicks stay in the pasteboard left of the align column and below the appearance panel,
+    /// and the pen anchors stay outside the rectangle dragged from `down` to `drag`.
+    private static func canvasPoints(in bounds: NSRect) -> (down: NSPoint, drag: NSPoint, pen: NSPoint, penA: NSPoint, penB: NSPoint, penC: NSPoint) {
+        let yMax = max(120, bounds.height - 280)
+        let dragX = min(220, max(80, bounds.width - 360))
+        return (
+            down: NSPoint(x: 48, y: 80),
+            drag: NSPoint(x: dragX, y: min(240, yMax)),
+            pen: NSPoint(x: 28, y: 24),
+            penA: NSPoint(x: 22, y: 30),
+            penB: NSPoint(x: min(280, max(dragX + 36, 120)), y: 46),
+            penC: NSPoint(x: 22, y: min(360, max(100, yMax - 24)))
+        )
     }
 
     private static func currentInputSourceID() -> String {
@@ -225,6 +241,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func captureShots(in directory: String) {
         let dir = URL(fileURLWithPath: directory, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        window.setContentSize(NSSize(width: WorkspaceMetrics.windowWidth, height: WorkspaceMetrics.windowHeight))
+        root.layoutSubtreeIfNeeded()
         root.showHome()
         window.displayIfNeeded()
         root.layoutSubtreeIfNeeded()
@@ -236,10 +254,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         writePNG(root, to: dir.appendingPathComponent("new-document.png"))
         root.create(NewDocSpec(name: "未标题-1", width: 210, height: 297, unit: .mm, colorMode: .cmyk, artboards: 1, bleed: 0, raster: 72, portrait: true))
         root.layoutSubtreeIfNeeded()
+        let model = workspace.active.model
+        parkArtboard(model)
         root.editor.sync()
         root.displayIfNeeded()
         writePNG(root, to: dir.appendingPathComponent("workspace.png"))
-        let model = workspace.active.model
+        centerArtboard(model)
         let board = model.document.currentArtboard.rect
         let start = Vec2(board.midX - 90, board.midY - 60)
         let end = Vec2(board.midX + 70, board.midY + 50)
@@ -277,8 +297,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         exit(0)
     }
 
+    /// The panel screenshot is pasteboard gray. Park the white page outside the view for that capture.
+    private func parkArtboard(_ model: EditorModel) {
+        let board = model.document.currentArtboard.rect
+        model.pan = Vec2(board.maxX + 800, board.maxY + 800)
+    }
+
+    private func centerArtboard(_ model: EditorModel) {
+        let board = model.document.currentArtboard.rect
+        let zoom = max(model.zoom, 0.02)
+        model.pan = Vec2(
+            board.midX - model.viewportSize.x / zoom / 2,
+            board.midY - model.viewportSize.y / zoom / 2
+        )
+    }
+
     private func writePNG(_ view: NSView, to url: URL) {
-        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+        let scale: CGFloat = 2
+        let pixelsWide = max(1, Int((view.bounds.width * scale).rounded()))
+        let pixelsHigh = max(1, Int((view.bounds.height * scale).rounded()))
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: pixelsWide,
+            pixelsHigh: pixelsHigh,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return }
+        rep.size = view.bounds.size
         view.cacheDisplay(in: view.bounds, to: rep)
         guard let data = rep.representation(using: .png, properties: [:]) else { return }
         try? data.write(to: url)

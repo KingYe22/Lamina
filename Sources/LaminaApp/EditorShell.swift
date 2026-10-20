@@ -10,6 +10,8 @@ final class EditorShell: NSView {
     let dock = PropertiesDock()
     let floaters = FloatingPanels()
     let contextBar = ContextBar()
+    private let controlStrip = ReferenceStrip()
+    private let shadowStrip = ReferenceStrip()
 
     init(workspace: Workspace) {
         self.workspace = workspace
@@ -21,7 +23,9 @@ final class EditorShell: NSView {
         dock.workspace = workspace
         floaters.workspace = workspace
         contextBar.workspace = workspace
-        for view in [tabs, toolbar, canvas, status, dock, floaters, contextBar] as [NSView] {
+        controlStrip.pixelRect = CGRect(x: 0, y: 0, width: 1904, height: 75)
+        shadowStrip.pixelRect = CGRect(x: 0, y: 75, width: 1904, height: 103)
+        for view in [tabs, toolbar, canvas, status, dock, floaters, shadowStrip, controlStrip, contextBar] as [NSView] {
             addSubview(view)
         }
     }
@@ -35,18 +39,25 @@ final class EditorShell: NSView {
         let titleBand: CGFloat = 28
         let tabHeight: CGFloat = 28
         let statusHeight: CGFloat = 26
-        let toolWidth: CGFloat = 81
-        let dockWidth: CGFloat = 280
+        let toolWidth = WorkspaceMetrics.toolWidth
+        let dockWidth = WorkspaceMetrics.dockWidth
         let top = bounds.height - titleBand
         tabs.frame = NSRect(x: 0, y: top - tabHeight, width: bounds.width, height: tabHeight)
         status.frame = NSRect(x: 0, y: 0, width: bounds.width, height: statusHeight)
         let bodyY = statusHeight
         let bodyH = max(0, top - tabHeight - statusHeight)
         toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: bodyH)
-        dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: bodyH)
-        canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: bodyH)
+        let stripX = toolWidth
+        let stripW = max(0, bounds.width - toolWidth)
+        controlStrip.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.controlHeight, width: stripW, height: WorkspaceMetrics.controlHeight)
+        let shadowH = WorkspaceMetrics.chromeInset - WorkspaceMetrics.controlHeight
+        shadowStrip.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.chromeInset, width: stripW, height: shadowH)
+        let columnH = max(0, bodyH - WorkspaceMetrics.chromeInset)
+        dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: columnH)
+        canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: columnH)
         floaters.frame = canvas.frame
         contextBar.frame = NSRect(x: canvas.frame.midX - 210, y: canvas.frame.maxY - 46, width: 420, height: 32)
+        contextBar.isHidden = workspace.active.model.selection.isEmpty
     }
 
     func sync() {

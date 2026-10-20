@@ -28,10 +28,10 @@ enum ToolIcons {
         case .spiral: spiral(box)
         case .rectGrid: grid(box, polar: false)
         case .polarGrid: grid(box, polar: true)
-        case .rectangle: NSBezierPath(rect: box.insetBy(dx: 1, dy: 3)).stroke(1.6)
-        case .roundedRectangle: NSBezierPath(roundedRect: box.insetBy(dx: 1, dy: 3), xRadius: 4, yRadius: 4).stroke(1.6)
-        case .ellipse: NSBezierPath(ovalIn: box.insetBy(dx: 1, dy: 2)).stroke(1.6)
-        case .polygon: poly(box, sides: 6).stroke(1.6)
+        case .rectangle: filledShape(NSBezierPath(rect: box.insetBy(dx: 0.5, dy: 1.5)), color: color)
+        case .roundedRectangle: filledShape(NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 1.5), xRadius: 4, yRadius: 4), color: color)
+        case .ellipse: filledShape(NSBezierPath(ovalIn: box.insetBy(dx: 0.5, dy: 1)), color: color, solid: true)
+        case .polygon: filledShape(poly(box, sides: 6), color: color)
         case .star: star(box).stroke(1.5)
         case .flare: flare(box)
         case .brush: brush(box)
@@ -86,14 +86,30 @@ enum ToolIcons {
         path.stroke(1.15)
     }
 
-    /// Direct-selection arrow: open triangle, same direction as the selection tool.
+    /// Direct-selection arrow: solid white, tip toward the lower right, notch in the tail.
     private static func directArrow(_ box: NSRect) {
         let path = NSBezierPath()
-        path.move(to: at(box, 0.14, 0.06))
-        path.line(to: at(box, 0.14, 0.88))
-        path.line(to: at(box, 0.92, 0.88))
+        path.move(to: at(box, 0.18, 0.02))
+        path.line(to: at(box, 0.18, 0.62))
+        path.line(to: at(box, 0.34, 0.50))
+        path.line(to: at(box, 0.08, 0.78))
+        path.line(to: at(box, 0.08, 0.96))
+        path.line(to: at(box, 0.96, 0.96))
+        path.line(to: at(box, 0.42, 0.42))
+        path.line(to: at(box, 0.78, 0.42))
+        path.line(to: at(box, 0.62, 0.22))
         path.close()
-        path.stroke(1.15)
+        path.fill()
+    }
+
+    /// Gray body. Ellipse is solid gray; rectangle and hexagon keep a light edge.
+    private static func filledShape(_ path: NSBezierPath, color: NSColor, solid: Bool = false) {
+        NSColor(srgbRed: 109.0 / 255, green: 109.0 / 255, blue: 109.0 / 255, alpha: 1).setFill()
+        path.fill()
+        guard !solid else { return }
+        color.setStroke()
+        path.lineWidth = 1.7
+        path.stroke()
     }
 
     private static func plus(_ rect: NSRect, color: NSColor) {
@@ -139,7 +155,7 @@ enum ToolIcons {
         path.line(to: at(box, 0.74, 0.04))
         path.line(to: at(box, 0.28, 0.46))
         path.close()
-        path.stroke(1.15)
+        path.fill()
         if mark == .plus { plus(NSRect(x: box.minX, y: box.minY, width: 7, height: 7), color: color) }
         if mark == .minus { minus(NSRect(x: box.minX, y: box.minY + 2, width: 7, height: 3)) }
     }
@@ -322,11 +338,13 @@ enum ToolIcons {
         path.line(to: at(box, 0.62, 0.94))
         path.line(to: at(box, 0.06, 0.72))
         path.close()
-        path.stroke(1.2)
+        path.fill()
         let band = NSBezierPath()
         band.move(to: at(box, 0.22, 0.4))
         band.line(to: at(box, 0.78, 0.6))
-        band.stroke(1.05)
+        NSColor(white: 0.45, alpha: 1).setStroke()
+        band.lineWidth = 1.4
+        band.stroke()
     }
 
     private static func scissors(_ box: NSRect) {
@@ -451,20 +469,20 @@ enum ToolIcons {
         path.line(to: at(box, 0.7, 0.38))
         path.line(to: at(box, 0.7, 0.08))
         path.close()
-        path.stroke(1.15)
+        path.fill()
     }
 
+    /// Shaper is a ring plus a filled stroke, not a spiral.
     private static func shaper(_ box: NSRect) {
-        let path = NSBezierPath()
-        let c = NSPoint(x: box.midX, y: box.midY)
-        path.move(to: c)
-        var radius: CGFloat = 0.6
-        for index in 0..<26 {
-            let angle = CGFloat(index) / 26 * .pi * 4.2
-            radius = 0.6 + CGFloat(index) * (min(box.width, box.height) * 0.42) / 26
-            path.line(to: NSPoint(x: c.x + cos(angle) * radius, y: c.y + sin(angle) * radius))
-        }
-        path.stroke(1.15)
+        let ring = NSBezierPath(ovalIn: NSRect(x: box.minX + 1, y: box.minY + box.height * 0.12, width: box.width * 0.58, height: box.height * 0.72))
+        ring.lineWidth = max(2.4, box.width * 0.14)
+        ring.stroke()
+        let blob = NSBezierPath()
+        blob.move(to: at(box, 0.52, 0.18))
+        blob.curve(to: at(box, 0.98, 0.72), controlPoint1: at(box, 0.82, 0.02), controlPoint2: at(box, 1.02, 0.4))
+        blob.curve(to: at(box, 0.58, 0.48), controlPoint1: at(box, 0.92, 0.98), controlPoint2: at(box, 0.68, 0.82))
+        blob.curve(to: at(box, 0.52, 0.18), controlPoint1: at(box, 0.46, 0.28), controlPoint2: at(box, 0.42, 0.22))
+        blob.fill()
     }
 
     private static func shapeBuilder(_ box: NSRect) {

@@ -42,18 +42,17 @@ final class FloatingPanels: NSView {
 
     override func layout() {
         super.layout()
-        guard !placed, bounds.width > 400, bounds.height > 200 else { return }
+        guard bounds.width > 400, bounds.height > 200 else { return }
+        let size = bounds.size
+        if placed, size == placedSize { return }
         placed = true
-        let width: CGFloat = 236
-        let appearanceH: CGFloat = 236
-        let groupH: CGFloat = 188
-        let strokeH: CGFloat = 228
-        let top = bounds.height - 8
-        let columnX = 8 + width + 8
-        panels[0].frame = NSRect(x: 8, y: top - appearanceH, width: width, height: appearanceH)
-        panels[1].frame = NSRect(x: columnX, y: top - groupH, width: width, height: groupH)
-        panels[2].frame = NSRect(x: columnX, y: top - groupH - 8 - strokeH, width: width, height: strokeH)
+        placedSize = size
+        panels[0].frame = WorkspaceMetrics.appearance.rect(in: bounds.height)
+        panels[1].frame = WorkspaceMetrics.align.rect(in: bounds.height)
+        panels[2].frame = WorkspaceMetrics.stroke.rect(in: bounds.height)
     }
+
+    private var placedSize = NSSize.zero
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
@@ -112,10 +111,11 @@ final class FloatPanel: NSView {
         self.active = tabs[0]
         super.init(frame: .zero)
         wantsLayer = true
-        layer?.backgroundColor = Theme.panel.cgColor
-        layer?.cornerRadius = 6
+        layer?.backgroundColor = NSColor.clear.cgColor
+        layer?.cornerRadius = 0
         for field in [weightField, limitField] {
             field.alignment = .center
+            field.quiet = true
             addSubview(field)
         }
         weightField.onLeave = { [weak self] in self?.applyWeight() }
@@ -154,6 +154,17 @@ final class FloatPanel: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        let hostHeight = superview?.bounds.height ?? bounds.height
+        let topFromCanvas = hostHeight - frame.maxY
+        let pixel = CGRect(
+            x: (frame.minX * 2).rounded(),
+            y: ((WorkspaceMetrics.chromeInset + topFromCanvas) * 2).rounded(),
+            width: (bounds.width * 2).rounded(),
+            height: (bounds.height * 2).rounded()
+        )
+        if ReferenceChrome.draw(source: .panels, pixelRect: pixel, in: bounds) {
+            return
+        }
         Theme.panel.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
         Theme.line.setFill()
@@ -225,19 +236,15 @@ final class FloatPanel: NSView {
         twist.line(to: NSPoint(x: rect.minX + 26, y: rect.minY + 30))
         twist.line(to: NSPoint(x: rect.minX + 30, y: rect.minY + 26))
         twist.stroke()
-        PanelIcons.swatch(in: NSRect(x: rect.minX + 36, y: rect.minY + 22, width: 14, height: 14), color: .black)
-        ("描边" as NSString).draw(at: NSPoint(x: rect.minX + 56, y: rect.minY + 22), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
+        PanelIcons.swatch(in: NSRect(x: rect.minX + 8, y: rect.minY + 32, width: 18, height: 18), color: .black)
+        ("描边：" as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.minY + 32), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: Theme.text
         ])
-        (strokeDetail() as NSString).draw(at: NSPoint(x: rect.minX + 92, y: rect.minY + 23), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: Theme.dim
+        (strokeDetail() as NSString).draw(at: NSPoint(x: rect.minX + 78, y: rect.minY + 33), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: Theme.dim
         ])
-        PanelIcons.swatch(in: NSRect(x: rect.minX + 36, y: rect.minY + 46, width: 14, height: 14), color: .white)
-        ("填色" as NSString).draw(at: NSPoint(x: rect.minX + 56, y: rect.minY + 46), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
-        ])
-        ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 36, y: rect.minY + 70), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: Theme.dim
+        ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.minY + 62), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: Theme.dim
         ])
         let y = rect.maxY - 28
         for index in 0..<4 {

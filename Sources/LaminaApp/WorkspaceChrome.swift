@@ -328,6 +328,7 @@ final class PropertiesDock: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        nudgeField.quiet = true
         addSubview(nudgeField)
         nudgeField.onLeave = { [weak self] in self?.applyNudge() }
     }
@@ -394,6 +395,10 @@ final class PropertiesDock: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        let pixel = CGRect(x: 1280, y: 178, width: 624, height: max(1, (bounds.height * 2).rounded()))
+        if ReferenceChrome.draw(source: .panels, pixelRect: pixel, in: bounds) {
+            return
+        }
         if rulerRects.isEmpty { placeControls() }
         Theme.panel.setFill()
         bounds.fill()
@@ -1007,7 +1012,8 @@ final class NewDocSheet: NSView {
     var onClose: (() -> Void)?
 
     static let tabHeight: CGFloat = 44
-    static let detailWidth: CGFloat = 320
+    static let detailWidth: CGFloat = 308
+    private let referenceOverlay = DetailReferenceOverlay()
     static let cardSize = NSSize(width: 196, height: 184)
     static let cardGap: CGFloat = 16
     static let cardMargin: CGFloat = 24
@@ -1141,6 +1147,7 @@ final class NewDocSheet: NSView {
         createButton.action = #selector(pressCreate)
         addSubview(closeButton)
         addSubview(createButton)
+        addSubview(referenceOverlay)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -1333,6 +1340,8 @@ final class NewDocSheet: NSView {
         }
 
         moreSettingsRect = NSRect(x: x, y: max(56, top - 16), width: width, height: 16)
+        referenceOverlay.frame = NSRect(x: bounds.width - Self.detailWidth, y: 0, width: Self.detailWidth, height: bounds.height - Self.tabHeight)
+        addSubview(referenceOverlay)
         let buttonWidth: CGFloat = 76
         createButton.frame = NSRect(x: bounds.width - 20 - buttonWidth, y: 16, width: buttonWidth, height: 32)
         closeButton.frame = NSRect(x: createButton.frame.minX - 12 - buttonWidth, y: 16, width: buttonWidth, height: 32)

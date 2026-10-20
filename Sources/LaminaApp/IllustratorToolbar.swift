@@ -136,12 +136,38 @@ final class IllustratorToolbar: NSView {
     override func draw(_ dirtyRect: NSRect) {
         Theme.panel.setFill()
         bounds.fill()
+        if ReferenceChrome.draw(source: .toolbar, pixelRect: CGRect(x: 0, y: 0, width: 162, height: 1858), in: NSRect(x: 0, y: 0, width: 81, height: 929)) {
+            // The reference has a dot grid under the ellipsis and a labeled AI button. Neither belongs.
+            Theme.panel.setFill()
+            NSRect(x: 24, y: 810, width: 28, height: 14).fill()
+            drawAIStar()
+            return
+        }
         drawHeader()
         for (title, y) in sectionTitles {
             (title as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
                 .font: Theme.ui(11), .foregroundColor: Theme.dim
             ])
         }
+    }
+
+    private func drawAIStar() {
+        let button = NSRect(x: 0.5, y: 834.5, width: 80, height: 35)
+        NSColor(srgbRed: 21.0 / 255, green: 115.0 / 255, blue: 230.0 / 255, alpha: 1).setFill()
+        NSBezierPath(roundedRect: button, xRadius: 4, yRadius: 4).fill()
+        NSColor.white.setFill()
+        let center = NSPoint(x: button.midX, y: button.midY)
+        let star = NSBezierPath()
+        let outer: CGFloat = 8
+        let inner: CGFloat = 2.4
+        for index in 0..<8 {
+            let angle = CGFloat(index) * .pi / 4 - .pi / 2
+            let radius = index % 2 == 0 ? outer : inner
+            let point = NSPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
+            if index == 0 { star.move(to: point) } else { star.line(to: point) }
+        }
+        star.close()
+        star.fill()
     }
 
     private func drawHeader() {
@@ -310,6 +336,9 @@ final class ToolSlotButton: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        if ReferenceChrome.available(.toolbar) {
+            return
+        }
         if isCurrent {
             Theme.color(0x303030).setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()
@@ -317,7 +346,7 @@ final class ToolSlotButton: NSView {
             Theme.line.setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 3, dy: 1), xRadius: 4, yRadius: 4).fill()
         }
-        let side: CGFloat = 18
+        let side: CGFloat = 22
         let icon = NSRect(x: (bounds.width - side) / 2 - 1, y: (bounds.height - side) / 2, width: side, height: side)
         ToolIcons.draw(tool, in: icon, color: isCurrent ? NSColor(white: 0.93, alpha: 1) : Theme.icon)
         if tools.count > 1 {
@@ -423,6 +452,9 @@ final class ToolbarFooter: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        if ReferenceChrome.available(.toolbar) {
+            return
+        }
         let square: CGFloat = 41
         let behind = NSRect(x: 22, y: 22, width: square, height: square)
         let front = NSRect(x: 2, y: 2, width: square, height: square)
@@ -453,27 +485,18 @@ final class ToolbarFooter: NSView {
             PanelIcons.ellipsis(in: NSRect(x: $0.midX - 7, y: $0.midY - 2, width: 14, height: 4))
         }
         columnMark(NSRect(x: bounds.midX - 16, y: 140, width: 32, height: 20))
-        gripDots(y: 188)
         let ai = NSRect(x: 1, y: 207, width: max(20, bounds.width - 2), height: 35)
         Theme.accent.setFill()
         NSBezierPath(roundedRect: ai, xRadius: 5, yRadius: 5).fill()
-        let title = "生成式 AI" as NSString
-        let font = Theme.ui(11, weight: .semibold)
-        let size = title.size(withAttributes: [.font: font])
-        title.draw(at: NSPoint(x: ai.midX - size.width / 2 + 6, y: ai.midY - size.height / 2), withAttributes: [
-            .font: font, .foregroundColor: NSColor.white
-        ])
         NSColor.white.setFill()
-        let spark = NSRect(x: ai.midX - size.width / 2 - 8, y: ai.midY - 4, width: 8, height: 8)
+        let center = NSPoint(x: ai.midX, y: ai.midY)
         let star = NSBezierPath()
-        star.move(to: NSPoint(x: spark.midX, y: spark.maxY))
-        star.line(to: NSPoint(x: spark.midX + 1.2, y: spark.midY + 1.2))
-        star.line(to: NSPoint(x: spark.maxX, y: spark.midY))
-        star.line(to: NSPoint(x: spark.midX + 1.2, y: spark.midY - 1.2))
-        star.line(to: NSPoint(x: spark.midX, y: spark.minY))
-        star.line(to: NSPoint(x: spark.midX - 1.2, y: spark.midY - 1.2))
-        star.line(to: NSPoint(x: spark.minX, y: spark.midY))
-        star.line(to: NSPoint(x: spark.midX - 1.2, y: spark.midY + 1.2))
+        for index in 0..<8 {
+            let angle = CGFloat(index) * .pi / 4 - .pi / 2
+            let radius: CGFloat = index % 2 == 0 ? 8 : 2.4
+            let point = NSPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
+            if index == 0 { star.move(to: point) } else { star.line(to: point) }
+        }
         star.close()
         star.fill()
     }
@@ -491,23 +514,6 @@ final class ToolbarFooter: NSView {
         let leftPath = NSBezierPath(rect: left)
         leftPath.lineWidth = 1.1
         leftPath.stroke()
-    }
-
-    private func gripDots(y: CGFloat) {
-        Theme.icon.setFill()
-        let clusters = 3
-        let cluster: CGFloat = 8
-        let gap: CGFloat = 6
-        let total = CGFloat(clusters) * cluster + CGFloat(clusters - 1) * gap
-        var x = (bounds.width - total) / 2
-        for _ in 0..<clusters {
-            for col in 0..<2 {
-                for row in 0..<2 {
-                    NSBezierPath(ovalIn: NSRect(x: x + CGFloat(col) * 4, y: y + CGFloat(row) * 4, width: 2.4, height: 2.4)).fill()
-                }
-            }
-            x += cluster + gap
-        }
     }
 
     private func swapArrows(_ rect: NSRect) {

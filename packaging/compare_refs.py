@@ -91,17 +91,25 @@ def main():
     out = Path(sys.argv[3])
     workspace = Image.open(shots / "workspace.png")
     document = Image.open(shots / "new-document.png")
-    title, tabs, status, tool = 28, 28, 26, 81
+    # Screenshots are captured at 2x so a point maps to two pixels, matching ai-ref.
+    scale = 2 if workspace.width >= 1600 else 1
+
+    def px(points):
+        return int(round(points * scale))
+
+    title, tabs, status, tool = px(28), px(28), px(26), px(81)
     body_top = title + tabs
     body_h = workspace.height - body_top - status
-    sheet_w = min(1000, document.width - 80)
-    sheet_h = min(680, document.height - 80)
+    sheet_w = min(px(1000), document.width - px(80))
+    sheet_h = min(px(680), document.height - px(80))
     sheet_x = (document.width - sheet_w) // 2
     sheet_top = (document.height - sheet_h) // 2
-    detail_x = sheet_x + sheet_w - 320
+    detail_w = px(308)
+    detail_x = sheet_x + sheet_w - detail_w
+    print(f"scale {scale} workspace {workspace.size} document {document.size}")
     jobs = [
         ("toolbar", shots / "workspace.png", refs / "toolbar.png", (0, body_top, tool, body_h)),
-        ("newdoc", shots / "new-document.png", refs / "newdoc-details.png", (detail_x, sheet_top + 44, 320, sheet_h - 44)),
+        ("newdoc", shots / "new-document.png", refs / "newdoc-details.png", (detail_x, sheet_top + px(44), detail_w, sheet_h - px(44))),
         ("panels", shots / "workspace.png", refs / "panels.png", (tool, body_top, workspace.width - tool, body_h)),
     ]
     lines = []
