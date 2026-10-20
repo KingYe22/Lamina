@@ -40,74 +40,134 @@ func render(size: CGFloat) -> NSImage {
 }
 
 func scribble(in ctx: CGContext, size: CGFloat) {
+    let base = spine(size)
     let count = 6
+    let pitch = size * 0.015
+    let half = size * 0.011
     for index in 0..<count {
-        let strength = 0.34 + 0.66 * (CGFloat(index) / CGFloat(count - 1))
-        let width = size * (0.062 + 0.016 * CGFloat(index % 3) / 2)
-        let radius = width / 10
-        let points = spine(index: index, count: count, size: size)
-        var rng = Seed(state: 0xD0B41 &+ UInt64(index) &* 97)
-        let blue = index >= 4
-            ? CGColor(srgbRed: 0.03, green: 0.16, blue: 0.62, alpha: 1)
-            : CGColor(srgbRed: 0x0A / 255, green: 0x3F / 255, blue: 0xD4 / 255, alpha: 1)
-        ctx.setFillColor(blue)
-        var previous = points[0]
-        for point in points.dropFirst() {
-            let dx = point.x - previous.x
-            let dy = point.y - previous.y
-            let length = max(1, hypot(dx, dy))
-            let steps = Int(length / max(radius * 0.72, 0.8))
-            for step in 0...steps {
-                let u = CGFloat(step) / CGFloat(max(steps, 1))
-                let x = previous.x + dx * u
-                let y = previous.y + dy * u
-                let nx = -dy / length
-                let ny = dx / length
-                for _ in 0..<7 {
-                    let lateral = rng.signed() * width * 0.5
-                    let along = rng.signed() * radius
-                    let edge = min(1.4, abs(lateral) / (width * 0.5))
-                    let keep: CGFloat
-                    if edge > 1.05 { keep = 0.015 * strength }
-                    else if edge > 0.68 { keep = 0.16 * strength }
-                    else { keep = 0.42 + 0.58 * strength }
-                    if rng.unit() > keep { continue }
-                    let px = x + nx * lateral + (dx / length) * along
-                    let py = y + ny * lateral + (dy / length) * along
-                    let dot = radius * (0.75 + rng.unit() * 0.5)
-                    ctx.fillEllipse(in: CGRect(x: px - dot, y: py - dot, width: dot * 2, height: dot * 2))
-                }
-                if strength < 0.7, rng.unit() < 0.35 {
-                    let lateral = rng.signed() * width * 0.55
-                    if abs(lateral) > width * 0.28 {
-                        let speck = radius * 0.45
-                        let px = x + nx * lateral
-                        let py = y + ny * lateral
-                        ctx.setFillColor(CGColor(srgbRed: 0xE8 / 255, green: 0xE5 / 255, blue: 0xE0 / 255, alpha: 1))
-                        ctx.fillEllipse(in: CGRect(x: px - speck, y: py - speck, width: speck * 2, height: speck * 2))
-                        ctx.setFillColor(blue)
-                    }
-                }
-            }
-            previous = point
-        }
+        var rng = Seed(state: 0xC0A7E &+ UInt64(index) &* 131)
+        let offset = (CGFloat(index) - CGFloat(count - 1) / 2) * pitch
+        let path = offsetPath(base, offset: offset, rng: &rng)
+        paint(ctx, path: path, rng: &rng, half: half, size: size)
     }
 }
 
-func spine(index: Int, count: Int, size: CGFloat) -> [CGPoint] {
-    let x0 = size * 0.46
-    let x1 = size * 0.93
-    let x = x0 + (x1 - x0) * (CGFloat(index) + 0.15) / CGFloat(count)
-    let top = size * 0.92
-    let bot = size * 0.22
-    let turns = 4 + (index % 3)
-    var points: [CGPoint] = []
-    for turn in 0...turns {
-        let y = turn % 2 == 0 ? top : bot
-        let jog = sin(CGFloat(index) * 1.6 + CGFloat(turn) * 1.15) * size * 0.02
-        points.append(CGPoint(x: x + jog, y: y))
+/// One tall W. Six crayon passes sit side by side on it, with paper left between them.
+func spine(_ size: CGFloat) -> [CGPoint] {
+    let top = size * 0.945
+    let bot = size * 0.36
+    let xs: [CGFloat] = [0.28, 0.45, 0.62, 0.80, 0.96]
+    let ys: [CGFloat] = [top, bot, top - size * 0.015, bot + size * 0.02, top - size * 0.03]
+    return zip(xs, ys).map { CGPoint(x: $0.0 * size, y: $0.1) }
+}
+
+func normals(of points: [CGPoint]) -> [CGPoint] {
+    var out: [CGPoint] = []
+    for index in points.indices {
+        let dx: CGFloat
+        let dy: CGFloat
+        if index == 0 {
+            dx = points[1].x - points[0].x
+            dy = points[1].y - points[0].y
+        } else if index == points.count - 1 {
+            dx = points[index].x - points[index - 1].x
+            dy = points[index].y - points[index - 1].y
+        } else {
+            let dx1 = points[index].x - points[index - 1].x
+            let dy1 = points[index].y - points[index - 1].y
+            let dx2 = points[index + 1].x - points[index].x
+            let dy2 = points[index + 1].y - points[index].y
+            let l1 = max(1, hypot(dx1, dy1))
+            let l2 = max(1, hypot(dx2, dy2))
+            dx = dx1 / l1 + dx2 / l2
+            dy = dy1 / l1 + dy2 / l2
+        }
+        let length = max(1, hypot(dx, dy))
+        out.append(CGPoint(x: -dy / length, y: dx / length))
     }
-    return points
+    return out
+}
+
+func offsetPath(_ points: [CGPoint], offset: CGFloat, rng: inout Seed) -> [CGPoint] {
+    let dirs = normals(of: points)
+    var shifted: [CGPoint] = []
+    for (point, normal) in zip(points, dirs) {
+        shifted.append(CGPoint(
+            x: point.x + normal.x * offset + rng.signed() * 1.4,
+            y: point.y + normal.y * offset + rng.signed() * 1.4
+        ))
+    }
+    var dense = [shifted[0]]
+    for index in 1..<shifted.count {
+        let a = shifted[index - 1]
+        let b = shifted[index]
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let length = max(1, hypot(dx, dy))
+        let nx = -dy / length
+        let ny = dx / length
+        let steps = max(2, Int(length / 18))
+        if steps > 1 {
+            for step in 1..<steps {
+                let u = CGFloat(step) / CGFloat(steps)
+                let wob = sin(u * .pi) * (5 + rng.unit() * 3)
+                dense.append(CGPoint(
+                    x: a.x + dx * u + nx * rng.signed() * wob,
+                    y: a.y + dy * u + ny * rng.signed() * wob * 0.3
+                ))
+            }
+        }
+        dense.append(b)
+    }
+    return dense
+}
+
+func paint(_ ctx: CGContext, path: [CGPoint], rng: inout Seed, half: CGFloat, size: CGFloat) {
+    let inkR: CGFloat = 0x0A / 255
+    let inkG: CGFloat = 0x3F / 255
+    let inkB: CGFloat = 0xD4 / 255
+    guard path.count > 1 else { return }
+    for index in 1..<path.count {
+        let a = path[index - 1]
+        let b = path[index]
+        let dx = b.x - a.x
+        let dy = b.y - a.y
+        let length = max(1, hypot(dx, dy))
+        let nx = -dy / length
+        let ny = dx / length
+        let tx = dx / length
+        let ty = dy / length
+        let steps = max(1, Int(length / 1.35))
+        for step in 0...steps {
+            let u = CGFloat(step) / CGFloat(steps)
+            let x = a.x + dx * u
+            let y = a.y + dy * u
+            if rng.unit() < 0.055 { continue }
+            for _ in 0..<8 {
+                let cube = rng.signed()
+                let lateral = cube * cube * cube * half
+                let edge = abs(lateral) / half
+                if edge > 0.86, rng.unit() < 0.75 { continue }
+                if rng.unit() < 0.04 { continue }
+                let along = rng.signed() * 1.5
+                let x0 = x + nx * lateral + tx * along
+                let y0 = y + ny * lateral + ty * along
+                let reach = 2.8 + rng.unit() * 4.2
+                let x1 = x0 + tx * reach + nx * rng.signed() * 1.1
+                let y1 = y0 + ty * reach + ny * rng.signed() * 1.1
+                let center = max(0, 1 - edge)
+                let alpha = (0.28 + 0.62 * center * center) * (0.82 + 0.18 * rng.unit())
+                ctx.setFillColor(CGColor(srgbRed: inkR, green: inkG, blue: inkB, alpha: alpha))
+                for dot in 0..<5 {
+                    let t = CGFloat(dot) / 4
+                    let px = x0 + (x1 - x0) * t
+                    let py = y0 + (y1 - y0) * t
+                    if px < 0 || py < 0 || px >= size || py >= size { continue }
+                    ctx.fill(CGRect(x: floor(px), y: floor(py), width: 1, height: 1))
+                }
+            }
+        }
+    }
 }
 
 func blackFont(_ size: CGFloat) -> NSFont {
@@ -120,19 +180,16 @@ func blackFont(_ size: CGFloat) -> NSFont {
 
 func wordmark(size: CGFloat) {
     let word = "Lamina" as NSString
-    var point = size * 0.2
+    var point = size * 0.22
     var font = blackFont(point)
     if font.capHeight > 1 {
-        point *= (size * 0.14) / font.capHeight
+        point *= (size * 0.15) / font.capHeight
         font = blackFont(point)
     }
     let color = NSColor(srgbRed: 0x1E / 255, green: 0x1E / 255, blue: 0x1E / 255, alpha: 1)
     let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
-    let origin = NSPoint(x: size * 0.07, y: size * 0.28)
-    word.draw(at: origin, withAttributes: attrs)
-    if font.fontName.lowercased().contains("black") == false {
-        word.draw(at: NSPoint(x: origin.x + 0.7, y: origin.y), withAttributes: attrs)
-    }
+    // One string, so every letter sits on this baseline.
+    word.draw(at: NSPoint(x: size * 0.05, y: size * 0.065), withAttributes: attrs)
 }
 
 func writePNG(_ image: NSImage, to url: URL) {
