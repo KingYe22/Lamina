@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = "墨线"
+        window.title = "Lamina"
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = Theme.chrome
         window.contentView = shell
@@ -34,7 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let workspace = self?.workspace {
                 MenuBar.refreshEnabled(workspace: workspace)
                 let title = workspace.active.model.document.title
-                self?.window.title = title.isEmpty ? "墨线" : "墨线 — \(title)"
+                self?.window.title = title.isEmpty ? "Lamina" : "Lamina — \(title)"
             }
         }
         shell.layoutSubtreeIfNeeded()
@@ -53,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let queued = pendingURLs
         pendingURLs = []
         for url in queued { workspace.open(url: url, place: false) }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

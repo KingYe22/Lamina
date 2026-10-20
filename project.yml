@@ -13,8 +13,8 @@ settings:
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGN_IDENTITY: ""
     ENABLE_HARDENED_RUNTIME: NO
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.1.1"
+    CURRENT_PROJECT_VERSION: "2"
 targets:
   LaminaCore:
     type: library.static
@@ -63,8 +63,8 @@ targets:
     info:
       path: Sources/LaminaApp/Info.plist
       properties:
-        CFBundleDisplayName: 墨线
-        CFBundleName: 墨线
+        CFBundleDisplayName: Lamina
+        CFBundleName: Lamina
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

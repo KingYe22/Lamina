@@ -55,11 +55,20 @@ jobs:
           set -euo pipefail
           APP="build/Build/Products/Release/Lamina.app"
           test -d "$APP"
-          mkdir -p dist
-          cp -R "$APP" dist/Lamina.app
-          ditto -c -k --keepParent dist/Lamina.app dist/Lamina.app.zip
-          hdiutil create -volname Lamina -srcfolder dist/Lamina.app -ov -format UDZO dist/Lamina.dmg
-          du -sh dist/Lamina.app dist/Lamina.dmg
+          rm -rf dist
+          mkdir -p dist/dmg
+          cp -R "$APP" dist/dmg/Lamina.app
+          # Drop quarantine before ad-hoc signing so the signature is what ships.
+          xattr -cr dist/dmg/Lamina.app || true
+          codesign --force --deep --sign - dist/dmg/Lamina.app
+          codesign --verify --deep --strict dist/dmg/Lamina.app
+          xattr -dr com.apple.quarantine dist/dmg/Lamina.app || true
+          cp "packaging/打开 Lamina.command" "dist/dmg/打开 Lamina.command"
+          chmod +x "dist/dmg/打开 Lamina.command"
+          xattr -cr "dist/dmg/打开 Lamina.command" || true
+          ditto -c -k --keepParent dist/dmg/Lamina.app dist/Lamina.app.zip
+          hdiutil create -volname Lamina -srcfolder dist/dmg -ov -format UDZO dist/Lamina.dmg
+          du -sh dist/dmg/Lamina.app dist/Lamina.dmg
 
       - uses: actions/upload-artifact@v4
         with:
