@@ -472,7 +472,7 @@ int main(int argc, char **argv) {
         NSString *penPan = penBefore[@"pan"] ?: @"";
         NSString *penZoom = penBefore[@"zoom"] ?: @"";
         int itemsBeforePen = [penBefore[@"items"] intValue];
-        drag(parsePoint(penBefore[@"down"]), parsePoint(penBefore[@"pen"]));
+        drag(parsePoint(penBefore[@"penA"]), parsePoint(penBefore[@"penB"]));
         NSDictionary *pulled = waitUntil(^BOOL(NSDictionary *state) {
             return [state[@"nodes"] intValue] >= 1;
         }, 2.5);
@@ -484,7 +484,7 @@ int main(int argc, char **argv) {
         note([NSString stringWithFormat:@"%@ pen-drag frame=%@ nodes=%@", (pulledStill && pulledNode) ? @"PASS" : @"FAIL", pulled[@"frame"] ?: @"?", pulled[@"nodes"] ?: @"?"]);
         if (!(pulledStill && pulledNode)) note([NSString stringWithFormat:@"  raw=%@", pulled[@"__raw"] ?: @""]);
 
-        click(parsePoint(penBefore[@"drag"]));
+        click(parsePoint(penBefore[@"penC"]));
         NSDictionary *anchored = waitUntil(^BOOL(NSDictionary *state) {
             return [state[@"nodes"] intValue] >= 2 && [state[@"frame"] isEqualToString:frameBefore];
         }, 2.5);
