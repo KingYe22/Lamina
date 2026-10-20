@@ -86,6 +86,8 @@ final class VectorCanvas: NSView {
     /// from claiming letter keys before keyDown.
     override var inputContext: NSTextInputContext? { nil }
 
+    override func interpretKeyEvents(_ eventArray: [NSEvent]) {}
+
     override func becomeFirstResponder() -> Bool {
         let ok = super.becomeFirstResponder()
         NSTextInputContext.current?.discardMarkedText()
@@ -99,8 +101,9 @@ final class VectorCanvas: NSView {
     }
 
     override func keyUp(with event: NSEvent) {
-        if event.keyCode == 49 {
+        if event.keyCode == VirtualKey.space {
             workspace?.active.model.spaceHeld = false
+            KeyProbe.bump(workspace)
             if workspace?.active.model.livePaths.isEmpty == false {
                 workspace?.active.model.updateLiveModifiers(
                     shift: event.modifierFlags.contains(.shift),
@@ -234,6 +237,8 @@ final class VectorCanvas: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        PanelField.disarmAll(in: window)
+        window?.endEditing(for: nil)
         window?.makeFirstResponder(self)
         guard let model = workspace?.active.model else { return }
         panAtDown = model.pan
@@ -249,6 +254,7 @@ final class VectorCanvas: NSView {
         }
         needsDisplay = true
         workspace?.touch()
+        KeyProbe.bump(workspace)
     }
 
     override func mouseMoved(with event: NSEvent) {
@@ -266,6 +272,7 @@ final class VectorCanvas: NSView {
         let point = documentPoint(event, pan: pan)
         model.pointerDrag(to: point, shift: event.modifierFlags.contains(.shift), option: event.modifierFlags.contains(.option), command: event.modifierFlags.contains(.command), space: model.spaceHeld, stylus: stylus(event))
         needsDisplay = true
+        KeyProbe.bump(workspace)
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -283,6 +290,7 @@ final class VectorCanvas: NSView {
         }
         needsDisplay = true
         workspace?.touch()
+        KeyProbe.bump(workspace)
     }
 
     override func scrollWheel(with event: NSEvent) {

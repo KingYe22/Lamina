@@ -1,6 +1,54 @@
 import AppKit
 import LaminaCore
 
+/// ANSI virtual key codes. Routing uses these, never `characters`.
+enum VirtualKey {
+    static let ansiA: UInt16 = 0
+    static let ansiS: UInt16 = 1
+    static let ansiD: UInt16 = 2
+    static let ansiF: UInt16 = 3
+    static let ansiH: UInt16 = 4
+    static let ansiG: UInt16 = 5
+    static let ansiZ: UInt16 = 6
+    static let ansiX: UInt16 = 7
+    static let ansiC: UInt16 = 8
+    static let ansiV: UInt16 = 9
+    static let ansiB: UInt16 = 11
+    static let ansiQ: UInt16 = 12
+    static let ansiW: UInt16 = 13
+    static let ansiE: UInt16 = 14
+    static let ansiR: UInt16 = 15
+    static let ansiY: UInt16 = 16
+    static let ansiT: UInt16 = 17
+    static let ansiEqual: UInt16 = 24
+    static let ansiMinus: UInt16 = 27
+    static let ansiO: UInt16 = 31
+    static let ansiU: UInt16 = 32
+    static let ansiI: UInt16 = 34
+    static let ansiP: UInt16 = 35
+    static let ansiL: UInt16 = 37
+    static let ansiJ: UInt16 = 38
+    static let ansiK: UInt16 = 40
+    static let ansiN: UInt16 = 45
+    static let ansiM: UInt16 = 46
+    static let returnKey: UInt16 = 36
+    static let tab: UInt16 = 48
+    static let space: UInt16 = 49
+    static let delete: UInt16 = 51
+    static let forwardDelete: UInt16 = 117
+    static let escape: UInt16 = 53
+    static let up: UInt16 = 126
+    static let down: UInt16 = 125
+}
+
+enum KeyProbe {
+    static var onChange: ((Workspace) -> Void)?
+    static func bump(_ workspace: Workspace?) {
+        guard let workspace else { return }
+        onChange?(workspace)
+    }
+}
+
 enum ChordAppKit {
     static func chord(from event: NSEvent) -> KeyChord? {
         var mods = KeyModifiers()
@@ -12,11 +60,11 @@ enum ChordAppKit {
 
         let code = event.keyCode
         switch code {
-        case 36: return KeyChord(modifiers: mods, key: .return)
-        case 48: return KeyChord(modifiers: mods, key: .tab)
-        case 49: return KeyChord(modifiers: mods, key: .space)
-        case 51, 117: return KeyChord(modifiers: mods, key: .delete)
-        case 53: return KeyChord(modifiers: mods, key: .escape)
+        case VirtualKey.returnKey: return KeyChord(modifiers: mods, key: .return)
+        case VirtualKey.tab: return KeyChord(modifiers: mods, key: .tab)
+        case VirtualKey.space: return KeyChord(modifiers: mods, key: .space)
+        case VirtualKey.delete, VirtualKey.forwardDelete: return KeyChord(modifiers: mods, key: .delete)
+        case VirtualKey.escape: return KeyChord(modifiers: mods, key: .escape)
         case 123: return KeyChord(modifiers: mods, key: .left)
         case 124: return KeyChord(modifiers: mods, key: .right)
         case 125: return KeyChord(modifiers: mods, key: .down)
@@ -33,10 +81,10 @@ enum ChordAppKit {
         case 109: return KeyChord(modifiers: mods, key: .function(10))
         case 103: return KeyChord(modifiers: mods, key: .function(11))
         case 111: return KeyChord(modifiers: mods, key: .function(12))
-        case 24:
+        case VirtualKey.ansiEqual:
             if mods == .shift { return KeyChord(modifiers: [], key: .plus) }
             return KeyChord(modifiers: mods, key: .equal)
-        case 27:
+        case VirtualKey.ansiMinus:
             return KeyChord(modifiers: mods, key: .minus)
         case 44:
             return KeyChord(modifiers: mods, key: .slash)
@@ -115,9 +163,13 @@ enum ChordAppKit {
 
     private static func letter(for code: UInt16) -> Character? {
         let map: [UInt16: Character] = [
-            0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v",
-            11: "b", 12: "q", 13: "w", 14: "e", 15: "r", 16: "y", 17: "t",
-            31: "o", 32: "u", 34: "i", 35: "p", 37: "l", 38: "j", 40: "k", 45: "n", 46: "m"
+            VirtualKey.ansiA: "a", VirtualKey.ansiS: "s", VirtualKey.ansiD: "d", VirtualKey.ansiF: "f",
+            VirtualKey.ansiH: "h", VirtualKey.ansiG: "g", VirtualKey.ansiZ: "z", VirtualKey.ansiX: "x",
+            VirtualKey.ansiC: "c", VirtualKey.ansiV: "v", VirtualKey.ansiB: "b", VirtualKey.ansiQ: "q",
+            VirtualKey.ansiW: "w", VirtualKey.ansiE: "e", VirtualKey.ansiR: "r", VirtualKey.ansiY: "y",
+            VirtualKey.ansiT: "t", VirtualKey.ansiO: "o", VirtualKey.ansiU: "u", VirtualKey.ansiI: "i",
+            VirtualKey.ansiP: "p", VirtualKey.ansiL: "l", VirtualKey.ansiJ: "j", VirtualKey.ansiK: "k",
+            VirtualKey.ansiN: "n", VirtualKey.ansiM: "m"
         ]
         return map[code]
     }
@@ -133,20 +185,29 @@ enum ChordAppKit {
 enum KeyRouter {
     private static var lastStamp: TimeInterval = -1
     private static var lastCode: UInt16 = .max
+    private static var lastConsumed = false
 
-    /// True only while a visible, editable text view is the field editor.
-    /// A bare NSTextField that is not editing, and the canvas, do not count.
+    /// True only while a visible field editor is actually editing.
+    /// A panel field that has not been clicked does not count.
     /// The decision uses keyCode, never charactersIgnoringModifiers.
     static func isActivelyEditing(_ event: NSEvent) -> Bool {
         let window = event.window ?? NSApp.keyWindow
-        guard let text = window?.firstResponder as? NSTextView else { return false }
-        if text.isHiddenOrHasHiddenAncestor { return false }
-        if !text.isEditable { return false }
+        let responder = window?.firstResponder
+        let editing: Bool
+        if let text = responder as? NSTextView {
+            editing = text.isEditable && !text.isHiddenOrHasHiddenAncestor
+        } else if let field = responder as? NSTextField {
+            editing = field.isEditable && !field.refusesFirstResponder && !field.isHiddenOrHasHiddenAncestor
+        } else {
+            editing = false
+        }
+        if !editing { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let commandish = flags.contains(.command) || flags.contains(.control)
         if !commandish { return true }
-        // a c v x z — physical codes, so Pinyin cannot rename them.
-        let editingChords: Set<UInt16> = [0, 8, 9, 7, 6]
+        let editingChords: Set<UInt16> = [
+            VirtualKey.ansiA, VirtualKey.ansiC, VirtualKey.ansiV, VirtualKey.ansiX, VirtualKey.ansiZ
+        ]
         if flags.contains(.command), !flags.contains(.option), !flags.contains(.control), editingChords.contains(event.keyCode) {
             return true
         }
@@ -156,28 +217,35 @@ enum KeyRouter {
     static func handle(_ event: NSEvent, workspace: Workspace) -> NSEvent? {
         if event.type != .keyDown { return event }
         if event.timestamp == lastStamp, event.keyCode == lastCode {
-            return nil
+            return lastConsumed ? nil : event
         }
+        let result = route(event, workspace: workspace)
+        lastStamp = event.timestamp
+        lastCode = event.keyCode
+        lastConsumed = result == nil
+        KeyProbe.bump(workspace)
+        return result
+    }
+
+    private static func route(_ event: NSEvent, workspace: Workspace) -> NSEvent? {
         let model = workspace.active.model
         if isActivelyEditing(event), model.editingText == nil {
             ShortcutLog.record(event, route: "交给正在编辑的文本框", action: "—")
             return event
         }
         func consume(_ route: String, _ action: String) -> NSEvent? {
-            lastStamp = event.timestamp
-            lastCode = event.keyCode
             ShortcutLog.record(event, route: route, action: action)
             return nil
         }
-        if event.keyCode == 49 {
+        if event.keyCode == VirtualKey.space {
             model.spaceHeld = true
             return consume("空格", "临时抓手")
         }
-        if event.keyCode == 126 || event.keyCode == 125, model.adjustLiveSides(up: event.keyCode == 126) {
+        if event.keyCode == VirtualKey.up || event.keyCode == VirtualKey.down, model.adjustLiveSides(up: event.keyCode == VirtualKey.up) {
             workspace.touch()
             return consume("绘制中", model.status)
         }
-        if event.keyCode == 36, model.editingText == nil {
+        if event.keyCode == VirtualKey.returnKey, model.editingText == nil {
             model.requestToolOptions()
             workspace.touch()
             return consume("keyCode", "工具选项")
@@ -185,12 +253,12 @@ enum KeyRouter {
         if model.editingText != nil,
            !event.modifierFlags.contains(.command),
            !event.modifierFlags.contains(.control) {
-            if event.keyCode == 53 {
+            if event.keyCode == VirtualKey.escape {
                 model.editingText = nil
                 workspace.touch()
                 return consume("文字", "结束编辑")
             }
-            if event.keyCode == 51 || event.keyCode == 117 {
+            if event.keyCode == VirtualKey.delete || event.keyCode == VirtualKey.forwardDelete {
                 workspace.replaceEditingText { text in
                     if !text.isEmpty { text.removeLast() }
                 }

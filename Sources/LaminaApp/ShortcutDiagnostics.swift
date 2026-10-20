@@ -6,12 +6,23 @@ final class ShortcutDiagnostics {
     static let shared = ShortcutDiagnostics()
     private var window: NSWindow?
     private let text = NSTextView()
+    private let header = NSTextField(labelWithString: "")
     private var lines: [String] = []
+    private var timer: Timer?
 
     func show() {
         if window == nil { build() }
+        refreshHeader()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] timer in
+            guard let self = self, self.window?.isVisible == true else {
+                timer.invalidate()
+                return
+            }
+            self.refreshHeader()
+        }
     }
 
     func append(_ line: String) {
@@ -22,24 +33,44 @@ final class ShortcutDiagnostics {
         if Thread.isMainThread {
             text.string = value
             text.scrollToEndOfDocument(nil)
+            refreshHeader()
         } else {
             DispatchQueue.main.async { [weak self] in
                 self?.text.string = value
                 self?.text.scrollToEndOfDocument(nil)
+                self?.refreshHeader()
             }
         }
     }
 
+    private func refreshHeader() {
+        let lamina = NSApp.windows.first { $0 is LaminaWindow }
+        let name = lamina?.firstResponder.map { String(describing: type(of: $0)) } ?? "无"
+        header.stringValue = "当前 first responder：\(name)"
+    }
+
     private func build() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 640, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 460),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
         )
         window.title = "快捷键诊断"
         window.isReleasedWhenClosed = false
-        let scroll = NSScrollView(frame: window.contentView?.bounds ?? .zero)
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 720, height: 460))
+        header.frame = NSRect(x: 0, y: 428, width: 720, height: 32)
+        header.autoresizingMask = [.width, .minYMargin]
+        header.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
+        header.textColor = NSColor(calibratedWhite: 0.96, alpha: 1)
+        header.backgroundColor = NSColor(calibratedWhite: 0.2, alpha: 1)
+        header.drawsBackground = true
+        header.isBezeled = false
+        header.isEditable = false
+        header.isSelectable = true
+        header.refusesFirstResponder = true
+        header.alignment = .left
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 720, height: 428))
         scroll.autoresizingMask = [.width, .height]
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = true
@@ -49,12 +80,15 @@ final class ShortcutDiagnostics {
         text.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
         text.textColor = NSColor(calibratedWhite: 0.92, alpha: 1)
         text.backgroundColor = NSColor(calibratedWhite: 0.12, alpha: 1)
-        text.string = "在这里按键。每一行是实际收到的 keyCode、输入法和触发的动作。\n拼音模式下字母键如果被输入法吃掉，这里不会出现新行。\n"
+        text.string = "在这里按键。顶部是主窗口当前 first responder 的类名。\n每一行还有 keyCode、输入法、响应者类名和触发的动作。\n面板里的数值框只有点击后才会变成 first responder。\n"
         text.textContainerInset = NSSize(width: 8, height: 8)
         scroll.documentView = text
-        window.contentView = scroll
+        content.addSubview(scroll)
+        content.addSubview(header)
+        window.contentView = content
         window.center()
         self.window = window
+        refreshHeader()
     }
 
     private static let clock: DateFormatter = {

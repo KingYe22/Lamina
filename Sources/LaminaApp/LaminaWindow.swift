@@ -7,8 +7,9 @@ final class LaminaWindow: NSWindow {
         if event.type == .keyDown, let workspace, !KeyRouter.isActivelyEditing(event) {
             if KeyRouter.handle(event, workspace: workspace) == nil { return }
         }
-        if event.type == .keyUp, event.keyCode == 49 {
+        if event.type == .keyUp, event.keyCode == VirtualKey.space {
             workspace?.active.model.spaceHeld = false
+            KeyProbe.bump(workspace)
             return
         }
         super.sendEvent(event)
@@ -29,6 +30,7 @@ final class LaminaWindow: NSWindow {
             return
         }
         if KeyRouter.handle(event, workspace: workspace) == nil { return }
+        super.keyDown(with: event)
     }
 
     override var canBecomeKey: Bool { true }

@@ -125,25 +125,40 @@ jobs:
       - name: Shortcut test
         run: |
           set -euo pipefail
+          clang -fobjc-arc -O2 -framework Carbon -framework CoreGraphics -framework Foundation packaging/KeyPoster.m -o /tmp/keyposter
           BIN="dist/dmg/Lamina.app/Contents/MacOS/Lamina"
-          RESULT="$(mktemp)"
-          rm -f "$RESULT"
-          LAMINA_KEYTEST=1 LAMINA_KEYTEST_FILE="$RESULT" "$BIN" >/tmp/lamina-keys.out 2>/tmp/lamina-keys.err &
-          pid=$!
-          for _ in $(seq 1 60); do
-            if [[ -s "$RESULT" ]] && grep -Eq '^(OK|FAIL)$' "$RESULT"; then break; fi
-            if ! kill -0 "$pid" 2>/dev/null; then break; fi
-            sleep 0.5
+          fail=0
+          for mode in pinyin abc; do
+            STATE="$(mktemp)"
+            RESULT="$(mktemp)"
+            rm -f "$STATE" "$RESULT"
+            LAMINA_KEYTEST=1 LAMINA_KEYTEST_FILE="$STATE" "$BIN" >/tmp/lamina-keys-"$mode".out 2>/tmp/lamina-keys-"$mode".err &
+            pid=$!
+            ready=0
+            for _ in $(seq 1 50); do
+              if [[ -s "$STATE" ]] && grep -q 'phase=home' "$STATE"; then ready=1; break; fi
+              if ! kill -0 "$pid" 2>/dev/null; then break; fi
+              sleep 0.2
+            done
+            if [[ "$ready" != 1 ]]; then
+              echo "app did not reach the home screen ($mode)"
+              cat /tmp/lamina-keys-"$mode".out /tmp/lamina-keys-"$mode".err || true
+              kill "$pid" 2>/dev/null || true
+              fail=1
+              break
+            fi
+            /tmp/keyposter "$mode" "$pid" "$STATE" "$RESULT" || true
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            echo "----- $mode -----"
+            cat "$RESULT" || true
+            echo "----- app log ($mode) -----"
+            cat /tmp/lamina-keys-"$mode".out /tmp/lamina-keys-"$mode".err || true
+            echo "----- crashes -----"
+            ls -lt "$HOME/Library/Logs/DiagnosticReports" 2>/dev/null | head -n 5 || true
+            if ! grep -q '^OK$' "$RESULT"; then fail=1; fi
           done
-          kill "$pid" 2>/dev/null || true
-          wait "$pid" 2>/dev/null || true
-          echo "----- key test -----"
-          cat "$RESULT" || true
-          echo "----- stdout/stderr -----"
-          cat /tmp/lamina-keys.out /tmp/lamina-keys.err || true
-          echo "----- crashes -----"
-          ls -lt "$HOME/Library/Logs/DiagnosticReports" 2>/dev/null | head -n 5 || true
-          grep -q '^OK$' "$RESULT"
+          exit "$fail"
 
       - name: Capture interface screenshots
         run: |
@@ -208,7 +223,7 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
-            Dock 和窗口标题显示为 Lamina。0.3.0 按物理 keyCode 接收快捷键，绘制时有实时预览和尺寸标签，工具栏图标可长按弹出同组工具。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
+            Dock 和窗口标题显示为 Lamina。0.3.0 在画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。绘制时有实时预览和尺寸标签，工具栏图标可长按弹出同组工具。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
           files: |
             dist/Lamina.app.zip
             dist/Lamina.dmg

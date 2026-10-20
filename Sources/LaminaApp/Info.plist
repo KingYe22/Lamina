@@ -29,7 +29,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
+	<string>LaminaApplication</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

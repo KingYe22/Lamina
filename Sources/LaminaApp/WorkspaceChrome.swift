@@ -34,6 +34,16 @@ final class AppRoot: NSView {
     let dialog = NewDocumentDialog()
     private(set) var showingEditor = false
 
+    /// The content view is not a text client. A nil context keeps Pinyin from
+    /// claiming letter keys while the workspace is focused.
+    override var inputContext: NSTextInputContext? { nil }
+
+    override func interpretKeyEvents(_ eventArray: [NSEvent]) {}
+
+    override func keyDown(with event: NSEvent) {
+        if KeyRouter.handle(event, workspace: workspace) == nil { return }
+    }
+
     init(workspace: Workspace) {
         self.workspace = workspace
         editor = EditorShell(workspace: workspace)
@@ -68,6 +78,7 @@ final class AppRoot: NSView {
         editor.isHidden = true
         home.needsDisplay = true
         window?.makeFirstResponder(nil)
+        KeyProbe.bump(workspace)
     }
 
     func showEditor() {
@@ -78,15 +89,33 @@ final class AppRoot: NSView {
         dialog.isHidden = true
         editor.sync()
         window?.endEditing(for: nil)
-        window?.makeFirstResponder(editor.canvas.drawing)
-        NSTextInputContext.current?.discardMarkedText()
-        NSTextInputContext.current?.deactivate()
+        PanelField.disarmAll(in: window)
+        focusCanvas()
+        DispatchQueue.main.async { [weak self] in self?.focusCanvas() }
     }
 
     func showDialog() {
         dialog.isHidden = false
         dialog.syncPresets()
-        window?.makeFirstResponder(showingEditor ? editor.canvas.drawing : nil)
+        dialog.needsLayout = true
+        layoutSubtreeIfNeeded()
+        if showingEditor {
+            CanvasFocus.restore(in: window)
+        } else {
+            window?.makeFirstResponder(nil)
+        }
+        KeyProbe.bump(workspace)
+    }
+
+    private func focusCanvas() {
+        guard showingEditor, !PanelField.anyArmed(in: window) else { return }
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        window?.initialFirstResponder = editor.canvas.drawing
+        window?.makeFirstResponder(editor.canvas.drawing)
+        NSTextInputContext.current?.discardMarkedText()
+        NSTextInputContext.current?.deactivate()
+        KeyProbe.bump(workspace)
     }
 
     func create(_ spec: NewDocSpec) {
@@ -250,6 +279,9 @@ final class ContextBar: NSView {
 
 final class FloatingPanels: NSView {
     weak var workspace: Workspace?
+    private let weightField = PanelField(text: "1 pt")
+    private let limitField = PanelField(text: "4")
+    private let spacingField = PanelField(text: "0")
     private var groupTab = 1
     private var strokeTab = 0
     private var cap = 0
@@ -267,7 +299,28 @@ final class FloatingPanels: NSView {
 
     override var isFlipped: Bool { true }
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        for field in [weightField, limitField, spacingField] {
+            addSubview(field)
+        }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     func sync() { needsDisplay = true }
+
+    override func layout() {
+        super.layout()
+        let strokeRectMinY = strokeY + 26
+        weightField.frame = NSRect(x: 44, y: strokeRectMinY - 2, width: 76, height: 20)
+        limitField.frame = NSRect(x: 112, y: strokeRectMinY + 86, width: 36, height: 22)
+        let alignRectMinY = alignY + 26
+        spacingField.frame = NSRect(x: 78, y: alignRectMinY + 108, width: 54, height: 22)
+        weightField.isHidden = strokeTab != 0
+        limitField.isHidden = strokeTab != 0
+        spacingField.isHidden = groupTab != 1
+    }
 
     private var alignY: CGFloat { appearanceHeight + gap }
     private var strokeY: CGFloat { alignY + alignHeight + gap }
@@ -401,6 +454,7 @@ final class FloatingPanels: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        CanvasFocus.restore(in: window)
         let point = convert(event.locationInWindow, from: nil)
         if point.y < appearanceHeight {
             if NSRect(x: 8, y: 48, width: 18, height: 16).contains(point) { strokeVisible.toggle() }
@@ -427,6 +481,7 @@ final class FloatingPanels: NSView {
             }
         }
         needsDisplay = true
+        needsLayout = true
         workspace?.touch()
     }
 
@@ -504,13 +559,41 @@ final class FloatingPanels: NSView {
 
 final class PropertiesDock: NSView {
     weak var workspace: Workspace?
+    private let nudgeField = PanelField(text: "1 pt")
     private let tabs = ["属性", "注释", "图层", "库"]
     private var tab = "属性"
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { false }
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        addSubview(nudgeField)
+        nudgeField.onLeave = { [weak self] in self?.applyNudge() }
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     func sync() { needsDisplay = true }
+
+    func nudgeFieldCenter() -> NSPoint {
+        nudgeField.convert(NSPoint(x: nudgeField.bounds.midX, y: nudgeField.bounds.midY), to: self)
+    }
+
+    override func layout() {
+        super.layout()
+        nudgeField.frame = NSRect(x: max(0, bounds.width - 108), y: 442, width: 80, height: 22)
+        nudgeField.isHidden = tab != "属性"
+    }
+
+    private func applyNudge() {
+        guard let model = workspace?.active.model else { return }
+        let cleaned = nudgeField.stringValue.replacingOccurrences(of: "pt", with: "").trimmingCharacters(in: .whitespaces)
+        if let number = Double(cleaned) {
+            model.nudge = min(64, max(0.1, number))
+        }
+        nudgeField.stringValue = "\(Int(model.nudge)) pt"
+    }
 
     private var usePreviewBounds = true
     private var scaleCorners = false
@@ -616,9 +699,10 @@ final class PropertiesDock: NSView {
         if point.y < 32 {
             if point.x > bounds.width - 28 { return }
             let index = Int((point.x - 8) / 52)
-            if tabs.indices.contains(index) { tab = tabs[index]; needsDisplay = true }
+            if tabs.indices.contains(index) { tab = tabs[index]; needsDisplay = true; needsLayout = true }
             return
         }
+        CanvasFocus.restore(in: window)
         guard tab == "属性", let workspace else { return }
         let model = workspace.active.model
         if NSRect(x: 72, y: 88, width: bounds.width - 84, height: 22).contains(point) {
@@ -693,6 +777,7 @@ final class HomeView: NSView {
         super.init(frame: frameRect)
         newButton.target = self
         newButton.action = #selector(pressNew)
+        newButton.refusesFirstResponder = true
         newButton.isBordered = false
         newButton.attributedTitle = NSAttributedString(string: "新文件", attributes: [
             .foregroundColor: NSColor.white,
@@ -700,6 +785,7 @@ final class HomeView: NSView {
         ])
         openButton.target = self
         openButton.action = #selector(pressOpen)
+        openButton.refusesFirstResponder = true
         openButton.isBordered = false
         openButton.contentTintColor = Theme.text
         openButton.font = NSFont.systemFont(ofSize: 14)
@@ -717,6 +803,10 @@ final class HomeView: NSView {
 
     @objc private func pressNew() { onNew?() }
     @objc private func pressOpen() { onOpen?() }
+
+    func newButtonCenter() -> NSPoint {
+        NSPoint(x: newButton.frame.midX, y: newButton.frame.midY)
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         Theme.window.setFill()
@@ -761,11 +851,11 @@ final class HomeView: NSView {
 final class NewDocumentDialog: NSView {
     var onCreate: ((NewDocSpec) -> Void)?
     var onClose: (() -> Void)?
-    private let nameField = NSTextField(string: "未标题-1")
-    private let widthField = NSTextField(string: "210")
-    private let heightField = NSTextField(string: "297")
-    private let bleedField = NSTextField(string: "0")
-    private let countField = NSTextField(string: "1")
+    private let nameField = PanelField(text: "未标题-1")
+    private let widthField = PanelField(text: "210")
+    private let heightField = PanelField(text: "297")
+    private let bleedField = PanelField(text: "0")
+    private let countField = PanelField(text: "1")
     private var unit: UnitKind = .mm
     private var mode: ColorMode = .cmyk
     private var portrait = true
@@ -786,16 +876,16 @@ final class NewDocumentDialog: NSView {
         card.layer?.cornerRadius = 8
         for field in [nameField, widthField, heightField, bleedField, countField] {
             field.font = NSFont.systemFont(ofSize: 12)
-            field.isBezeled = true
-            field.bezelStyle = .roundedBezel
-            field.refusesFirstResponder = true
+            field.alignment = .left
             card.addSubview(field)
         }
         closeButton.target = self
         closeButton.action = #selector(pressClose)
+        closeButton.refusesFirstResponder = true
         closeButton.isBordered = false
         createButton.target = self
         createButton.action = #selector(pressCreate)
+        createButton.refusesFirstResponder = true
         createButton.isBordered = false
         createButton.attributedTitle = NSAttributedString(string: "创建", attributes: [
             .foregroundColor: NSColor.white,
@@ -891,11 +981,6 @@ final class NewDocumentDialog: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let local = NSPoint(x: point.x - card.frame.minX, y: point.y - card.frame.minY)
-        for field in [nameField, widthField, heightField, bleedField, countField] where field.frame.contains(local) {
-            field.refusesFirstResponder = false
-            window?.makeFirstResponder(field)
-            return
-        }
         if NSRect(x: 740, y: 16, width: 96, height: 28).contains(local) {
             onCreate?(currentSpec())
             return
@@ -923,6 +1008,10 @@ final class NewDocumentDialog: NSView {
             }
             tabX += width
         }
+    }
+
+    func createButtonCenter() -> NSPoint {
+        NSPoint(x: card.frame.minX + createButton.frame.midX, y: card.frame.minY + createButton.frame.midY)
     }
 
     private func applyPreset(_ name: String) {
