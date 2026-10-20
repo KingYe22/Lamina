@@ -25,7 +25,10 @@ enum MacGlyphs {
             CTRunGetGlyphs(run, CFRange(location: 0, length: count), &glyphs)
             CTRunGetPositions(run, CFRange(location: 0, length: count), &positions)
             let attributes = CTRunGetAttributes(run) as NSDictionary
-            guard let runFont = attributes[kCTFontAttributeName] as? CTFont else { continue }
+            guard let attribute = attributes[kCTFontAttributeName] else { continue }
+            let cfFont = attribute as CFTypeRef
+            guard CFGetTypeID(cfFont) == CTFontGetTypeID() else { continue }
+            let runFont = cfFont as! CTFont
             for index in 0..<count {
                 var transform = CGAffineTransform(translationX: CGFloat(text.origin.x) + positions[index].x, y: CGFloat(text.origin.y))
                 transform = transform.scaledBy(x: 1, y: -1)

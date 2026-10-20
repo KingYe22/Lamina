@@ -77,6 +77,7 @@ public struct Rect2: Codable, Equatable, Hashable, Sendable {
     public var midX: Double { x + width / 2 }
     public var midY: Double { y + height / 2 }
     public var origin: Vec2 { Vec2(x, y) }
+    public var size: Vec2 { Vec2(width, height) }
     public var center: Vec2 { Vec2(midX, midY) }
     /// Both axes non-positive. A horizontal or vertical line still has a usable bound.
     public var isEmpty: Bool { width <= 0 && height <= 0 }

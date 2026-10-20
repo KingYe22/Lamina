@@ -92,7 +92,8 @@ final class VectorCanvas: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let model = workspace?.active.model else { return }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        if !model.gpuPreview || metal.device == nil {
+        let metalDevice = (superview as? CanvasHost)?.metal.device
+        if !model.gpuPreview || metalDevice == nil {
             context.setFillColor(Theme.pasteboard.cgColor)
             context.fill(bounds)
         }

@@ -577,7 +577,8 @@ enum CanvasDrawing {
         switch item {
         case .path(let object):
             var path = cgPath(object.path)
-            path = path.copy(using: cgAffine(object.transform)) ?? path
+            var transform = cgAffine(object.transform)
+            path = path.copy(using: &transform) ?? path
             return path
         case .compound(let object):
             let path = CGMutablePath()
