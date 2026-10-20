@@ -78,6 +78,7 @@ class PanelField: NSTextField, NSTextFieldDelegate {
             || commandSelector == #selector(NSResponder.cancelOperation(_:))
             || commandSelector == #selector(NSResponder.insertTab(_:))
             || commandSelector == #selector(NSResponder.insertBacktab(_:)) {
+            // The field editor is mid-command. Resign on the next turn, after it returns.
             DispatchQueue.main.async { [weak self] in self?.leave() }
             return true
         }
@@ -90,16 +91,38 @@ class PanelField: NSTextField, NSTextFieldDelegate {
         needsDisplay = true
     }
 
+    /// The panel field whose field editor is the window's first responder, if any.
+    static func fieldOwningFirstResponder(in window: NSWindow?) -> PanelField? {
+        guard let responder = window?.firstResponder else { return nil }
+        if let field = responder as? PanelField { return field }
+        if let text = responder as? NSText {
+            if let field = text.delegate as? PanelField { return field }
+            if let cell = text.delegate as? NSTextFieldCell, let field = cell.controlView as? PanelField {
+                return field
+            }
+        }
+        return nil
+    }
+
     func leave() {
         guard !leaving else { return }
         leaving = true
+        commitAndResign()
+        onLeave?()
+        leaving = false
+        // AppKit can put the field editor back after endEditing returns inside a key event.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.fieldIsEditing else { return }
+            self.commitAndResign()
+        }
+    }
+
+    private func commitAndResign() {
         armed = false
         refusesFirstResponder = true
         let host = window
         host?.endEditing(for: self)
         CanvasFocus.restore(in: host)
-        onLeave?()
-        leaving = false
     }
 
     static func anyArmed(in window: NSWindow?) -> Bool {
@@ -137,7 +160,10 @@ enum CanvasFocus {
         window?.endEditing(for: nil)
         guard let canvas = find(in: window), !canvas.isHiddenOrHasHiddenAncestor else { return }
         window?.initialFirstResponder = canvas
-        window?.makeFirstResponder(canvas)
+        if window?.firstResponder !== canvas {
+            window?.makeFirstResponder(nil)
+            window?.makeFirstResponder(canvas)
+        }
         NSTextInputContext.current?.discardMarkedText()
         NSTextInputContext.current?.deactivate()
         KeyProbe.bump(canvas.workspace)
