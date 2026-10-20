@@ -3,7 +3,7 @@ import AppKit
 /// A panel value such as stroke weight or keyboard increment.
 /// It stays out of the key loop until the pointer clicks it. Return, Esc, and Tab
 /// hand focus straight back to the canvas.
-final class PanelField: NSTextField, NSTextFieldDelegate {
+class PanelField: NSTextField, NSTextFieldDelegate {
     var onLeave: (() -> Void)?
     private var armed = false
     private var leaving = false
