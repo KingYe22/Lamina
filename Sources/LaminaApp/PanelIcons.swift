@@ -278,18 +278,18 @@ enum PanelIcons {
         let front = NSRect(x: box.minX + 4, y: box.minY, width: box.width - 4, height: box.height - 4)
         switch kind {
         case 1:
-            NSBezierPath(rect: front).stroke(1.2)
+            strokeRect(front)
             Theme.panel.setFill()
             NSBezierPath(rect: back).fill()
-            NSBezierPath(rect: back).stroke(1.2)
+            strokeRect(back)
         case 2:
-            NSBezierPath(rect: box).stroke(1.2)
-            NSBezierPath(rect: box.insetBy(dx: 3, dy: 3)).stroke(1.2)
+            strokeRect(box)
+            strokeRect(box.insetBy(dx: 3, dy: 3))
         default:
-            NSBezierPath(rect: back).stroke(1.2)
+            strokeRect(back)
             Theme.panel.setFill()
             NSBezierPath(rect: front).fill()
-            NSBezierPath(rect: front).stroke(1.2)
+            strokeRect(front)
         }
     }
 
@@ -298,7 +298,7 @@ enum PanelIcons {
         Theme.text.setStroke()
         switch kind {
         case 1:
-            NSBezierPath(rect: box).stroke(1.2)
+            strokeRect(box)
             let bar = NSBezierPath()
             bar.move(to: NSPoint(x: box.minX, y: box.maxY - 3))
             bar.line(to: NSPoint(x: box.maxX, y: box.maxY - 3))
@@ -307,8 +307,9 @@ enum PanelIcons {
         case 2:
             cornerBrackets(box)
         default:
-            NSBezierPath(roundedRect: box, xRadius: 1.5, yRadius: 1.5).lineWidth = 1.2
-            NSBezierPath(roundedRect: box, xRadius: 1.5, yRadius: 1.5).stroke()
+            let frame = NSBezierPath(roundedRect: box, xRadius: 1.5, yRadius: 1.5)
+            frame.lineWidth = 1.2
+            frame.stroke()
         }
     }
 
@@ -387,6 +388,12 @@ enum PanelIcons {
             head.lineWidth = 1
             head.stroke()
         }
+    }
+
+    private static func strokeRect(_ rect: NSRect, width: CGFloat = 1.2) {
+        let path = NSBezierPath(rect: rect)
+        path.lineWidth = width
+        path.stroke()
     }
 
     private static func cornerBrackets(_ box: NSRect) {
