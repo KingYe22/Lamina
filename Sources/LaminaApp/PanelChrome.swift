@@ -45,12 +45,14 @@ final class FloatingPanels: NSView {
         guard !placed, bounds.width > 400, bounds.height > 200 else { return }
         placed = true
         let width: CGFloat = 236
-        let height: CGFloat = 312
-        var x: CGFloat = 12
-        for panel in panels {
-            panel.frame = NSRect(x: x, y: 16, width: width, height: height)
-            x += width + 10
-        }
+        let appearanceH: CGFloat = 236
+        let groupH: CGFloat = 188
+        let strokeH: CGFloat = 228
+        let top = bounds.height - 8
+        let columnX = 8 + width + 8
+        panels[0].frame = NSRect(x: 8, y: top - appearanceH, width: width, height: appearanceH)
+        panels[1].frame = NSRect(x: columnX, y: top - groupH, width: width, height: groupH)
+        panels[2].frame = NSRect(x: columnX, y: top - groupH - 8 - strokeH, width: width, height: strokeH)
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -215,13 +217,29 @@ final class FloatPanel: NSView {
         (heading as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY), withAttributes: [
             .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
         ])
-        ("不透明度" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 20), withAttributes: [
+        PanelIcons.eye(in: NSRect(x: rect.minX, y: rect.minY + 24, width: 16, height: 12), open: true)
+        let twist = NSBezierPath()
+        Theme.icon.setStroke()
+        twist.lineWidth = 1.2
+        twist.move(to: NSPoint(x: rect.minX + 22, y: rect.minY + 26))
+        twist.line(to: NSPoint(x: rect.minX + 26, y: rect.minY + 30))
+        twist.line(to: NSPoint(x: rect.minX + 30, y: rect.minY + 26))
+        twist.stroke()
+        PanelIcons.swatch(in: NSRect(x: rect.minX + 36, y: rect.minY + 22, width: 14, height: 14), color: .black)
+        ("描边" as NSString).draw(at: NSPoint(x: rect.minX + 56, y: rect.minY + 22), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: Theme.text
+        ])
+        (strokeDetail() as NSString).draw(at: NSPoint(x: rect.minX + 92, y: rect.minY + 23), withAttributes: [
             .font: Theme.ui(11), .foregroundColor: Theme.dim
         ])
-        PanelIcons.popup(NSRect(x: rect.minX + 64, y: rect.minY + 18, width: rect.width - 64, height: 20), title: "默认")
-        row(rect.minX, rect.minY + 46, title: "描边", detail: strokeDetail(), color: .black)
-        row(rect.minX, rect.minY + 70, title: "填色", detail: "", color: .white)
-        let y = rect.minY + 100
+        PanelIcons.swatch(in: NSRect(x: rect.minX + 36, y: rect.minY + 46, width: 14, height: 14), color: .white)
+        ("填色" as NSString).draw(at: NSPoint(x: rect.minX + 56, y: rect.minY + 46), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: Theme.text
+        ])
+        ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 36, y: rect.minY + 70), withAttributes: [
+            .font: Theme.ui(11), .foregroundColor: Theme.dim
+        ])
+        let y = rect.maxY - 28
         for index in 0..<4 {
             let box = NSRect(x: rect.minX + CGFloat(index) * 28, y: y, width: 24, height: 22)
             Theme.field.setFill()

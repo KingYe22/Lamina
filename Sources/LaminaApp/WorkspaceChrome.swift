@@ -369,18 +369,19 @@ final class PropertiesDock: NSView {
 
     private func placeControls() {
         let left: CGFloat = 12
-        unitRect = NSRect(x: 72, y: 88, width: max(80, bounds.width - 84), height: 22)
-        boardRect = NSRect(x: 72, y: 114, width: max(80, bounds.width - 84), height: 22)
+        unitRect = NSRect(x: 64, y: 88, width: max(80, bounds.width - 76), height: 22)
+        boardRect = NSRect(x: 64, y: 114, width: max(80, bounds.width - 76), height: 22)
         editRect = NSRect(x: left, y: 140, width: min(148, bounds.width - 24), height: 26)
         rulerRects = iconSlots(6, x: left, y: 200)
         guideRects = iconSlots(5, x: left, y: 256)
         alignRects = iconSlots(3, x: left, y: 312)
         prefRects = iconSlots(3, x: left, y: 368)
-        nudgeField.frame = NSRect(x: max(left, bounds.width - 100), y: 404, width: 84, height: 22)
+        nudgeField.frame = NSRect(x: 64, y: 472, width: max(80, bounds.width - 76), height: 22)
         let quickW = min(124, (bounds.width - 36) / 2)
         quickRects = [
-            NSRect(x: left, y: 460, width: quickW, height: 28),
-            NSRect(x: left + quickW + 8, y: 460, width: quickW, height: 28)
+            NSRect(x: left, y: 532, width: quickW, height: 28),
+            NSRect(x: left + quickW + 8, y: 532, width: quickW, height: 28),
+            NSRect(x: left, y: 566, width: min(140, bounds.width - 24), height: 28)
         ]
     }
 
@@ -439,15 +440,27 @@ final class PropertiesDock: NSView {
         section("对齐选项", y: 290)
         let alignOn = [model.snapGrid, model.snapPoint, model.smartGuides]
         drawIconRow(alignRects, on: alignOn) { index, rect in self.alignGlyph(index, in: rect) }
-        section("首选项", y: 346)
-        drawIconRow(prefRects, on: [usePreviewBounds, scaleCorners, scaleEffects]) { index, rect in self.prefGlyph(index, in: rect) }
-        ("键盘增量" as NSString).draw(at: NSPoint(x: 12, y: 408), withAttributes: [
+        PanelIcons.well(NSRect(x: 12, y: 346, width: bounds.width - 24, height: 26), selected: false)
+        ("智能参考线偏好设置…" as NSString).draw(at: NSPoint(x: 20, y: 351), withAttributes: [
             .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
-        section("快速操作", y: 438)
-        if quickRects.count == 2 {
+        section("首选项", y: 382)
+        PanelIcons.checkbox(at: NSPoint(x: 12, y: 404), on: usePreviewBounds, title: "使用预览边界")
+        PanelIcons.checkbox(at: NSPoint(x: 12, y: 426), on: scaleCorners, title: "缩放圆角")
+        PanelIcons.checkbox(at: NSPoint(x: 12, y: 448), on: scaleEffects, title: "缩放描边和效果")
+        let nudgeLabel = "键盘增量" as NSString
+        let nudgeFont = Theme.ui(12)
+        let nudgeSize = nudgeLabel.size(withAttributes: [.font: nudgeFont])
+        nudgeLabel.draw(at: NSPoint(x: 56 - nudgeSize.width, y: 476), withAttributes: [
+            .font: nudgeFont, .foregroundColor: Theme.text
+        ])
+        section("快速操作", y: 508)
+        if quickRects.count >= 2 {
             quickButton(quickRects[0], draw: { PanelIcons.gear(in: $0) }, title: "文档设置")
             quickButton(quickRects[1], draw: { PanelIcons.sliders(in: $0) }, title: "首选项")
+        }
+        if quickRects.count >= 3 {
+            quickButton(quickRects[2], draw: { PanelIcons.artboard(in: $0) }, title: "生成矢量")
         }
     }
 
@@ -587,10 +600,13 @@ final class PropertiesDock: NSView {
     }
 
     private func labeledPopup(_ label: String, _ value: String, y: CGFloat) {
-        (label as NSString).draw(at: NSPoint(x: 12, y: y + 2), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: Theme.dim
+        let font = Theme.ui(12)
+        let size = (label as NSString).size(withAttributes: [.font: font])
+        let labelRight: CGFloat = 56
+        (label as NSString).draw(at: NSPoint(x: labelRight - size.width, y: y + 3), withAttributes: [
+            .font: font, .foregroundColor: Theme.dim
         ])
-        PanelIcons.popup(NSRect(x: 72, y: y, width: bounds.width - 84, height: 22), title: value)
+        PanelIcons.popup(NSRect(x: labelRight + 8, y: y, width: bounds.width - labelRight - 20, height: 22), title: value)
     }
 
     private func quickButton(_ rect: NSRect, draw: (NSRect) -> Void, title: String) {
@@ -650,19 +666,25 @@ final class PropertiesDock: NSView {
         } else if let index = alignRects.firstIndex(where: { $0.contains(point) }) {
             let names = ["对齐网格", "对齐点", "显示/隐藏智能参考线"]
             _ = workspace.perform(names[index])
-        } else if prefRects.indices.contains(0), prefRects[0].contains(point) {
+        } else if NSRect(x: 12, y: 346, width: bounds.width - 24, height: 26).contains(point) {
+            model.smartGuides = true
+            model.status = "智能参考线偏好设置"
+        } else if NSRect(x: 8, y: 400, width: bounds.width - 16, height: 20).contains(point) {
             usePreviewBounds.toggle()
             model.status = usePreviewBounds ? "使用预览边界" : "使用几何边界"
-        } else if prefRects.indices.contains(1), prefRects[1].contains(point) {
+        } else if NSRect(x: 8, y: 422, width: bounds.width - 16, height: 20).contains(point) {
             scaleCorners.toggle()
             model.status = scaleCorners ? "缩放圆角" : "不缩放圆角"
-        } else if prefRects.indices.contains(2), prefRects[2].contains(point) {
+        } else if NSRect(x: 8, y: 444, width: bounds.width - 16, height: 20).contains(point) {
             scaleEffects.toggle()
             model.status = scaleEffects ? "缩放描边和效果" : "不缩放描边和效果"
         } else if quickRects.indices.contains(0), quickRects[0].contains(point) {
             _ = workspace.perform("打开“文档设置”对话框")
         } else if quickRects.indices.contains(1), quickRects[1].contains(point) {
             _ = workspace.perform("打开“偏好设置”对话框")
+        } else if quickRects.indices.contains(2), quickRects[2].contains(point) {
+            _ = workspace.perform("显示/隐藏 AI")
+            model.status = "生成矢量"
         }
         workspace.touch()
         needsDisplay = true
@@ -1052,13 +1074,13 @@ final class NewDocSheet: NSView {
     private var bleedLinked = true
 
     private let nameField = DialogField(text: "未标题-1", size: 13)
-    private let widthField = DialogField(text: "210")
-    private let heightField = DialogField(text: "297")
-    private let countField = DialogField(text: "1")
-    private let bleedTop = DialogField(text: "0")
-    private let bleedBottom = DialogField(text: "0")
-    private let bleedLeft = DialogField(text: "0")
-    private let bleedRight = DialogField(text: "0")
+    private let widthField = DialogField(text: "210", size: 13)
+    private let heightField = DialogField(text: "297", size: 13)
+    private let countField = DialogField(text: "1", size: 13)
+    private let bleedTop = DialogField(text: "0", size: 13)
+    private let bleedBottom = DialogField(text: "0", size: 13)
+    private let bleedLeft = DialogField(text: "0", size: 13)
+    private let bleedRight = DialogField(text: "0", size: 13)
     private let closeButton = DialogPushButton()
     private let createButton = DialogPushButton()
 
@@ -1135,7 +1157,7 @@ final class NewDocSheet: NSView {
     @objc private func pressClose() { onClose?() }
     @objc private func pressCreate() { submit() }
 
-    private static func makeLabel(_ text: String, size: CGFloat = 11, weight: NSFont.Weight = .regular, color: NSColor = Theme.dim) -> NSTextField {
+    private static func makeLabel(_ text: String, size: CGFloat = 12, weight: NSFont.Weight = .regular, color: NSColor = Theme.dim) -> NSTextField {
         let field = NSTextField(labelWithString: text)
         field.font = Theme.ui(size, weight: weight)
         field.textColor = color
@@ -1320,11 +1342,11 @@ final class NewDocSheet: NSView {
         let shape = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
-        Theme.window.setFill()
+        Theme.dialog.setFill()
         bounds.fill()
 
         let detail = NSRect(x: bounds.width - Self.detailWidth, y: 0, width: Self.detailWidth, height: bounds.height - Self.tabHeight)
-        Theme.panel.setFill()
+        Theme.dialog.setFill()
         detail.fill()
         Theme.line.setFill()
         NSRect(x: detail.minX, y: detail.minY, width: 1, height: detail.height).fill()

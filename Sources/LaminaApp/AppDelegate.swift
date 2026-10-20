@@ -181,12 +181,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "new=\(Self.cg(root.home, root.home.newButtonCenter()))",
             "create=\(Self.cg(root.dialog, root.dialog.createButtonCenter()))",
             "field=\(Self.cg(root.editor.dock, root.editor.dock.nudgeFieldCenter()))",
-            "down=\(Self.cg(canvas, NSPoint(x: mid.x - 40, y: mid.y - 30)))",
-            "pen=\(Self.cg(canvas, NSPoint(x: mid.x + 36, y: mid.y + 48)))",
-            "drag=\(Self.cg(canvas, NSPoint(x: mid.x + 90, y: mid.y - 8)))",
-            "penA=\(Self.cg(canvas, NSPoint(x: mid.x - 160, y: mid.y + 110)))",
-            "penB=\(Self.cg(canvas, NSPoint(x: mid.x - 40, y: mid.y + 170)))",
-            "penC=\(Self.cg(canvas, NSPoint(x: mid.x + 80, y: mid.y + 90)))"
+            "down=\(Self.cg(canvas, NSPoint(x: mid.x + 180, y: mid.y - 280)))",
+            "pen=\(Self.cg(canvas, NSPoint(x: mid.x + 210, y: mid.y - 220)))",
+            "drag=\(Self.cg(canvas, NSPoint(x: mid.x + 320, y: mid.y - 200)))",
+            "penA=\(Self.cg(canvas, NSPoint(x: mid.x + 40, y: mid.y - 300)))",
+            "penB=\(Self.cg(canvas, NSPoint(x: mid.x + 160, y: mid.y - 240)))",
+            "penC=\(Self.cg(canvas, NSPoint(x: mid.x + 90, y: mid.y - 160)))"
         ].joined(separator: " ")
         let data = Data((line + "\n").utf8)
         try? keyLog.seekToEnd()

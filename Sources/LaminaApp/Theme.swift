@@ -22,30 +22,33 @@ enum Theme {
         return NSFont(name: name, size: size) ?? NSFont.systemFont(ofSize: size, weight: weight)
     }
 
-    /// Title bar, gray-75.
-    static let window = color(0x262626)
-    /// Pasteboard, gray-50.
-    static let pasteboard = color(0x1D1D1D)
-    /// Toolbar and panels, gray-100.
-    static let panel = color(0x323232)
+    /// Workspace chrome sampled from the Illustrator toolbar (#535353).
+    static let window = color(0x535353)
+    /// Pasteboard behind the artboard, sampled from the panel screenshot.
+    static let pasteboard = color(0x606060)
+    /// Toolbar, floating panels, and the properties dock.
+    static let panel = color(0x535353)
     static let chrome = window
-    /// Depressed fields, gray-50.
-    static let field = color(0x1D1D1D)
-    static let raised = field
-    /// Dividers and dialog stroke, gray-200.
-    static let line = color(0x3F3F3F)
-    static let fieldBorder = color(0x545454)
-    /// Primary text, gray-800.
-    static let text = color(0xEBEBEB)
-    /// Labels and unselected tabs, gray-600.
-    static let dim = color(0xB2B2B2)
-    /// Group titles, gray-700.
-    static let heading = color(0xD1D1D1)
-    /// Tool icons at rest.
-    static let icon = color(0xD1D1D1)
-    /// Secondary button stroke, gray-500.
+    /// New-document column, sampled from newdoc-details.png.
+    static let dialog = color(0x323232)
+    /// Depressed fields. New-document inputs sample to about #1C1C1C.
+    static let field = color(0x1C1C1C)
+    static let raised = color(0x3A3A3A)
+    /// Dividers.
+    static let line = color(0x6A6A6A)
+    static let fieldBorder = color(0x737373)
+    /// Primary text.
+    static let text = color(0xE8E8E8)
+    /// Labels and unselected tabs.
+    static let dim = color(0xB0B0B0)
+    /// Group titles.
+    static let heading = color(0xD0D0D0)
+    /// Tool icons, sampled from the toolbar line art.
+    static let icon = color(0xC1C1C1)
+    /// Secondary button stroke.
     static let secondaryStroke = color(0x909090)
-    static let accent = color(0x0367E0)
+    /// Generative-AI blue sampled from the toolbar button.
+    static let accent = color(0x1673E6)
     static let accentHover = color(0x0059C2)
     static let accentDown = color(0x004DA3)
     static let focus = color(0x54A3F6)

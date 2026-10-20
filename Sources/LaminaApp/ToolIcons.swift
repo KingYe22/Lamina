@@ -8,9 +8,9 @@ enum ToolIcons {
         color.setFill()
         let box = rect.insetBy(dx: 2, dy: 2)
         switch tool {
-        case .selection: arrow(box, filled: true)
-        case .directSelection: arrow(box, filled: false)
-        case .groupSelection: arrow(box, filled: true); plus(NSRect(x: box.maxX - 7, y: box.maxY - 7, width: 6, height: 6), color: color)
+        case .selection: arrow(box)
+        case .directSelection: directArrow(box)
+        case .groupSelection: arrow(box); plus(NSRect(x: box.maxX - 7, y: box.maxY - 7, width: 6, height: 6), color: color)
         case .magicWand: wand(box)
         case .lasso: lasso(box)
         case .pen: nib(box, mark: nil, color: color)
@@ -35,12 +35,15 @@ enum ToolIcons {
         case .star: star(box).stroke(1.5)
         case .flare: flare(box)
         case .brush: brush(box)
-        case .blobBrush: brush(box); NSBezierPath(ovalIn: NSRect(x: box.maxX - 8, y: box.minY, width: 7, height: 7)).fill()
+        case .blobBrush: blob(box)
         case .pencil: pencil(box)
         case .smooth: wave(box)
         case .pathEraser: pencil(box); minus(NSRect(x: box.minX, y: box.maxY - 6, width: 7, height: 4))
         case .joinTool: join(box)
-        case .shaper: wave(box); NSBezierPath(rect: box.insetBy(dx: 4, dy: 5)).stroke(1)
+        case .shaper: shaper(box)
+        case .shapeBuilder: shapeBuilder(box)
+        case .blend: blendMark(box)
+        case .rotateView: rotateView(box)
         case .eraser: eraser(box)
         case .scissors: scissors(box)
         case .knife: knife(box)
@@ -58,22 +61,39 @@ enum ToolIcons {
         case .hand: hand(box)
         case .zoom: zoom(box)
         case .artboard: NSBezierPath(rect: box.insetBy(dx: 2, dy: 2)).stroke(1.4)
-        default: arrow(box, filled: true)
+        default: arrow(box)
         }
     }
 
     private enum NibMark { case plus, minus }
 
-    private static func arrow(_ box: NSRect, filled: Bool) {
+    /// Toolbar hosts are flipped, so y grows downward. Coordinates below are fractions of the box from the top-left.
+    private static func at(_ box: NSRect, _ x: CGFloat, _ y: CGFloat) -> NSPoint {
+        NSPoint(x: box.minX + x * box.width, y: box.minY + y * box.height)
+    }
+
+    /// Selection arrow: hollow cursor, tip at the top, notch in the tail.
+    private static func arrow(_ box: NSRect) {
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: box.minX + 2, y: box.minY + 1))
-        path.line(to: NSPoint(x: box.minX + 2, y: box.maxY - 1))
-        path.line(to: NSPoint(x: box.midX + 1, y: box.midY))
-        path.line(to: NSPoint(x: box.maxX - 1, y: box.maxY - 2))
-        path.line(to: NSPoint(x: box.midX, y: box.midY - 1))
-        path.line(to: NSPoint(x: box.minX + 7, y: box.minY + 1))
+        path.move(to: at(box, 0.16, 0.04))
+        path.line(to: at(box, 0.16, 0.58))
+        path.line(to: at(box, 0.34, 0.42))
+        path.line(to: at(box, 0.50, 0.96))
+        path.line(to: at(box, 0.66, 0.82))
+        path.line(to: at(box, 0.46, 0.40))
+        path.line(to: at(box, 0.90, 0.40))
         path.close()
-        if filled { path.fill() } else { path.stroke(1.5) }
+        path.stroke(1.15)
+    }
+
+    /// Direct-selection arrow: open triangle, same direction as the selection tool.
+    private static func directArrow(_ box: NSRect) {
+        let path = NSBezierPath()
+        path.move(to: at(box, 0.14, 0.06))
+        path.line(to: at(box, 0.14, 0.88))
+        path.line(to: at(box, 0.92, 0.88))
+        path.close()
+        path.stroke(1.15)
     }
 
     private static func plus(_ rect: NSRect, color: NSColor) {
@@ -100,25 +120,28 @@ enum ToolIcons {
 
     private static func lasso(_ box: NSRect) {
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: box.minX + 4, y: box.minY + 3))
-        path.curve(to: NSPoint(x: box.midX, y: box.maxY - 2), controlPoint1: NSPoint(x: box.minX, y: box.midY), controlPoint2: NSPoint(x: box.midX - 6, y: box.maxY))
-        path.curve(to: NSPoint(x: box.maxX - 2, y: box.midY), controlPoint1: NSPoint(x: box.maxX, y: box.maxY), controlPoint2: NSPoint(x: box.maxX, y: box.midY + 4))
-        path.curve(to: NSPoint(x: box.midX + 2, y: box.minY + 4), controlPoint1: NSPoint(x: box.maxX - 2, y: box.minY + 2), controlPoint2: NSPoint(x: box.midX + 8, y: box.minY + 2))
-        path.stroke(1.4)
+        path.move(to: at(box, 0.46, 0.62))
+        path.curve(to: at(box, 0.18, 0.22), controlPoint1: at(box, 0.08, 0.62), controlPoint2: at(box, 0.04, 0.18))
+        path.curve(to: at(box, 0.55, 0.18), controlPoint1: at(box, 0.32, 0.02), controlPoint2: at(box, 0.55, 0.02))
+        path.curve(to: at(box, 0.48, 0.48), controlPoint1: at(box, 0.92, 0.16), controlPoint2: at(box, 0.78, 0.42))
+        path.stroke(1.2)
+        let tail = NSBezierPath()
+        tail.move(to: at(box, 0.52, 0.55))
+        tail.line(to: at(box, 0.92, 0.96))
+        tail.stroke(1.2)
     }
 
     private static func nib(_ box: NSRect, mark: NibMark?, color: NSColor) {
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: box.minX + 3, y: box.minY + 2))
-        path.line(to: NSPoint(x: box.midX + 1, y: box.midY - 1))
-        path.line(to: NSPoint(x: box.maxX - 2, y: box.maxY - 3))
-        path.line(to: NSPoint(x: box.maxX - 5, y: box.maxY - 1))
-        path.line(to: NSPoint(x: box.midX - 2, y: box.midY - 2))
-        path.line(to: NSPoint(x: box.minX + 1, y: box.minY + 5))
+        path.move(to: at(box, 0.06, 0.94))
+        path.line(to: at(box, 0.40, 0.52))
+        path.line(to: at(box, 0.90, 0.10))
+        path.line(to: at(box, 0.74, 0.04))
+        path.line(to: at(box, 0.28, 0.46))
         path.close()
-        path.fill()
-        if mark == .plus { plus(NSRect(x: box.minX, y: box.maxY - 8, width: 7, height: 7), color: color) }
-        if mark == .minus { minus(NSRect(x: box.minX, y: box.maxY - 5, width: 7, height: 3)) }
+        path.stroke(1.15)
+        if mark == .plus { plus(NSRect(x: box.minX, y: box.minY, width: 7, height: 7), color: color) }
+        if mark == .minus { minus(NSRect(x: box.minX, y: box.minY + 2, width: 7, height: 3)) }
     }
 
     private static func caret(_ box: NSRect) {
@@ -131,10 +154,11 @@ enum ToolIcons {
 
     private static func curvePen(_ box: NSRect) {
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: box.minX + 3, y: box.minY + 4))
-        path.curve(to: NSPoint(x: box.maxX - 3, y: box.maxY - 4), controlPoint1: NSPoint(x: box.minX + 2, y: box.maxY - 2), controlPoint2: NSPoint(x: box.maxX - 2, y: box.minY + 2))
-        path.stroke(1.6)
-        NSBezierPath(ovalIn: NSRect(x: box.maxX - 6, y: box.maxY - 6, width: 4, height: 4)).fill()
+        path.move(to: at(box, 0.12, 0.78))
+        path.curve(to: at(box, 0.88, 0.22), controlPoint1: at(box, 0.08, 0.18), controlPoint2: at(box, 0.92, 0.82))
+        path.stroke(1.35)
+        NSBezierPath(ovalIn: NSRect(x: box.minX + box.width * 0.06, y: box.minY + box.height * 0.68, width: 3.5, height: 3.5)).stroke(1)
+        NSBezierPath(ovalIn: NSRect(x: box.maxX - box.width * 0.22, y: box.minY + box.height * 0.12, width: 3.5, height: 3.5)).stroke(1)
     }
 
     private static func glyph(_ text: String, _ box: NSRect, color: NSColor, vertical: Bool = false) {
@@ -144,9 +168,11 @@ enum ToolIcons {
         (text as NSString).draw(at: NSPoint(x: box.midX - size.width / 2, y: box.midY - size.height / 2 + 1), withAttributes: attrs)
         if vertical {
             let bar = NSBezierPath()
-            bar.move(to: NSPoint(x: box.maxX - 2, y: box.minY + 2))
-            bar.line(to: NSPoint(x: box.maxX - 2, y: box.maxY - 2))
-            bar.stroke(1.2)
+            bar.move(to: NSPoint(x: box.minX + 2, y: box.minY + 2))
+            bar.line(to: NSPoint(x: box.maxX - 2, y: box.minY + 2))
+            bar.move(to: NSPoint(x: box.midX, y: box.minY + 2))
+            bar.line(to: NSPoint(x: box.midX, y: box.maxY - 2))
+            bar.stroke(1.15)
         }
     }
 
@@ -237,14 +263,33 @@ enum ToolIcons {
     }
 
     private static func brush(_ box: NSRect) {
+        let handle = NSRect(x: box.minX, y: box.minY, width: box.width * 0.46, height: box.height * 0.32)
+        NSColor(srgbRed: 45.0 / 255, green: 140.0 / 255, blue: 235.0 / 255, alpha: 1).setFill()
+        NSBezierPath(roundedRect: handle, xRadius: 1.2, yRadius: 1.2).fill()
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: box.minX + 3, y: box.maxY - 2))
-        path.line(to: NSPoint(x: box.maxX - 5, y: box.minY + 7))
-        path.line(to: NSPoint(x: box.maxX - 2, y: box.minY + 3))
-        path.line(to: NSPoint(x: box.maxX - 7, y: box.minY + 2))
-        path.line(to: NSPoint(x: box.minX + 1, y: box.maxY - 6))
-        path.close()
-        path.fill()
+        path.lineWidth = 1.05
+        path.lineCapStyle = .round
+        path.move(to: NSPoint(x: handle.maxX - 1, y: handle.midY))
+        path.line(to: at(box, 0.96, 0.92))
+        path.move(to: NSPoint(x: handle.minX + 2, y: handle.maxY - 1))
+        path.curve(to: at(box, 0.88, 0.96), controlPoint1: at(box, 0.4, 0.55), controlPoint2: at(box, 0.7, 0.9))
+        path.move(to: NSPoint(x: handle.midX, y: handle.maxY - 1))
+        path.line(to: at(box, 0.78, 0.78))
+        path.stroke()
+    }
+
+    private static func blob(_ box: NSRect) {
+        let path = NSBezierPath()
+        path.lineWidth = 1.7
+        path.lineCapStyle = .round
+        path.move(to: at(box, 0.15, 0.2))
+        path.curve(to: at(box, 0.82, 0.84), controlPoint1: at(box, 0.05, 0.7), controlPoint2: at(box, 0.7, 0.15))
+        path.stroke()
+        let edge = NSBezierPath()
+        edge.lineWidth = 1.05
+        edge.move(to: at(box, 0.28, 0.16))
+        edge.curve(to: at(box, 0.9, 0.7), controlPoint1: at(box, 0.2, 0.55), controlPoint2: at(box, 0.75, 0.2))
+        edge.stroke()
     }
 
     private static func pencil(_ box: NSRect) {
@@ -271,9 +316,17 @@ enum ToolIcons {
     }
 
     private static func eraser(_ box: NSRect) {
-        let body = NSBezierPath(roundedRect: NSRect(x: box.minX + 4, y: box.minY + 3, width: box.width - 8, height: box.height - 6), xRadius: 2, yRadius: 2)
-        body.stroke(1.5)
-        line(box.minX + 4, box.midY, box.maxX - 4, box.midY)
+        let path = NSBezierPath()
+        path.move(to: at(box, 0.38, 0.06))
+        path.line(to: at(box, 0.94, 0.28))
+        path.line(to: at(box, 0.62, 0.94))
+        path.line(to: at(box, 0.06, 0.72))
+        path.close()
+        path.stroke(1.2)
+        let band = NSBezierPath()
+        band.move(to: at(box, 0.22, 0.4))
+        band.line(to: at(box, 0.78, 0.6))
+        band.stroke(1.05)
     }
 
     private static func scissors(_ box: NSRect) {
@@ -290,19 +343,18 @@ enum ToolIcons {
         path.line(to: NSPoint(x: box.maxX - 6, y: box.maxY - 2))
         path.line(to: NSPoint(x: box.minX + 2, y: box.minY + 6))
         path.close()
-        path.fill()
+        path.stroke(1.25)
     }
 
     private static func rotate(_ box: NSRect) {
         let path = NSBezierPath()
-        path.appendArc(withCenter: NSPoint(x: box.midX, y: box.midY), radius: box.width * 0.34, startAngle: 40, endAngle: 320, clockwise: false)
-        path.stroke(1.6)
+        path.appendArc(withCenter: NSPoint(x: box.midX, y: box.midY + 1), radius: box.width * 0.32, startAngle: 30, endAngle: 300, clockwise: false)
+        path.stroke(1.25)
         let head = NSBezierPath()
-        head.move(to: NSPoint(x: box.midX + box.width * 0.1, y: box.minY + 3))
-        head.line(to: NSPoint(x: box.midX + box.width * 0.34, y: box.minY + 1))
-        head.line(to: NSPoint(x: box.midX + box.width * 0.22, y: box.minY + 8))
-        head.close()
-        head.fill()
+        head.move(to: at(box, 0.62, 0.08))
+        head.line(to: at(box, 0.92, 0.18))
+        head.line(to: at(box, 0.7, 0.32))
+        head.stroke(1.15)
     }
 
     private static func reflect(_ box: NSRect) {
@@ -355,10 +407,12 @@ enum ToolIcons {
     }
 
     private static func fade(_ box: NSRect) {
-        let rect = box.insetBy(dx: 2, dy: 3)
-        NSBezierPath(rect: rect).stroke(1.2)
-        NSColor.black.withAlphaComponent(0.85).setFill()
-        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.minY, width: rect.width * 0.45, height: rect.height)).fill()
+        let rect = box.insetBy(dx: 1, dy: 2)
+        if let gradient = NSGradient(colors: [NSColor.black, NSColor.white]) {
+            gradient.draw(in: rect, angle: 0)
+        }
+        NSColor.black.setStroke()
+        NSBezierPath(rect: rect).stroke(1)
     }
 
     private static func dropper(_ box: NSRect) {
@@ -370,7 +424,7 @@ enum ToolIcons {
         path.line(to: NSPoint(x: box.maxX - 6, y: box.minY + 1))
         path.line(to: NSPoint(x: box.midX - 4, y: box.midY))
         path.close()
-        path.fill()
+        path.stroke(1.2)
     }
 
     private static func measure(_ box: NSRect) {
@@ -380,24 +434,64 @@ enum ToolIcons {
     }
 
     private static func zoom(_ box: NSRect) {
-        let r = box.width * 0.28
-        NSBezierPath(ovalIn: NSRect(x: box.minX + 1, y: box.minY + box.height * 0.28, width: r * 2, height: r * 2)).stroke(1.6)
-        line(box.minX + 1 + r * 1.55, box.minY + box.height * 0.28 + r * 0.45, box.maxX - 1, box.minY + 2)
+        let glass = NSRect(x: box.minX + 1, y: box.minY + 1, width: box.width * 0.62, height: box.height * 0.62)
+        NSBezierPath(ovalIn: glass).stroke(1.35)
+        line(glass.maxX - glass.width * 0.22, glass.maxY - glass.height * 0.22, box.maxX - 1, box.maxY - 1)
     }
 
     private static func hand(_ box: NSRect) {
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: box.minX + 7, y: box.maxY - 1))
-        path.line(to: NSPoint(x: box.minX + 7, y: box.midY + 1))
-        path.line(to: NSPoint(x: box.minX + 4, y: box.midY - 2))
-        path.line(to: NSPoint(x: box.minX + 4, y: box.minY + 5))
-        path.curve(to: NSPoint(x: box.midX + 2, y: box.minY + 2), controlPoint1: NSPoint(x: box.minX + 4, y: box.minY + 1), controlPoint2: NSPoint(x: box.midX - 2, y: box.minY + 1))
-        path.line(to: NSPoint(x: box.maxX - 3, y: box.minY + 6))
-        path.line(to: NSPoint(x: box.maxX - 3, y: box.midY + 2))
-        path.line(to: NSPoint(x: box.maxX - 6, y: box.midY))
-        path.line(to: NSPoint(x: box.maxX - 6, y: box.maxY - 5))
+        path.move(to: at(box, 0.28, 0.02))
+        path.line(to: at(box, 0.28, 0.48))
+        path.line(to: at(box, 0.14, 0.55))
+        path.line(to: at(box, 0.14, 0.78))
+        path.curve(to: at(box, 0.48, 0.96), controlPoint1: at(box, 0.14, 0.96), controlPoint2: at(box, 0.3, 0.96))
+        path.line(to: at(box, 0.86, 0.72))
+        path.line(to: at(box, 0.86, 0.42))
+        path.line(to: at(box, 0.7, 0.38))
+        path.line(to: at(box, 0.7, 0.08))
         path.close()
-        path.stroke(1.3)
+        path.stroke(1.15)
+    }
+
+    private static func shaper(_ box: NSRect) {
+        let path = NSBezierPath()
+        let c = NSPoint(x: box.midX, y: box.midY)
+        path.move(to: c)
+        var radius: CGFloat = 0.6
+        for index in 0..<26 {
+            let angle = CGFloat(index) / 26 * .pi * 4.2
+            radius = 0.6 + CGFloat(index) * (min(box.width, box.height) * 0.42) / 26
+            path.line(to: NSPoint(x: c.x + cos(angle) * radius, y: c.y + sin(angle) * radius))
+        }
+        path.stroke(1.15)
+    }
+
+    private static func shapeBuilder(_ box: NSRect) {
+        NSBezierPath(ovalIn: box.insetBy(dx: 1, dy: 1)).stroke(1.2)
+        let mark = NSBezierPath()
+        mark.move(to: at(box, 0.5, 0.28))
+        mark.line(to: at(box, 0.5, 0.72))
+        mark.move(to: at(box, 0.28, 0.5))
+        mark.line(to: at(box, 0.72, 0.5))
+        mark.stroke(1.2)
+    }
+
+    private static func blendMark(_ box: NSRect) {
+        NSBezierPath(rect: NSRect(x: box.minX + 1, y: box.minY + box.height * 0.28, width: box.width * 0.34, height: box.height * 0.34)).stroke(1.15)
+        NSBezierPath(rect: NSRect(x: box.midX, y: box.minY + box.height * 0.42, width: box.width * 0.42, height: box.height * 0.42)).stroke(1.15)
+        line(box.minX + box.width * 0.36, box.midY, box.midX, box.midY + 2)
+    }
+
+    private static func rotateView(_ box: NSRect) {
+        let path = NSBezierPath()
+        path.appendArc(withCenter: NSPoint(x: box.midX - 1, y: box.midY + 1), radius: box.width * 0.34, startAngle: 200, endAngle: 40, clockwise: false)
+        path.stroke(1.2)
+        let head = NSBezierPath()
+        head.move(to: at(box, 0.72, 0.1))
+        head.line(to: at(box, 0.96, 0.28))
+        head.line(to: at(box, 0.68, 0.34))
+        head.stroke(1.15)
     }
 }
 

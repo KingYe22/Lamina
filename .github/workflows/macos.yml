@@ -215,6 +215,19 @@ jobs:
           if-no-files-found: error
           path: dist/shots/*.png
 
+      - name: Compare screenshots with the reference
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user pillow || python3 -m pip install --break-system-packages pillow
+          python3 packaging/compare_refs.py dist/shots packaging/ai-ref dist/compare
+          ls -l dist/compare
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lamina-compare
+          if-no-files-found: error
+          path: dist/compare/*
+
       - uses: actions/upload-artifact@v4
         with:
           name: Lamina-macOS
@@ -270,7 +283,7 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
-            Dock 和窗口标题显示为 Lamina。0.3.2 按 Illustrator 2026 中文版真机截图对齐了三块界面：新建文档的「预设详细信息」里，名称左对齐、宽高和出血数值居中、下拉框右侧是箭头、方向是两个图标按钮、出血有上/下/左/右和蓝色链接，高级选项与更多设置可以折叠。左侧工具栏按选择、形状、绘图、修改、文字、导航、颜色分两列，下面是填色/描边、颜色/渐变/无、绘图模式、屏幕模式、编辑工具栏，以及蓝色的生成式 AI。外观、变换/对齐/路径查找器、描边/透明度是可拖动、关闭、折叠、合并的浮动面板；属性面板用图标开关控制标尺、网格、参考线和捕捉。钢笔拖拽只添加锚点和方向手柄，不再带动窗口。应用图标使用提供的原稿，只套 macOS 圆角蒙版。快捷键表仍编译在程序里。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
+            Dock 和窗口标题显示为 Lamina。0.3.3 继续按真机截图像素对齐：工具栏是中灰底上的浅灰线描图标，选择、形状、绘图、修改、文字、导航、颜色各组按截图排成多行，顶部有 « 和拖动点，填色/描边色块重叠，生成式 AI 是通栏蓝色按钮。外观面板浮在画布左上，变换/对齐/路径查找器与描边/透明度叠在它右边，属性面板靠右，标签右对齐，并带有智能参考线偏好设置、三个首选项勾选和生成矢量。工作区和面板底色取自截图的中灰。构建会把成品和参考图缩放到同一宽度，输出半透明叠加图和差异图。钢笔拖拽只添加锚点和方向手柄，不再带动窗口。应用图标使用提供的原稿，只套 macOS 圆角蒙版。快捷键表仍编译在程序里。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
           files: |
             dist/Lamina.app.zip
             dist/Lamina.dmg
