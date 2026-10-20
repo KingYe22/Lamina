@@ -2,8 +2,21 @@ import XCTest
 @testable import LaminaCore
 
 final class ShortcutTests: XCTestCase {
+    func testEmbeddedTableMatchesCheckedInFile() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/LaminaCore/Resources/adobe_shortcuts_cn.txt")
+        let file = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(ShortcutSource.load(), file)
+        XCTAssertNil(ShortcutSource.failure)
+        XCTAssertFalse(ShortcutSource.load().isEmpty)
+    }
+
     func testEveryAdobeRowIsMapped() {
         let text = ShortcutSource.load()
+        XCTAssertNil(ShortcutSource.failure)
         XCTAssertTrue(text.contains("Command + Z"), "shortcut source missing")
         let rows = ShortcutTableParser.parse(text)
         XCTAssertEqual(rows.count, 390, rows.prefix(5).map(\.title).joined(separator: " | "))

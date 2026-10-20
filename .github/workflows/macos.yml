@@ -75,10 +75,40 @@ jobs:
           hdiutil create -volname Lamina -srcfolder dist/dmg -ov -format UDZO dist/Lamina.dmg
           du -sh dist/dmg/Lamina.app dist/Lamina.dmg
 
+      - name: Install shipped app from the disk image
+        id: install
+        run: |
+          set -euo pipefail
+          MOUNT="$(mktemp -d)"
+          hdiutil attach dist/Lamina.dmg -nobrowse -readonly -mountpoint "$MOUNT"
+          DEST="$(mktemp -d)"
+          cp -R "$MOUNT/Lamina.app" "$DEST/Lamina.app"
+          hdiutil detach "$MOUNT"
+          # The user's 0.2.1 disk image had no shortcut file and no SwiftPM bundle.
+          # Delete every copy the temp app could read so only the compiled-in table works.
+          find "$DEST/Lamina.app" -name 'adobe_shortcuts_cn.txt' -delete
+          rm -rf "$DEST/Lamina.app/Contents/Resources/"*.bundle
+          RESOURCE="Sources/LaminaCore/Resources/adobe_shortcuts_cn.txt"
+          if [[ -f "$RESOURCE" ]]; then
+            mv "$RESOURCE" "$RESOURCE.ci-aside"
+          fi
+          BIN="$DEST/Lamina.app/Contents/MacOS/Lamina"
+          test -x "$BIN"
+          if grep -a -q 'adobe_shortcuts_cn.txt' "$BIN"; then
+            echo "executable still contains a runtime path to the shortcut file"
+            exit 1
+          fi
+          if ! grep -a -q 'Command + Z' "$BIN"; then
+            echo "shortcut table text is not inside the executable"
+            exit 1
+          fi
+          echo "app=$DEST/Lamina.app" >> "$GITHUB_OUTPUT"
+          du -sh "$DEST/Lamina.app"
+
       - name: Smoke test launch window
         run: |
           set -euo pipefail
-          APP="dist/dmg/Lamina.app"
+          APP="${{ steps.install.outputs.app }}"
           BIN="$APP/Contents/MacOS/Lamina"
           test -x "$BIN"
           swiftc -O -framework CoreGraphics -framework Foundation packaging/SmokeWindows.swift -o /tmp/smoke-windows
@@ -126,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           clang -fobjc-arc -O2 -framework Carbon -framework CoreGraphics -framework Foundation packaging/KeyPoster.m -o /tmp/keyposter
-          BIN="dist/dmg/Lamina.app/Contents/MacOS/Lamina"
+          BIN="${{ steps.install.outputs.app }}/Contents/MacOS/Lamina"
           fail=0
           for mode in pinyin abc; do
             STATE="$(mktemp)"
@@ -163,7 +193,7 @@ jobs:
       - name: Capture interface screenshots
         run: |
           set -euo pipefail
-          BIN="dist/dmg/Lamina.app/Contents/MacOS/Lamina"
+          BIN="${{ steps.install.outputs.app }}/Contents/MacOS/Lamina"
           DIR="$(mktemp -d)"
           LAMINA_SHOTS="$DIR" "$BIN" >/tmp/lamina-shots.out 2>/tmp/lamina-shots.err || true
           cp /tmp/AppIcon-1024.png "$DIR/icon-1024.png"
@@ -192,9 +222,17 @@ jobs:
             dist/Lamina.dmg
             dist/Lamina.app.zip
 
+      - name: Restore shortcut source file
+        if: always()
+        run: |
+          RESOURCE="Sources/LaminaCore/Resources/adobe_shortcuts_cn.txt"
+          if [[ -f "$RESOURCE.ci-aside" ]]; then
+            mv "$RESOURCE.ci-aside" "$RESOURCE"
+          fi
+
       - name: Resolve release tag
         id: release
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        if: success() && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
@@ -205,10 +243,18 @@ jobs:
           else
             TAG="${GITHUB_REF_NAME}"
           fi
+          if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then
+            git fetch origin "refs/tags/${TAG}" --force
+            current="$(git rev-parse "refs/tags/${TAG}^{}")"
+            if [ "$current" != "$GITHUB_SHA" ]; then
+              echo "tag ${TAG} points at ${current}, this run built ${GITHUB_SHA}; refusing to publish a stale tag"
+              exit 1
+            fi
+          fi
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
 
       - name: Attach app and disk image to the GitHub Release
-        if: steps.release.outputs.tag != ''
+        if: success() && steps.release.outputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
@@ -223,7 +269,7 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
-            Dock 和窗口标题显示为 Lamina。0.3.0 在画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。绘制时有实时预览和尺寸标签，工具栏图标可长按弹出同组工具。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
+            Dock 和窗口标题显示为 Lamina。0.3.0 把快捷键表编译进程序，不再去读 Resources 里的文本文件。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。绘制时有实时预览和尺寸标签，工具栏图标可长按弹出同组工具。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
           files: |
             dist/Lamina.app.zip
             dist/Lamina.dmg

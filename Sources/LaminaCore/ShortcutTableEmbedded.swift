@@ -1,0 +1,2561 @@
+import Foundation
+
+/// Illustrator shortcut table compiled into the binary.
+/// The shipped app must not read this from a file: the disk image does not
+/// contain the SwiftPM resource bundle, and a source-path fallback only
+/// exists on the machine that compiled the app.
+enum ShortcutTableEmbedded {
+    static let text = #"""
+
+    Illustrator 默认键盘快捷键 | Illustrator
+                用户指南
+                取消(C)
+                默认键盘快捷键 | Illustrator
+                搜索
+                上次更新日期： 
+                    2026年3月5日
+                    Illustrator
+                        Open app
+ 《Illustrator 用户指南》
+ 了解 Illustrator
+   Illustrator 简介
+     Illustrator 的新增功能
+     最新的性能增强
+     Illustrator 发行说明
+     使用 Illustrator (Beta)
+     常见问题
+     Illustrator 系统要求
+     适用于 Apple Silicon 的 Illustrator
+     GPU 性能
+   工作区
+     工作区基础知识
+     创建文档
+     使用 Illustrator“发现”面板加快学习速度
+     使用上下文任务栏加速工作流程 
+     工具栏
+     默认键盘快捷键
+     自定快捷键
+     画板简介
+     管理画板
+     自定义工作区
+     “属性”面板
+     设置偏好设置
+     触控工作区
+     Illustrator 中的 Microsoft Surface Dial 支持
+     撤消编辑和管理设计历史记录
+     旋转视图
+     标尺、网格和参考线
+     Illustrator 中的无障碍功能
+     查看图稿
+     将 Touch Bar 与 Illustrator 结合使用
+     文件和模板
+   Illustrator 中的工具
+     工具概览
+     选择工具
+       选择
+       直接选择
+       编组选择
+       魔棒
+       套索
+       画板
+     导航工具
+       抓住
+       旋转视图
+       缩放
+     绘图工具
+       渐变
+       网格
+       形状生成器
+     文本工具
+       文字
+       路径文字
+       垂直文字
+     绘图工具
+       钢笔
+       添加锚点
+       删除锚点
+       锚点
+       曲率
+       直线段
+       矩形
+       圆角矩形
+       椭圆
+       多边形
+       星形
+       画笔
+       斑点画笔
+       铅笔
+       Shaper
+       切片
+     修改工具
+       旋转
+       镜像
+       缩放
+       切变
+       宽度
+       自由变换
+       滴管
+       混合
+       橡皮擦
+       剪刀
+       尺寸
+   生成式 AI（在中国大陆不可用）
+     Illustrator 生成式 AI 常见问题解答
+     使用文本提示生成场景、主题和图标
+     使用文本提示生成矢量图形
+     使用文本提示生成矢量形状填充
+     生成图形以扩展图稿并填充出血区域
+     使用文本提示重新着色图稿
+   快速操作
+     复古文字
+     霓虹灯文本
+     复古文本
+     重新着色
+     将草图转换为矢量
+ Illustrator iPad 版
+   Illustrator iPad 版简介
+     Illustrator iPad 版概述
+     Illustrator iPad 版常见问题解答
+     系统要求 | Illustrator iPad 版
+     在 Illustrator iPad 版上可以或无法执行的操作
+   工作区
+     Illustrator iPad 版工作区
+     触控快捷键和手势
+     Illustrator iPad 版的键盘快捷键
+     管理应用程序设置
+   文档
+     在 Illustrator iPad 版中处理文档
+     导入 Photoshop 和 Fresco 文档
+   选择和排列对象
+     创建重复对象
+     混合对象
+   绘图
+     绘制和编辑路径
+     绘制和编辑形状
+   文字
+     处理文字和字体
+     在路径上创建文本设计
+     添加您自己的字体
+   处理图像
+     对栅格图像进行矢量化
+   颜色
+     应用颜色和渐变
+ 云文档
+   基本信息
+     使用 Illustrator 云文档
+     共享并协作处理 Illustrator 云文档
+     共享文档以供审阅
+     升级 Adobe Illustrator 的云存储空间
+     Illustrator 云文档 | 常见问题
+   故障排除
+     排除创建或保存 Illustrator 云文档的问题
+     为 Illustrator 云文档问题排除故障
+ 添加和编辑内容
+   绘图
+     绘图基础知识
+     编辑路径
+     绘制像素级优化的图稿
+     使用钢笔、曲率或铅笔工具绘制
+     绘制简单线段和形状
+     绘制矩形和极坐标网格
+     绘制和编辑光晕
+     描摹图像
+     简化路径
+     符号工具和符号组
+     调整路径段
+     利用简单 5 步设计花朵
+     创建和编辑透视网格
+     在透视网格上绘制和修改对象
+     将对象用作符号以重复使用
+     绘制用于 Web 工作流程的像素对齐路径
+   测量
+     测量距离和面积
+     测量和绘制尺寸
+   3D 对象和材质
+     关于 Illustrator 中的 3D 效果
+     创建 3D 图形
+     将图稿贴在 3D 对象上
+     创建 3D 文本
+     创建 3D 对象
+   颜色
+     关于颜色
+     选择颜色
+     使用和创建色板
+     调整颜色
+     使用“Adobe Color 主题”面板
+     颜色组（协调）
+     “颜色主题”面板
+     重新着色图稿
+   绘画
+     关于绘画
+     使用填色和描边上色
+     实时上色组
+     渐变
+     画笔
+     透明度和混合模式
+     为对象应用描边
+     创建和编辑图案
+     网格
+     图案
+   选择和排列对象
+     选择对象
+     图层
+     展开、分组和取消分组对象
+     移动、对齐和分布对象
+     对齐、排列和移动路径上的对象 
+     将对象与字形对齐
+     将对象与日语字形对齐
+     堆叠对象    
+     锁定、隐藏和删除对象
+     复制和重复对象
+     旋转和镜像对象
+     交织对象
+     创建逼真的模型
+   改变对象形状
+     裁切图像
+     变换对象
+     组合对象
+     剪切、分割和裁切对象
+     操控变形
+     缩放、倾斜和扭曲对象
+     混合对象
+     使用封套改变形状
+     使用效果改变对象形状
+     使用 Shaper 和形状生成器工具构建新的形状
+     使用实时转角
+     增强的支持触摸式变形工作流程
+     编辑剪贴蒙版
+     实时形状
+     使用形状生成器工具创建形状
+     全局编辑
+   文字
+     添加文本并使用文字对象
+     为文本添加基本格式
+     关于 Illustrator 字体的常见问题解答
+     字体和排版
+     创建路径文字
+     创建项目符号列表和编号列表
+     管理文本区域
+     为文本添加高级格式
+     设置段落格式
+     字符和段落样式
+     特殊字符
+     制表符
+     缩放和旋转文字
+     行距和字距
+     连字和换行
+     拼写和语言词典
+     设置亚洲字符格式
+     阿拉伯文和希伯来文排版
+     亚洲文字排版器
+     Reflow 查看器
+     预览、添加或替换缺失字体
+     导入和导出文本
+     识别图像和轮廓化文本中使用的字体
+     创意字体排印设计
+     使用混合对象创建文本设计
+     使用图像描摹创建文本海报
+   创建特殊效果
+     使用效果
+     图形样式
+     外观属性
+     创建素描和马赛克
+     投影、发光和羽化
+     效果小结
+   Web 图形
+     创建 Web 图形的最佳做法
+     图表
+     SVG
+     切片和图像映射
+ 导入、导出和存储
+   导入
+     置入多个文件
+     管理链接和嵌入文件
+     链接信息
+     取消嵌入图像
+     从 Photoshop 导入图稿
+     导入位图图像
+     导入 Adobe PDF 文件
+     导入 EPS、DCS 和 AutoCAD 文件
+   Illustrator 中的 Creative Cloud Libraries 
+     Illustrator 中的 Creative Cloud Libraries
+   存储和导出
+     保存图稿
+     导出图稿
+     创建 Adobe PDF 文件
+     Adobe PDF 选项
+     在 Photoshop 中使用 Illustrator 图稿
+     收集资源并批量导出
+     包文件
+     提取 CSS | Illustrator CC
+     “文档信息”面板
+ 打印
+   准备打印
+     设置打印文档
+     更改页面大小和方向
+     指定用于裁切或对齐的裁切标记
+     大型画布快速入门
+   打印
+     叠印
+     使用颜色管理进行打印
+     PostScript 打印
+     打印预设
+     印刷标记和出血
+     打印和存储透明图稿
+     陷印
+     打印分色
+     打印渐变、网格和颜色混合
+     白色叠印
+ 任务自动化
+   使用“变量”面板合并数据
+   脚本的自动化
+   动作的自动化
+ 故障排除 
+   修复的问题
+   已知问题
+   崩溃问题
+   崩溃后恢复文件
+   修复损坏的文档
+   安全模式
+   文件问题
+   支持的文件格式
+   GPU 设备驱动程序问题
+   GPU 性能问题
+   Wacom 设备问题
+   DLL 文件问题
+   内存问题
+   偏好设置文件问题
+   字体问题
+   打印机问题
+   介质问题
+   插件缺失问题
+   与 Adobe 共享崩溃报告
+   无法在 Illustrator 中应用效果
+   改进 Illustrator 性能
+            在 Adobe Illustrator 中，使用键盘快捷键可提高您的工作效率。
+            Illustrator 提供了许多快捷键来帮助您更快地完成工作。 当您将鼠标光标悬停在命令菜单中的图标上方时，会显示许多键盘快捷键。
+            在应用程序中查找帮助
+按照步骤操作，只需简单一步即可查看键盘快捷键。
+            打开 Illustrator
+        注释
+以下列表包含最有用的快捷键。 您可以在菜单命令和工具提示中找到其他快捷键。
+您可以在 Illustrator 中自定义键盘快捷键。 请参阅自定义键盘快捷键。
+            键盘快捷键速查表
+            下载并打印 Illustrator 的一些有用键盘快捷键的一页速查表，以便于参考。
+macOS
+ Windows
+			筛选依据:
+				全部
+				常用的快捷键
+				处理文档
+				选择工具
+				查看图稿
+				处理所选对象
+				绘制
+				编辑形状
+				处理对象
+				处理实时上色组
+				创建可变宽度点
+				处理文字
+				使用面板
+				动作面板
+				“画笔”面板
+				“字符”和“段落”面板
+				“颜色”面板
+				“渐变”面板
+				“图层”面板
+				“色板”面板
+				“转换”面板
+				“透明度”面板
+				功能键
+            常用的快捷键
+快捷键
+ | 
+Windows
+ | 
+macOS
+ | 
+还原 | 
+Ctrl + Z | 
+Command + Z | 
+重做 | 
+Shift + Ctrl + Z | 
+Shift + Command + Z | 
+剪切 | 
+Ctrl + X | 
+Command + X | 
+复制 | 
+Ctrl + C | 
+Command + C | 
+粘贴 | 
+Ctrl + V | 
+Command + V | 
+贴在前面 | 
+Ctrl + F | 
+Command + F | 
+贴在后面 | 
+Ctrl + B | 
+Command + B | 
+原位粘贴 | 
+Shift + Ctrl + V | 
+Shift + Command + V | 
+粘贴到所有画板上 | 
+Alt + Shift + Ctrl + V | 
+Option + Shift + Command + V | 
+拼写检查 | 
+Ctrl + I | 
+Command + I | 
+打开“颜色设置”对话框 | 
+Shift + Ctrl + K | 
+Shift + Command + K | 
+打开“键盘快捷键”对话框 | 
+Alt + Shift + Ctrl + K | 
+Option + Shift + Command + K | 
+打开“偏好设置”对话框 | 
+Ctrl + K | 
+Command + K | 
+            处理文档
+            快捷键
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         创建文档 | 
+     Ctrl + N | 
+     Command + N | 
+         从模板创建文档 | 
+     Shift + Ctrl + N | 
+     Shift + Command + N | 
+         在不打开“新建文档”对话框的情况下创建文档 | 
+     Alt + Ctrl + N | 
+     Option + Command + N | 
+         打开文档 | 
+     Ctrl + O | 
+     Command + O | 
+         将文件置入文档 | 
+     Shift + Ctrl + P | 
+     Shift + Command + P | 
+         打开“文件信息”对话框 | 
+     Alt + Shift + Ctrl + I | 
+     Option + Shift + Command + I | 
+         打开“文档设置”对话框 | 
+     Alt + Ctrl + P | 
+     Option + Command + P | 
+         在 Adobe Bridge 中浏览 | 
+     Alt + Ctrl + O | 
+     Option + Command + O | 
+         关闭文档窗口 | 
+     Ctrl + W | 
+     Command + W | 
+         存储对文档所做的更改 | 
+     Ctrl + S | 
+     Command + S | 
+         打开“存储为”对话框 | 
+     Shift + Ctrl + S | 
+     Shift + Command + S | 
+         存储文档的副本 | 
+     Alt + Ctrl + S | 
+     Option + Command + S | 
+         将文档存储为脚本文件 | 
+     Ctrl + F12 | 
+     Command + F12 | 
+         打开“导出为多种屏幕所用格式”对话框 | 
+     Alt + Ctrl + E | 
+     Option + Command + E | 
+         打开“存储为 Web 所用格式”对话框 | 
+     Alt + Shift + Ctrl + S | 
+     Option + Shift + Command + S | 
+         打包文档 | 
+     Alt + Shift + Ctrl + P | 
+     Option + Shift + Command + P | 
+         打印 | 
+     Ctrl + P | 
+     Command + P | 
+         退出应用程序 | 
+     Ctrl + Q | 
+     Command + Q | 
+            选择工具
+            快捷键
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         画板工具
+ | 
+     Shift + O
+ | 
+     Shift + O
+ | 
+         选择工具
+ | 
+     V
+ | 
+     V
+ | 
+         直接选择工具
+ | 
+     A
+ | 
+     A
+ | 
+         魔棒工具
+ | 
+     Y
+ | 
+     Y
+ | 
+         套索工具
+ | 
+     Q
+ | 
+     Q
+ | 
+         钢笔工具
+ | 
+     P
+ | 
+     P
+ | 
+         曲率工具 | 
+     Shift + ~ | 
+     Shift + ~ | 
+         斑点画笔工具
+ | 
+     Shift+B
+ | 
+     Shift+B
+ | 
+         添加锚点工具
+ | 
+     +（加）
+ | 
+     +（加）
+ | 
+         删除锚点工具
+ | 
+     -（减）
+ | 
+     -（减）
+ | 
+         切换到锚点工具
+ | 
+     Shift + C
+ | 
+     Shift + C
+ | 
+         文字工具
+ | 
+     T
+ | 
+     T
+ | 
+         修饰文字工具 | 
+     Shift + T | 
+     Shift + T | 
+         直线段工具
+ | 
+     \（反斜线）
+ | 
+     \（反斜线）
+ | 
+         矩形工具
+ | 
+     M
+ | 
+     M
+ | 
+         椭圆工具
+ | 
+     L
+ | 
+     L
+ | 
+         画笔工具
+ | 
+     B
+ | 
+     B
+ | 
+         铅笔工具
+ | 
+     N
+ | 
+     N
+ | 
+         Shaper 工具 | 
+     Shift + N | 
+     Shift + N | 
+         旋转工具
+ | 
+     R
+ | 
+     R
+ | 
+         镜像工具
+ | 
+     O
+ | 
+     O
+ | 
+         按比例缩放工具
+ | 
+     S
+ | 
+     S
+ | 
+         变形工具
+ | 
+     Shift + R
+ | 
+     Shift + R
+ | 
+         宽度工具
+ | 
+     Shift+W
+ | 
+     Shift+W
+ | 
+         自由变换工具
+ | 
+     E
+ | 
+     E
+ | 
+         形状生成器工具
+ | 
+     Shift+M
+ | 
+     Shift+M
+ | 
+         透视网格工具
+ | 
+     Shift+P
+ | 
+     Shift+P
+ | 
+         透视选区工具
+ | 
+     Shift+V
+ | 
+     Shift+V
+ | 
+         符号喷枪工具
+ | 
+     Shift + S
+ | 
+     Shift + S
+ | 
+         柱形图工具
+ | 
+     J
+ | 
+     J
+ | 
+         网格工具
+ | 
+     U
+ | 
+     U
+ | 
+         渐变工具
+ | 
+     G
+ | 
+     G
+ | 
+         滴管工具
+ | 
+     I
+ | 
+     I
+ | 
+         混合工具
+ | 
+     W
+ | 
+     W
+ | 
+         实时上色油漆桶工具
+ | 
+     K
+ | 
+     K
+ | 
+         实时上色选择工具
+ | 
+     Shift + L
+ | 
+     Shift + L
+ | 
+         切片工具
+ | 
+     Shift + K
+ | 
+     Shift + K
+ | 
+         橡皮擦工具
+ | 
+     Shift + E
+ | 
+     Shift + E
+ | 
+         剪刀工具
+ | 
+     C
+ | 
+     C
+ | 
+         抓手工具
+ | 
+     H
+ | 
+     H
+ | 
+         缩放工具
+ | 
+     Z
+ | 
+     Z
+ | 
+         在使用“斑点画笔”工具时切换到“平滑”工具
+ | 
+     按 Alt
+ | 
+     按 Option
+ | 
+            查看图稿
+快捷键
+ | 
+Windows
+ | 
+macOS
+ | 
+在屏幕模式之间切换：正常屏幕模式、带菜单栏的全屏模式、全屏模式
+ | 
+F
+ | 
+F
+ | 
+适合窗口中的可成像区域
+ | 
+双击“抓手工具”
+ | 
+双击“抓手工具”
+ | 
+放大 100%
+ | 
+双击缩放工具或按 Ctrl + 1
+ | 
+双击缩放工具或按 Command + 1
+ | 
+切换到“抓手工具”（当不处于文本编辑模式时）
+ | 
+空格键
+ | 
+空格键
+ | 
+切换到放大模式中的“缩放工具”
+ | 
+Ctrl + 空格键
+ | 
+空格键 + Command
+ | 
+切换到缩小模式中的“缩放工具”
+ | 
+Ctrl + Alt + 空格键
+ | 
+空格键 + Command + Option
+ | 
+使用“缩放工具”拖移时移动“缩放”选框
+ | 
+空格键
+ | 
+空格键
+ | 
+隐藏定界框 | 
+Shift + Ctrl + B | 
+Shift + Command + B | 
+隐藏非选定图稿
+ | 
+Ctrl + Alt + Shift + 3
+ | 
+Command + Option + Shift + 3
+ | 
+在水平参考线和垂直参考线之间转换
+ | 
+按住 Alt 键拖移参考线
+ | 
+按住 Option 键拖移参考线
+ | 
+释放参考线
+ | 
+按住 Ctrl + Shift 键并双击参考线
+ | 
+Command + 按住 Shift 键双击参考线
+ | 
+显示/隐藏画板
+ | 
+Ctrl + Shift + H
+ | 
+Command + Shift + H
+ | 
+显示/隐藏画板标尺
+ | 
+Ctrl + R
+ | 
+Command + Option + R
+ | 
+显示透明网格 | 
+Shift + Ctrl + D | 
+Shift + Command + D | 
+在窗口中查看所有画板
+ | 
+Ctrl + Alt + 0 (零)
+ | 
+Command + Option + 0 (零)
+ | 
+在现用画板上就地粘贴
+ | 
+Ctrl+Shift+V
+ | 
+Command+Shift+V
+ | 
+退出画板工具模式
+ | 
+Esc
+ | 
+Esc
+ | 
+在另一画板中创建画板
+ | 
+按住 Shift 键拖移
+ | 
+按住 Shift 键拖移
+ | 
+在“画板”面板中选择多个画板
+ | 
+按住 Ctrl 键并单击
+ | 
+按住 Command 键并单击
+ | 
+浏览到下一文档
+ | 
+Ctrl + F6
+ | 
+Command + F6
+ | 
+浏览到上一文档
+ | 
+Ctrl + Shift + F6
+ | 
+Command + Shift + F6
+ | 
+浏览到下一文档组
+ | 
+Ctrl + Alt + F6
+ | 
+Command + Option + F6
+ | 
+浏览到上一文档组
+ | 
+Ctrl + Alt + Shift + F6
+ | 
+Command + Option + Shift + F6
+ | 
+在文档的轮廓和 GPU 预览之间切换 | 
+Ctrl + Y | 
+Command + Y | 
+在文档的 GPU 和 CPU 预览之间切换 | 
+Ctrl + E | 
+Command + E | 
+在“叠印预览”模式下查看文档 | 
+Alt + Shift + Ctrl + Y | 
+Option + Shift + Command + Y | 
+在“像素预览”模式下查看文档 | 
+Alt + Ctrl + Y | 
+Option + Command + Y | 
+退出全屏模式 | 
+Esc | 
+Esc | 
+放大 | 
+Ctrl + = | 
+Command + = | 
+缩小 | 
+Ctrl + - | 
+Command + - | 
+隐藏参考线 | 
+Ctrl + ; | 
+Command + ; | 
+锁定参考线 | 
+Alt + Ctrl + ; | 
+Option + Command + ; | 
+建立参考线 | 
+Ctrl + 5 | 
+Command + 5 | 
+释放参考线 | 
+Alt + Ctrl + 5 | 
+Option + Ctrl + 5 | 
+显示/隐藏智能参考线 | 
+Ctrl + U | 
+Command + U | 
+显示/隐藏透视网格 | 
+Ctrl+Shift+I | 
+Command+Shift+I | 
+显示网格 | 
+Ctrl + ' | 
+Command + ' | 
+对齐网格  | 
+Shift + Ctrl + ' | 
+Shift + Command + ' | 
+对齐点 | 
+Alt + Ctrl + ' | 
+Option + Command + ' | 
+            处理所选对象
+快捷键
+ | 
+Windows
+ | 
+macOS
+ | 
+切换到上次使用的选择工具（选择工具、直接选择工具或编组选择工具）
+ | 
+Ctrl + `
+ | 
+Command + `
+ | 
+在“直接选择工具”和“编组选择工具”之间切换
+ | 
+Alt
+ | 
+选项
+ | 
+用“选择工具”、“直接选择工具”、“编组选择工具”、“实时上色选择工具”或者“魔棒工具”向选区添加内容
+ | 
+按住 Shift 键单击
+ | 
+按住 Shift 键单击
+ | 
+使用选择工具、直接选择工具、编组选择工具或实时上色选择工具从选区中减少内容
+ | 
+按住 Shift 键单击
+ | 
+按住 Shift 键单击
+ | 
+使用魔棒工具从选区中减少内容
+ | 
+按住 Alt 键单击
+ | 
+按住 Option 键单击
+ | 
+用“套索工具”添加到选区
+ | 
+按住 Shift 键拖移
+ | 
+按住 Shift 键拖移
+ | 
+用“套索工具”从选区减少内容
+ | 
+按住 Alt 键拖移
+ | 
+按住 Option 键拖移
+ | 
+将套索工具的指针改为十字线
+ | 
+Caps Lock
+ | 
+Caps Lock
+ | 
+选择现用画板中的图稿
+ | 
+Ctrl + Alt + A
+ | 
+Command + Option + A
+ | 
+围绕选定对象创建裁剪标记
+ | 
+Alt + C + O
+ | 
+ | 
+全选 | 
+Ctrl + A | 
+Cmd + A | 
+取消选择 | 
+Shift + Ctrl + A | 
+Shift + Command + A | 
+重新选择 | 
+Ctrl + 6 | 
+Command + 6 | 
+选择当前所选对象上方的对象  | 
+Alt + Ctrl + ] | 
+Option + Command + ] | 
+选择当前所选对象下方的对象 | 
+Alt + Ctrl + [ | 
+Option + Command + | 
+选择对象的下方
+ | 
+按住 Ctrl 单击两次
+ | 
+按住 Command 单击两次
+ | 
+在隔离模式中选择下方
+ | 
+按住 Ctrl 单击两次
+ | 
+按住 Command 单击两次
+ | 
+编组选定图稿 | 
+Ctrl + G | 
+Command + G | 
+取消选定图稿编组 | 
+Shift + Ctrl + G | 
+Shift + Command + G | 
+锁定所选对象 | 
+Ctrl + 2 | 
+Command + 2 | 
+解锁所选对象 | 
+Alt + Ctrl + 2 | 
+Option + Command + 2 | 
+隐藏所选对象 | 
+Ctrl + 3 | 
+Command + 3 | 
+显示所有所选对象 | 
+Alt + Ctrl + 3 | 
+Option + Command + 3 | 
+以用户定义的增量移动选区 | 
+向右箭头键、向左箭头键、向上箭头键或向下箭头键
+ | 
+向右箭头键、向左箭头键、向上箭头键或向下箭头键
+ | 
+以用户定义增量的 10 倍移动选区 | 
+Shift + 向右箭头键、向左箭头键、向上箭头键或向下箭头键 | 
+Shift + 向右箭头键、向左箭头键、向上箭头键或向下箭头键 | 
+锁定所有取消选择的图稿 | 
+Ctrl + Alt + Shift + 2 | 
+Command + Option + Shift + 2 | 
+将移动限制为 45°角（使用“镜像工具”时除外） | 
+按住 Shift | 
+按住 Shift | 
+将所选对象前移 | 
+Ctrl + ] | 
+Command + ] | 
+将所选对象移到前面 | 
+Shift + Ctrl + ] | 
+Shift + Command + ] | 
+将所选对象后移 | 
+Ctrl + [ | 
+Command + [ | 
+将所选对象移到后面  | 
+Shift + Ctrl + [ | 
+Shift + Command + [ | 
+仅选择完全位于选框内的对象 | 
+拖动选框时按 E | 
+拖动选框时按 E
+ | 
+        注释
+            在“常规偏好设置”中设置键盘增量 (Ctrl/ Cmd + K)。
+            绘制
+            快捷键
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         将形状的比例或方向限制为：
+       用于矩形、圆角矩形、椭圆和网格的相等高度和宽度
+       用于直线段和弧线段的 45° 增量
+       用于多边形、星形和光晕的原方向
+ | 
+     按住 Shift 键拖移
+ | 
+     按住 Shift 键拖移
+ | 
+         绘制时移动形状
+ | 
+     按住空格键拖移
+ | 
+     按住空格键拖移
+ | 
+         从形状中央拖移（多边形、星形和光晕除外）
+ | 
+     按住 Alt 键拖移
+ | 
+     按住 Option 键拖移
+ | 
+         增加或减少多边形的边，星形的点，弧线段的角度，螺旋线的螺旋，或光晕的射线
+ | 
+     开始拖移，然后按向上箭头键或向下箭头键
+ | 
+     开始拖移，然后按向上箭头键或向下箭头键
+ | 
+         保持星形内半径为常量
+ | 
+     开始拖移，然后按住 Ctrl
+ | 
+     开始拖移，然后按住 Command
+ | 
+         保持星形边为直线
+ | 
+     按住 Alt 键拖移
+ | 
+     按住 Option 键拖移
+ | 
+         在开放和封闭弧形之间切换
+ | 
+     开始拖移，然后按住 C
+ | 
+     开始拖移，然后按住 C
+ | 
+         翻转一条弧线，保持参考点为常量
+ | 
+     开始拖移，然后按住 F
+ | 
+     开始拖移，然后按住 F
+ | 
+         增加螺旋线长度时，从螺旋线中添加或减少螺旋
+ | 
+     开始拖移，然后按住 Alt 键拖移
+ | 
+     开始拖移，然后按住 Option 键拖移
+ | 
+         改变螺旋线的衰减率
+ | 
+     开始拖移，然后按住 Ctrl 键拖移
+ | 
+     开始拖移，然后按住 Command 键拖移
+ | 
+         从矩形网格添加或删除水平线或从极坐标网格添加或删除同心圆线
+ | 
+     开始拖移，然后按向上箭头键或向下箭头键
+ | 
+     开始拖移，然后按向上箭头键或向下箭头键
+ | 
+         从矩形网格添加或删除垂直线或从极坐标网格添加或删除径向线
+ | 
+     开始拖移，然后按向右箭头键或向左箭头键
+ | 
+     开始拖移，然后按向右箭头键或向左箭头键
+ | 
+         将矩形网格中的水平分隔线或极坐标网格中的径向分隔线的切变值按 10% 减少
+ | 
+     开始拖移，然后按 F
+ | 
+     开始拖移，然后按 F
+ | 
+         将矩形网格中的水平分隔线或极坐标网格中的径向分隔线的切变值按 10% 增加
+ | 
+     开始拖移，然后按 V
+ | 
+     开始拖移，然后按 V
+ | 
+         将矩形网格中的垂直分隔线或极坐标网格中的同心圆分隔线的切变值按 10% 减少
+ | 
+     开始拖移，然后按 X
+ | 
+     开始拖移，然后按 X
+ | 
+         将矩形网格中的垂直分隔线或极坐标网格中的同心圆分隔线的切变值按 10% 增加
+ | 
+     开始拖移，然后按 C
+ | 
+     开始拖移，然后按 C
+ | 
+         增大“斑点画笔”的尺寸
+ | 
+     ]（右方括号）
+ | 
+     ]（右方括号）
+ | 
+         减小“斑点画笔”的尺寸
+ | 
+     [（左方括号）
+ | 
+     [（左方括号）
+ | 
+         限制“斑点画笔”路径为水平或垂直
+ | 
+     Shift
+ | 
+     Shift
+ | 
+         在多种绘图模式之间切换
+ | 
+     Shift+D
+ | 
+     Shift+D
+ | 
+         连接两个或更多路径
+ | 
+     选择这些路径，然后按 Ctrl+J 组合键
+ | 
+     选择这些路径，然后按 Command+J 组合键
+ | 
+         平均两个或更多路径 | 
+     选择这些路径，然后按 Alt + Ctrl + J | 
+     选择这些路径，然后按 Option + Command + J | 
+         创建角点连接或平滑连接
+ | 
+     选择这些路径，然后按 Shift + Ctrl + Alt + J
+ | 
+     选择锚点，然后按 Shift + Command + Option + J
+ | 
+         创建复合路径 | 
+     Ctrl + 8 | 
+     Command + 8 | 
+         释放复合路径 | 
+     Alt + Shift + Ctrl + 8 | 
+     Option + Shift + Command + 8 | 
+         编辑图案 | 
+     Shift + Ctrl + F8 | 
+     Shift + Command + F8 | 
+         透视网格工具 | 
+     Shift+P | 
+     Shift+P | 
+         透视选区工具 | 
+     Shift+V | 
+     Shift+V | 
+         透视网格 | 
+     Ctrl+Shift+I | 
+     Command+Shift+I | 
+         垂直移动对象 | 
+     按住数字键 5，然后单击并拖动对象 | 
+     按住数字键 5，然后单击并拖动对象 | 
+         切换透视平面 | 
+     使用透视选区工具，然后按 1 选择左侧网格、按 2 选择水平网格，按 3 选择右侧网格或按 4 选择无现用网格 | 
+     使用透视选区工具，然后按 1 选择左侧网格、按 2 选择水平网格，按 3 选择右侧网格或按 4 选择无现用网格 | 
+         在透视中复制对象 | 
+     按住 Ctrl+Alt 拖动 | 
+     按住 Command+Alt 拖动 | 
+         在透视中重复变换对象 | 
+     Ctrl+D | 
+     Command+D | 
+         在多种绘图模式之间切换 | 
+     Shift+D | 
+     Shift+D | 
+            编辑形状
+快捷键
+ | 
+Windows
+ | 
+macOS
+ | 
+切换“钢笔工具”到“转换锚点工具”
+ | 
+Alt
+ | 
+选项
+ | 
+在“添加锚点工具”和“删除锚点工具”之间切换
+ | 
+Alt
+ | 
+选项
+ | 
+从“剪刀工具”切换到“添加锚点工具”
+ | 
+Alt
+ | 
+选项
+ | 
+从“铅笔工具”切换到“平滑工具”
+ | 
+Alt（启用按 Alt 键从“铅笔工具”切换到“平滑工具”选项）
+ | 
+Option（启用按 Option 键从“铅笔工具”切换到“平滑工具”选项）
+ | 
+用“钢笔工具”绘图时，移动当前锚点
+ | 
+按住空格键拖移
+ | 
+按住空格键拖移
+ | 
+用“美工刀工具”剪切一条直线
+ | 
+按住 Alt 键拖移
+ | 
+按住 Option 键拖移
+ | 
+用“美工刀工具”在 45° 或 90° 剪切
+ | 
+按住 Shift + Alt 组合键拖移
+ | 
+按住 Shift + Option 组合键拖移
+ | 
+使用“路径查找器”面板中的形状模式按钮创建复合路径
+ | 
+Alt + 形状模式
+ | 
+Option + 形状模式
+ | 
+抹除使用形状生成器工具创建的不必要的闭合区域
+ | 
+按住 Alt 单击该闭合区域
+ | 
+按住 Option 单击该闭合区域
+ | 
+选择形状生成器工具
+ | 
+Shift+M
+ | 
+Shift+M
+ | 
+显示矩形选框可轻松合并多个路径（使用形状生成器工具时）
+ | 
+按住 Shift 单击并拖动
+ | 
+按住 Shift 单击并拖动
+ | 
+增大符号强度（使用符号工具时） | 
+Shift + } | 
+Shift + } | 
+减小符号强度（使用符号工具时） | 
+Shift + { | 
+Shift + { | 
+混合对象 | 
+Alt + Ctrl + B | 
+Option + Command + B | 
+完成向混合添加对象 | 
+Alt + Shift + Ctrl + B | 
+Option + Shift + Command + B | 
+使用变形封套扭曲对象 | 
+Alt + Ctrl + Shift + W | 
+Option + Command + Shift + W | 
+使用网格作为封套形状来扭曲对象 | 
+Alt + Ctrl + M | 
+Option + Command + M | 
+使用其他对象作为封套形状来扭曲对象 | 
+Alt + Ctrl + C | 
+Option + Command + C | 
+            结果
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         在填色和描边之间转换
+ | 
+     X
+ | 
+     X
+ | 
+         把填色和描边设置为默认
+ | 
+     D
+ | 
+     D
+ | 
+         互换填色和描边
+ | 
+     Shift + X
+ | 
+     Shift + X
+ | 
+         选择渐变填色模式
+ | 
+     >
+ | 
+     >
+ | 
+         隐藏渐变批注者（使用渐变工具时） | 
+     Alt + Ctrl + G | 
+     Option + Command + G | 
+         选择颜色填充模式
+ | 
+     <
+ | 
+     <
+ | 
+         选择无描边/填充模式
+ | 
+     /（正斜线）
+ | 
+     /（正斜线）
+ | 
+         从图像中提取颜色样本或从渐变中提取中间色样本
+ | 
+     Shift + 吸管工具
+ | 
+     Shift + 吸管工具
+ | 
+         提取样式样本，追加当前选定项目的外观
+ | 
+     Alt + 按住 Shift 键单击 + “吸管工具”
+ | 
+     Option + 按住 Shift 键单击 + “吸管工具”
+ | 
+         添加新填色
+ | 
+     Ctrl + /（正斜线）
+ | 
+     Command + /（正斜线）
+ | 
+         添加新描边
+ | 
+     Ctrl + Alt + /（正斜线）
+ | 
+     Command + Option + /（正斜线）
+ | 
+         将渐变重置为黑白状态
+ | 
+     按住 Ctrl 键单击“工具”面板或“渐变”面板中的渐变按钮
+ | 
+     按住 Command 键单击“工具”面板或“渐变”面板中的渐变按钮
+ | 
+         进行实时上色（使用油漆桶工具时）
+ | 
+     Alt + Ctrl + X | 
+     Option + Command + X 
+ | 
+         减小毛刷画笔大小
+ | 
+     [
+ | 
+     [
+ | 
+         增加毛刷画笔大小
+ | 
+     ]
+ | 
+     ]
+ | 
+            处理实时上色组
+            快捷键
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         切换到“吸管工具”，进行填色和/或描边取样
+ | 
+     按住 Alt 键单击 +“实时上色油漆桶工具”
+ | 
+     按住 Option 键单击 +“实时上色油漆桶工具”
+ | 
+         切换到“吸管工具”，从图像中进行颜色取样或从渐变中进行间色取样
+ | 
+     Alt + 按住 Shift 键单击 +“实时上色油漆桶工具”
+ | 
+     Option + 按住 Shift 键单击 +“实时上色油漆桶工具”
+ | 
+         切换到另一个“实时上色油漆桶工具”选项（如果当前已选定“填充上色”和“描边上色”，则只切换到“填充上色”）
+ | 
+     Shift +“实时上色油漆桶工具”
+ | 
+     Shift +“实时上色油漆桶工具”
+ | 
+         跨过未描边的边缘，对相邻的表面填色
+ | 
+     双击 +“实时上色油漆桶工具”
+ | 
+     双击 +“实时上色油漆桶工具”
+ | 
+         对具有相同填色的所有表面填色，对具有相同描边的所有边缘描边。
+ | 
+     三击 +“实时上色油漆桶工具”
+ | 
+     三击 +“实时上色油漆桶工具”
+ | 
+         切换到“吸管工具”，进行填色和/或描边取样
+ | 
+     按住 Alt 键单击 +“实时上色选择工具”
+ | 
+     按住 Option 键单击 +“实时上色选择工具”
+ | 
+         切换到“吸管工具”，从图像中进行颜色取样或从渐变中进行间色取样
+ | 
+     Alt + 按住 Shift 键单击 +“实时上色选择工具”
+ | 
+     Option + 按住 Shift 键单击 +“实时上色选择工具”
+ | 
+         从选区中添加/减去
+ | 
+     按住 Shift 键单击 +“实时上色选择工具”
+ | 
+     按住 Shift 键单击 +“实时上色选择工具”
+ | 
+         选择具有相同填色/描边的所有相连的表面/边缘
+ | 
+     双击 +“实时上色选择工具”
+ | 
+     双击 +“实时上色选择工具”
+ | 
+         选择具有相同填色/描边的所有表面/边缘
+ | 
+     三击 +“实时上色选择工具”
+ | 
+     三击 +“实时上色选择工具”
+ | 
+            处理对象
+快捷键
+ | 
+Windows
+ | 
+macOS
+ | 
+使用“旋转工具”、“比例缩放工具”、“镜像工具”或“倾斜工具”时设置原点并打开对话框
+ | 
+按住 Alt 键单击
+ | 
+按住 Option 键单击
+ | 
+使用“选择工具”、“比例缩放工具”、“镜像工具”或“倾斜工具”时复制并变换所选对象
+ | 
+按住 Alt 键拖移
+ | 
+按住 Option 键拖移
+ | 
+使用“选择工具”、“比例缩放工具”、“镜像工具”或“倾斜工具”时变换图案（独立于对象）
+ | 
+反引号 (') - 拖动
+ | 
+反引号 (') - 拖动
+ | 
+将变换重新应用于对象 | 
+Ctrl+D | 
+Command+D | 
+将上一个路径查找器效果应用于选定对象 | 
+Ctrl + 4 | 
+Command + 4 | 
+移动对象 | 
+Shift + Ctrl + M | 
+Shift + Command + M | 
+打开“分别变换”对话框 | 
+Alt + Shift + Ctrl + D | 
+Option + Shift + Command + D | 
+创建剪切蒙版 | 
+Ctrl + 7 | 
+Command + 7 | 
+释放剪切蒙版 | 
+Alt + Ctrl + 7 | 
+Option + Command + 7 | 
+在填色和描边之间转换 | 
+X | 
+X | 
+把填色和描边设置为默认 | 
+D | 
+D | 
+互换填色和描边 | 
+Shift + X | 
+Shift + X | 
+选择渐变填色模式 | 
+> | 
+> | 
+隐藏渐变批注者（使用渐变工具时） | 
+Alt + Ctrl + G | 
+Option + Command + G | 
+选择颜色填充模式 | 
+< | 
+< | 
+选择无描边/填充模式 | 
+/（正斜线） | 
+/（正斜线） | 
+从图像中提取颜色样本或从渐变中提取中间色样本 | 
+Shift + 吸管工具 | 
+Shift + 吸管工具 | 
+提取样式样本，追加当前选定项目的外观 | 
+Alt + 按住 Shift 键单击 + “吸管工具” | 
+Option + 按住 Shift 键单击 + “吸管工具” | 
+添加新填色 | 
+Ctrl + /（正斜线） | 
+Command + /（正斜线） | 
+添加新描边 | 
+Ctrl + Alt + /（正斜线） | 
+Command + Option + /（正斜线） | 
+将渐变重置为黑白状态 | 
+按住 Ctrl 键单击“工具”面板或“渐变”面板中的渐变按钮 | 
+按住 Command 键单击“工具”面板或“渐变”面板中的渐变按钮 | 
+进行实时上色（使用油漆桶工具时） | 
+Alt + Ctrl + X | 
+Option + Command + X | 
+减小毛刷画笔大小 | 
+[ | 
+[ | 
+增加毛刷画笔大小 | 
+] | 
+] | 
+            创建可变宽度点
+         快捷键
+ | 
+    Windows
+ | 
+    macOS
+ | 
+       选择多个宽度点数
+ | 
+    Shift + 单击
+ | 
+    Shift + 单击
+ | 
+       创建非统一宽度
+ | 
+    按住 Alt 键拖动
+ | 
+    按住 Option 键拖动
+ | 
+       创建宽度点数的副本
+ | 
+    按住 Alt 键拖动该宽度点数
+ | 
+    按住 Options 键拖动该宽度点数
+ | 
+       更改多个宽度点数的位置
+ | 
+    Shift + 拖动
+ | 
+    Shift + 拖动
+ | 
+       删除所选宽度点数
+ | 
+    删除
+ | 
+    删除
+ | 
+       取消选择宽度点数
+ | 
+    Esc
+ | 
+    Esc
+ | 
+            处理文字
+快捷键
+ | 
+Windows
+ | 
+macOS
+ | 
+加粗
+ | 
+Shift + Ctrl + B
+ | 
+Shift + Command + B
+ | 
+斜体
+ | 
+Shift + Ctrl + I
+ | 
+Shift + Command + I
+ | 
+下划线
+ | 
+Shift + Ctrl + U
+ | 
+Shift + Command + U
+ | 
+向右或向左移动一个字符
+ | 
+向右箭头键或向左箭头键
+ | 
+向右箭头键或向左箭头键
+ | 
+向上或向下移动一行
+ | 
+向上箭头键或向下箭头键
+ | 
+向上箭头键或向下箭头键
+ | 
+向右或向左移动一个单词
+ | 
+Ctrl + 向右箭头键或向左箭头键
+ | 
+Command + 向右箭头键或向左箭头键
+ | 
+向上或向下移动一个段落
+ | 
+Ctrl + 向上箭头键或向下箭头键
+ | 
+Command + 向上箭头键或向下箭头键
+ | 
+选择左侧后或右侧的单词
+ | 
+Shift + Ctrl + 向右箭头键或向左箭头键
+ | 
+Shift + Command + 向右箭头键或向左箭头键
+ | 
+选择前一个或后一个段落
+ | 
+Shift + Ctrl + 向上箭头键或向下箭头键
+ | 
+Shift + Command + 向上箭头键或向下箭头键
+ | 
+扩展现有的选区
+ | 
+按住 Shift 键单击
+ | 
+按住 Shift 键单击
+ | 
+段落向左对齐、右对齐或居中对齐
+ | 
+Ctrl + Shift + L、R 或 C
+ | 
+Command + Shift + L、R 或 C
+ | 
+左对齐文本
+ | 
+Ctrl + Shift + J
+ | 
+Command + Shift + J
+ | 
+全部两端对齐 | 
+Shift + Ctrl + F | 
+Shift + Command + F | 
+切换行书写器 | 
+Alt + Shift + Ctrl + C | 
+Option + Shift + Command + | 
+插入软回车
+ | 
+Shift + Enter
+ | 
+Shift + Return
+ | 
+突出显示字偶间距调整
+ | 
+Ctrl + Alt + K
+ | 
+Command + Option + K
+ | 
+将水平缩放重置为 100%
+ | 
+Ctrl + Shift + X
+ | 
+Command + Shift + X
+ | 
+增加或减小字体大小
+ | 
+Ctrl+Shift + 。 或，
+ | 
+Command+Shift + 。 或，
+ | 
+逐步增加或减小字体大小 | 
+Alt + Ctrl + Shift +。 或， | 
+Option + Command +Shift +。 或， | 
+增加或减小行距
+ | 
+Alt + 向上或向下箭头键（横排文本）或者向右或向左箭头键（直排文本）
+ | 
+Option + 向上或向下箭头键（横排文本）或者向右或向左箭头键（直排文本）
+ | 
+选择字距调整值 | 
+Alt + Ctrl + K | 
+Option + Command + K | 
+将字符间距调整/字偶间距调整重置为 0
+ | 
+Ctrl + Alt + Q
+ | 
+Command + Option + Q
+ | 
+增大或减小字偶/字符间距调整
+ | 
+Alt + 向右或向左箭头键（横排文本）或者向上或向下箭头键（直排文本）
+ | 
+Option + 向右或向左箭头键（横排文本）或者向上或向下箭头键（直排文本）
+ | 
+将字偶和字符间距调整增大或减小五倍
+ | 
+Ctrl + Alt + 向右或向左箭头键（横排文本）或者向上或向下箭头键（直排文本）
+ | 
+Command + Option + 向右或向左箭头键（横排文本）或者向上或向下箭头键（直排文本）
+ | 
+增加或减少基线偏移
+ | 
+Alt + Shift + 向上或向下箭头键（横排文本）或者向右或向左箭头键（直排文本）
+ | 
+Option + Shift + 向上或向下箭头键（横排文本）或者向右或向左箭头键（直排文本）
+ | 
+在“文字”和“直排文字”，“区域文字”和“直排区域文字”，以及“路径文字”和“直排路径文字”这些工具之间切换
+ | 
+Shift
+ | 
+Shift
+ | 
+在“区域文字”和“路径文字”、“直排区域文字”和“直排路径文字”这些工具之间切换
+ | 
+Alt
+ | 
+Option
+ | 
+创建轮廓 | 
+Shift + Ctrl + O | 
+Shift + Command + O | 
+打开“字符”面板 | 
+Ctrl + T | 
+Command + T | 
+打开“段落”面板 | 
+Alt + Ctrl + T | 
+Option + Command + T | 
+打开“选项卡”面板 | 
+Shift + Ctrl + T | 
+Shift + Command + T | 
+打开“OpenType”面板 | 
+Alt + Shift + Ctrl + T | 
+Option + Shift + Command + T | 
+插入字间中点 | 
+Alt + 8 | 
+Option + 8 | 
+插入版权符号 | 
+Alt + G | 
+Option + G | 
+插入省略号 | 
+Alt +； | 
+Option +； | 
+插入段落符号 | 
+Alt + 7 | 
+Option + 7 | 
+插入分节符
+ | 
+Alt + 6
+ | 
+Option + 6
+ | 
+插入商标符号 | 
+Alt + 2 | 
+Option + 2 | 
+插入注册商标符号 | 
+Alt + R | 
+Option + R | 
+上标 | 
+Shift + Ctrl + = | 
+Shift + Command + = | 
+下标 | 
+Alt + Shift + Ctrl + = | 
+Alt + Shift + Ctrl + = | 
+插入全角破折号 | 
+Alt + Shift + - | 
+Option+Shift + - | 
+插入半角破折号 | 
+Alt + - | 
+Option + - | 
+插入自由连字符 | 
+Shift + Ctrl + - | 
+Shift + Command + - | 
+切换自动连字 | 
+Alt + Shift + Ctrl + H | 
+Option + Shift + Command + H | 
+插入左双引号 | 
+Alt + [ | 
+Option + [ | 
+插入右双引号 | 
+Alt + Shift + [ | 
+Option+Shift + [ | 
+插入左单引号 | 
+Alt + ] | 
+Option + ] | 
+插入右单引号 | 
+Alt + Shift + ] | 
+Option+Shift + ] | 
+插入全角空格 | 
+Shift + Ctrl + M | 
+Shift + Command + M | 
+插入半角空格 | 
+Shift + Ctrl + N | 
+Shift + Command + N | 
+插入窄间隔 | 
+Alt + Shift + Ctrl + M | 
+Option + Shift + Command + M | 
+显示隐藏字符 | 
+Alt + Ctrl + I | 
+Option + Command + I
+ | 
+        注释
+            要更改文字快捷键的增量值，请选择编辑 > 偏好设置 > 文字 (Windows)，或选择 Illustrator > 偏好设置 > 文字 (macOS)。 在大小/行距、基线偏移和字距调整文本框中输入所需值，然后单击确定。
+            使用面板
+            快捷键
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         设置选项（“动作”、“画笔”、“色板”以及“符号”面板除外）
+ | 
+     按住 Alt 键单击“新建”按钮
+ | 
+     按住 Option 单击“新建”按钮
+ | 
+         切换度量单位 | 
+     Alt + Shift + Ctrl + U | 
+     Option + Shift + Command + U | 
+         删除而无需进行确认（“图层”面板除外）
+ | 
+     按住 Alt 键单击“删除”按钮
+ | 
+     按住 Option 键单击“删除”按钮
+ | 
+         应用值并使文本框保持启用状态
+ | 
+     Shift + Enter
+ | 
+     Shift + Return
+ | 
+         选择动作、画笔、图层、链接、样式或色板的范围
+ | 
+     按住 Shift 键单击
+ | 
+     按住 Shift 键单击
+ | 
+         选择不连续的动作、画笔、图层（只限于同一层）、链接、样式或色板
+ | 
+     按住 Ctrl 键单击
+ | 
+     按住 Command 键单击
+ | 
+         显示/隐藏所有面板
+ | 
+     Tab
+ | 
+     Tab
+ | 
+         显示/隐藏所有面板（“工具”面板和“控制”面板除外）
+ | 
+     Shift + Tab
+ | 
+     Shift + Tab
+ | 
+         增加/减少度量单位的逻辑分数中的值 | 
+     Ctrl + 向上或向下箭头键 | 
+     Command + 向上或向下箭头键 | 
+         将度量单位增加/减少 10 倍 | 
+     Shift + 向上或向下箭头键 | 
+     Shift + 向上或向下箭头键 | 
+            动作面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            扩展/折叠动作集的整个结构
+                 | 
+            按住 Alt 键单击扩展三角形
+                 | 
+            按住 Option 键单击扩展三角形
+                 | 
+            设定动作集的选项
+                 | 
+            双击文件夹图标
+                 | 
+            双击文件夹图标
+                 | 
+            播放单个命令
+                 | 
+            按住 Ctrl 键单击“播放当前所选动作”按钮
+                 | 
+            按住 Command 键单击“播放当前所选动作”按钮
+                 | 
+            开始记录动作而无须确认
+                 | 
+            按住 Alt 键单击“新建动作”按钮
+                 | 
+            按住 Option 键单击“新建动作”按钮
+                 | 
+            “画笔”面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            打开“画笔选项”对话框
+                 | 
+            双击画笔
+                 | 
+            双击画笔
+                 | 
+            复制画笔
+                 | 
+            将画笔拖移到“新建画笔”按钮上
+                 | 
+            将画笔拖移到“新建画笔”按钮上
+                 | 
+            “字符”和“段落”面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            打开“字符”面板
+                 | 
+            Ctrl + T
+                 | 
+            Command + T
+                 | 
+            打开“段落”面板
+                 | 
+            Alt + Ctrl + T
+                 | 
+            Option + Command + T
+                 | 
+            以小增量增加/减少选定的值
+                 | 
+            向上箭头键或向下箭头键
+                 | 
+            向上箭头键或向下箭头键
+                 | 
+            以大增量增加/减少选定的值
+                 | 
+            Shift + 向上箭头键或向下箭头键
+                 | 
+            Shift + 向上箭头键或向下箭头键
+                 | 
+            以分数为单位增加/减少选定的值
+                 | 
+            Ctrl + 向上或向下箭头键
+                 | 
+            Command + 向上或向下箭头键
+                 | 
+            在“字符”面板中突出显示字体名称域
+                 | 
+            Ctrl + Alt + Shift + F
+                 | 
+            Command + Option + Shift + F
+                 | 
+            “颜色”面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            为当前填色/描边选择补色
+                 | 
+            按住 Ctrl 键单击颜色条
+                 | 
+            按住 Command 键单击颜色条
+                 | 
+            更改非启用状态的填色/描边
+                 | 
+            按住 Alt 键单击颜色条
+                 | 
+            按住 Option 键单击颜色条
+                 | 
+            为非启用状态的填色/描边选择补色
+                 | 
+            按住 Ctrl + Alt 键单击颜色条
+                 | 
+            按住 Command + Option 键单击颜色条
+                 | 
+            对当前的填色/描边进行反向选择
+                 | 
+            按住 Ctrl + Shift 键单击颜色条
+                 | 
+            按住 Command + Shift 键单击颜色条
+                 | 
+            对非启用状态的填色/描边进行反向选择
+                 | 
+            按住 Ctrl + Shift + Alt 键单击颜色条
+                 | 
+            按住 Command + Shift + Option 键单击颜色条
+                 | 
+            打开颜色参考线
+                 | 
+            Shift + F3
+                 | 
+            Shift + F3
+                 | 
+            更改颜色模式
+                 | 
+            按住 Shift 键单击颜色条
+                 | 
+            按住 Shift 键单击颜色条
+                 | 
+            一前一后地移动颜色滑块
+                 | 
+            按住 Shift 拖移颜色滑块
+                 | 
+            按住 Shift 拖移颜色滑块
+                 | 
+            将 RGB 值在百分比和 0-255 之间切换
+                 | 
+            双击数字栏的右侧
+                 | 
+            双击数字栏的右侧
+                 | 
+            “渐变”面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            复制色标
+                 | 
+            按住 Alt 键拖移
+                 | 
+            按住 Option 键拖移
+                 | 
+            互换色标
+                 | 
+            按住 Alt 键，将色标拖移到另一个色标上
+                 | 
+            按住 Option 键，将色标拖移到另一个色标上
+                 | 
+            将色板颜色应用于现用（或选定的）色标
+                 | 
+            按住 Alt 并单击“色板”面板中的色板
+                 | 
+            按住 Option 并单击“色板”面板中的色板
+                 | 
+            将渐变填充重置为默认的黑白线性渐变
+                 | 
+            按住 Ctrl 键并单击“渐变”面板中的“渐变填充”框
+                 | 
+            按住 Command 键单击“渐变”面板中的“渐变填充”框
+                 | 
+            显示/隐藏渐变箭头
+                 | 
+            Ctrl + Alt + G
+                 | 
+            Command + Option + G
+                 | 
+            同时修改角度和终点
+                 | 
+            按住 Alt 键拖移渐变批注者的终点
+                 | 
+            按住 Option 键拖移渐变批注者的终点
+                 | 
+            拖动时限制渐变工具或渐变批注者
+                 | 
+            按住 Shift 键拖移
+                 | 
+            按住 Shift 键拖移
+                 | 
+            查看选定的渐变填充对象中的渐变批注者
+                 | 
+            G
+                 | 
+            G
+                 | 
+            “图层”面板
+            快捷键
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         添加图层 | 
+     Ctrl + L | 
+     Command + L | 
+         在打开“新建图层”对话框时添加图层 | 
+     Alt + Ctrl + L | 
+     Option + Command + L | 
+         选择图层上的所有对象
+ | 
+     按住 Alt 键单击图层名称
+ | 
+     按住 Option 键单击图层名称
+ | 
+         显示/隐藏除选定图层以外的所有图层
+ | 
+     按住 Alt 键单击眼睛图标
+ | 
+     按住 Option 键单击眼睛图标
+ | 
+         为选定的图层选择轮廓/预览视图
+ | 
+     按住 Ctrl 键单击眼睛图标
+ | 
+     按住 Command 键单击眼睛图标
+ | 
+         为所有其他图层选择轮廓/预览视图
+ | 
+     按住 Ctrl + Alt 键单击眼睛图标
+ | 
+     按住 Command + Option 键单击眼睛图标
+ | 
+         锁定/解锁所有其他图层
+ | 
+     按住 Alt 键单击锁状图标
+ | 
+     按住 Option 键单击锁状图标
+ | 
+         扩展所有子图层来显示整个结构
+ | 
+     按住 Alt 键单击扩展三角形
+ | 
+     按住 Option 键单击扩展三角形
+ | 
+         创建新图层时设置选项
+ | 
+     按住 Alt 键单击“新建图层”按钮
+ | 
+     按住 Option 键单击“新建图层”按钮
+ | 
+         创建新的子图层时设置选项
+ | 
+     按住 Alt 键单击“新建子图层”按钮
+ | 
+     按住 Option 键单击“新建子图层”按钮
+ | 
+         将新的子图层置于图层列表的底部
+ | 
+     按住 Ctrl + Alt 键单击“新建子图层”按钮
+ | 
+     按住 Command + Option 键单击“新建子图层”按钮
+ | 
+         将图层置于图层列表顶部
+ | 
+     按住 Ctrl 键单击“新建图层”按钮
+ | 
+     按住 Command 键单击“新建图层”按钮
+ | 
+         将图层置于选定图层的下方
+ | 
+     按住 Ctrl + Alt 键单击“新建图层”按钮
+ | 
+     按住 Command + Option 键单击“新建图层”按钮
+ | 
+         将所选对象复制到一个图层、子图层或组
+ | 
+     按住 Alt 键拖移
+ | 
+     按住 Option 键拖移
+ | 
+            “色板”面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            创建新的专色
+                 | 
+            按住 Ctrl 键单击“色板”按钮
+                 | 
+            按住 Command 键单击“新建色板”按钮
+                 | 
+            创建新的全局印刷色
+                 | 
+            按住 Ctrl + Shift 键单击“新建色板”按钮
+                 | 
+            按住 Command + Shift 键单击“新建色板”按钮
+                 | 
+            用另一种色板替换色板
+                 | 
+            按住 Alt 键将一种色板拖移到另一种上
+                 | 
+            按住 Option 键将一种色板拖移到另一种上
+                 | 
+            “转换”面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            应用一个值并保持专注于编辑区
+                 | 
+            Shift + Enter
+                 | 
+            Shift + Return
+                 | 
+            应用一个值并复制对象
+                 | 
+            Alt + Enter
+                 | 
+            Option + Return
+                 | 
+            对宽度或高度应用一个值并按比例缩放
+                 | 
+            Ctrl + Enter
+                 | 
+            Command + Return
+                 | 
+            “透明度”面板
+            快捷键
+                 | 
+            Windows
+                 | 
+            macOS
+                 | 
+            将上一个效果应用于选定对象
+                 | 
+            Shift + Ctrl + E
+                 | 
+            Shift + Command + E
+                 | 
+            通过调整效果对话框中的值，将上一个效果应用于选定对象
+                 | 
+            Alt + Shift + Ctrl + E
+                 | 
+            Option + Shift + Command + E
+                 | 
+            变蒙版为编辑用的灰度图像
+                 | 
+            按住 Alt 键单击蒙版缩览图
+                 | 
+            按住 Option 键单击蒙版缩览图
+                 | 
+            停用不透明蒙版
+                 | 
+            按住 Shift 键单击蒙版缩览图
+                 | 
+            按住 Shift 键单击蒙版缩览图
+                 | 
+            重新启用不透明蒙版
+                 | 
+            按住 Shift 键单击停用的蒙版缩览图
+                 | 
+            按住 Shift 键单击停用的蒙版缩览图
+                 | 
+            以 1% 的增量增加/降低不透明度
+                 | 
+            单击不透明区 + 向上箭头键或向下箭头键
+                 | 
+            单击不透明区 + 向上箭头键或向下箭头键
+                 | 
+            以 10% 的增量增加/降低不透明度
+                 | 
+            按住 Shift 键单击不透明区 + 向上箭头键或向下箭头键
+                 | 
+            按住 Shift 键单击不透明区 + 向上箭头键或向下箭头键
+                 | 
+            功能键
+            快捷键
+ | 
+     Windows
+ | 
+     macOS
+ | 
+         调用帮助
+ | 
+     F1
+ | 
+     F1
+ | 
+         剪切
+ | 
+     F2
+ | 
+     F2
+ | 
+         复制
+ | 
+     F3
+ | 
+     F3
+ | 
+         粘贴
+ | 
+     F4
+ | 
+     F4
+ | 
+         显示/隐藏“画笔”面板
+ | 
+     F5
+ | 
+     F5
+ | 
+         显示/隐藏“颜色”面板
+ | 
+     F6
+ | 
+     F6
+ | 
+         显示/隐藏“图层”面板
+ | 
+     F7
+ | 
+     F7
+ | 
+         创建新元件
+ | 
+     F8
+ | 
+     F8
+ | 
+         显示/隐藏“信息”面板
+ | 
+     Ctrl + F8
+ | 
+     Command + F8
+ | 
+         显示/隐藏“渐变”面板
+ | 
+     Ctrl + F9
+ | 
+     Command + F9
+ | 
+         显示/隐藏“描边”面板
+ | 
+     Ctrl + F10
+ | 
+     Command + F10
+ | 
+         显示/隐藏“属性”面板
+ | 
+     Ctrl + F11
+ | 
+     Command + F11
+ | 
+         恢复
+ | 
+     F12
+ | 
+     F12
+ | 
+         显示/隐藏“图形样式”面板
+ | 
+     Shift + F5
+ | 
+     Shift + F5
+ | 
+         显示/隐藏“外观”面板
+ | 
+     Shift + F6
+ | 
+     Shift + F6
+ | 
+         显示/隐藏“对齐”面板
+ | 
+     Shift + F7
+ | 
+     Shift + F7
+ | 
+         显示/隐藏“变换”面板
+ | 
+     Shift + F8
+ | 
+     Shift + F8
+ | 
+         显示/隐藏“路径查找器”面板
+ | 
+     Shift + Ctrl + F9
+ | 
+     Shift + Command + F9
+ | 
+         显示/隐藏“透明度”面板
+ | 
+     Shift + Ctrl + F10
+ | 
+     Shift + Command + F10
+ | 
+         显示/隐藏“符号”面板
+ | 
+     Shift + Ctrl + F11
+ | 
+     Shift + Command + F11
+ | 
+            将键盘快捷键列表导出为文本文档
+            您可以将工具和菜单命令的默认和自定义键盘快捷键列表导出为文本文档：
+            选择编辑 > 键盘快捷键。
+            如果您自定义了快捷键，请从集下拉菜单中选择自定义的快捷键集。
+            选择导出文本。
+            导航到所需的位置以存储该文本文件。
+            有疑问或想法？
+            如果您有疑问，或者希望分享观点，请加入 Adobe Illustrator 社区。 我们很乐意倾听您的心声并欣赏您的创意作品。
+            更快、更轻松地获得帮助
+            登录
+            新用户？
+            创建一个帐户 ›
+                    管理帐户
+                快速链接
+                查看您的所有计划
+                管理您的计划
+            查看快速链接
+            隐藏快速链接
+            法律声明    |    在线隐私政策
+            在 Illustrator 中精确设计
+使用为创意自由和精确度而打造的矢量图形工具，让您的创意变为现实。
+                打开该应用程序
+                打开该应用程序
+        共享此页面
+              Copied
+              Adobe Illustrator
+              < 访问 Adobe 帮助中心
+              学习和支持
+                开始使用
+                用户指南
+                教程
+                在社区提问
+                发表问题并获得专家解答。
+                立即提问
+                联系我们
+                针对您的问题，提供专家支持。
+                立即开始
+          ^ 返回顶部
+                Language Navigation
+                Language Navigation
+        选择地区
+        选择地区将更改 Adobe.com 上的语言和/或内容。
+            Americas
+                        Brasil
+                        Canada - English
+                        Canada - Français
+                        Latinoamérica
+                        México
+                        Argentina
+                        Colombia
+                        Perú
+                        Chile
+                        United States
+            Asia Pacific
+                        Australia
+                        Hong Kong S.A.R. of China
+                        India - English
+                        Indonesia - English
+                        Malaysia - English
+                        New Zealand
+                        Vietnam - English
+                        中国
+                        中國香港特別行政區
+                        台灣地區
+                        日本
+                        Indonesia
+                        Malaysia
+                        Pilipinas
+                        Việt Nam
+                        भारत
+                        한국
+                        Singapore
+                        Thailand - English
+                        ประเทศไทย
+            Europe, Middle East and Africa
+                        Africa - English
+                        België - Nederlands
+                        Belgique - Français
+                        Belgium - English
+                        Česká republika
+                        Danmark
+                        Deutschland
+                        Eesti
+                        España
+                        France
+                        Greece - English
+                        Ireland
+                        Israel - English
+                        Italia
+                        Latvija
+                        Lietuva
+                        Luxembourg - Deutsch
+                        Luxembourg - English
+                        Luxembourg - Français
+                        Magyarország
+                        Middle East and North Africa - English
+                        Nederland
+                        Norge
+                        Österreich
+                        Polska
+                        Portugal
+                        România
+                        Schweiz
+                        Slovenija
+                        Slovensko
+                        Suisse
+                        Suomi
+                        Svizzera
+                        Türkiye
+                        United Kingdom
+                        България
+                        Россия
+                        Україна
+                        الشرق الأوسط وشمال أفريقيا - اللغة العربية
+                        ישראל - עברית
+                        Sverige
+                        Saudi Arabia - English
+                        United Arab Emirates - English
+                        الإمارات العربية المتحدة
+                        المملكة العربية السعودية
+
+"""#
+}

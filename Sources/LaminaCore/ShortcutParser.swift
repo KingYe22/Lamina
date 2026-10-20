@@ -96,26 +96,41 @@ public struct ShortcutEntry: Equatable, Sendable {
 }
 
 public enum ShortcutSource {
+    /// Set when the compiled-in table cannot produce tool shortcuts.
+    /// Empty means the table loaded. Callers must surface this; do not keep going with an empty map.
+    public private(set) static var failure: String?
+
     public static func load() -> String {
-        #if SWIFT_PACKAGE
-        if let url = Bundle.module.url(forResource: "adobe_shortcuts_cn", withExtension: "txt"),
-           let text = try? String(contentsOf: url, encoding: .utf8),
-           text.contains("Command") {
-            return text
+        let text = ShortcutTableEmbedded.text
+        if let reason = problem(in: text) {
+            failure = reason
+            let line = "Lamina: 快捷键表加载失败：\(reason)\n"
+            try? FileHandle.standardError.write(contentsOf: Data(line.utf8))
+        } else {
+            failure = nil
         }
-        #endif
-        if let url = Bundle.main.url(forResource: "adobe_shortcuts_cn", withExtension: "txt"),
-           let text = try? String(contentsOf: url, encoding: .utf8),
-           text.contains("Command") {
-            return text
+        return text
+    }
+
+    private static func problem(in text: String) -> String? {
+        if text.isEmpty {
+            return "编译进程序的快捷键表是空的"
         }
-        let dev = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .appendingPathComponent("Resources/adobe_shortcuts_cn.txt")
-        if let text = try? String(contentsOf: dev, encoding: .utf8) {
-            return text
+        if !text.contains("Command") {
+            return "编译进程序的快捷键表里没有 macOS 按键"
         }
-        return ""
+        let rows = ShortcutTableParser.parse(text)
+        if rows.count < 300 {
+            return "快捷键表只解析出 \(rows.count) 条，工具键不会生效"
+        }
+        let required = ["选择工具", "矩形工具", "椭圆工具"]
+        let missing = required.filter { title in
+            !rows.contains { $0.title == title && !$0.chords.isEmpty }
+        }
+        if !missing.isEmpty {
+            return "快捷键表缺少 \(missing.joined(separator: "、"))"
+        }
+        return nil
     }
 }
 

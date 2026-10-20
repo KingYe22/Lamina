@@ -401,7 +401,11 @@ struct DockRoot: View {
 
     private var shortcutHelp: some View {
         VStack(alignment: .leading) {
-            Text("已载入 \(Keymap.entries.count) 条默认快捷键。").font(.callout)
+            if let failure = ShortcutSource.failure {
+                Text("快捷键表加载失败：\(failure)").font(.callout).foregroundStyle(.red)
+            } else {
+                Text("已载入 \(Keymap.entries.count) 条默认快捷键。").font(.callout)
+            }
             Text("当前集：\(model.keymap.setName)").font(.callout)
             Button("导入 .kys / 文本快捷键集") { workspace.importShortcuts() }
         }

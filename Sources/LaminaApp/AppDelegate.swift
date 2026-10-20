@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         MenuBar.install(workspace: workspace)
+        reportShortcutTableFailure()
         workspace.onNewDocument = { [weak self] in self?.root.showDialog() }
         workspace.onRevealEditor = { [weak self] in self?.root.showEditor() }
         workspace.onShortcutDiagnostics = { ShortcutDiagnostics.shared.show() }
@@ -68,6 +69,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let dir = ProcessInfo.processInfo.environment["LAMINA_SHOTS"] {
             captureShots(in: dir)
         }
+    }
+
+    /// The shortcut table is compiled into the binary. A miss used to return ""
+    /// and every tool key did nothing, including on a machine where the file
+    /// was never copied into the app.
+    private func reportShortcutTableFailure() {
+        _ = Keymap.entries
+        guard let failure = ShortcutSource.failure else { return }
+        let line = "Lamina: 快捷键表加载失败：\(failure)\n"
+        try? FileHandle.standardError.write(contentsOf: Data(line.utf8))
+        workspace.active.model.status = "快捷键表加载失败"
+        let testing = ProcessInfo.processInfo.environment["LAMINA_SMOKE"] == "1"
+            || ProcessInfo.processInfo.environment["LAMINA_KEYTEST"] == "1"
+            || ProcessInfo.processInfo.environment["LAMINA_SHOTS"] != nil
+        if testing { exit(1) }
+        let alert = NSAlert()
+        alert.messageText = "快捷键表没有载入"
+        alert.informativeText = "\(failure)。工具快捷键不会生效。"
+        alert.alertStyle = .critical
+        alert.runModal()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
