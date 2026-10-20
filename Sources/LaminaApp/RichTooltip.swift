@@ -73,20 +73,20 @@ final class RichTooltip: NSView {
     func show(from view: NSView, localPoint: NSPoint, title: String, body: String) {
         self.title = title
         self.body = body
-        let titleFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
-        let bodyFont = NSFont.systemFont(ofSize: 11)
+        let titleFont = Theme.ui(12, weight: .semibold)
+        let bodyFont = Theme.ui(12)
         let titleSize = (title as NSString).size(withAttributes: [.font: titleFont])
         let bodyRect = (body as NSString).boundingRect(
-            with: NSSize(width: 260, height: 80),
+            with: NSSize(width: 144, height: 120),
             options: [.usesLineFragmentOrigin],
             attributes: [.font: bodyFont]
         )
-        let width = max(titleSize.width, bodyRect.width) + 18
-        let height = titleSize.height + bodyRect.height + 16
+        let width = min(160, max(titleSize.width, bodyRect.width) + 16)
+        let height = titleSize.height + bodyRect.height + 12
         guard let content = view.window?.contentView else { return }
         let windowPoint = view.convert(localPoint, to: nil)
         let origin = content.convert(windowPoint, from: nil)
-        var frame = NSRect(x: origin.x + 22, y: origin.y - height + 8, width: min(width, 280), height: height)
+        var frame = NSRect(x: origin.x + 22, y: origin.y - height + 8, width: min(width, 160), height: height)
         if frame.maxX > content.bounds.width - 8 { frame.origin.x = max(8, origin.x - frame.width - 8) }
         if frame.minY < 8 { frame.origin.y = 8 }
         self.frame = frame
@@ -99,21 +99,21 @@ final class RichTooltip: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor(calibratedWhite: 0.97, alpha: 0.98).setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 5, yRadius: 5).fill()
-        NSColor(calibratedWhite: 0.55, alpha: 1).setStroke()
-        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5)
+        Theme.field.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 2, yRadius: 2).fill()
+        Theme.fieldBorder.setStroke()
+        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
         border.lineWidth = 1
         border.stroke()
-        let titleFont = NSFont.systemFont(ofSize: 12, weight: .semibold)
-        let bodyFont = NSFont.systemFont(ofSize: 11)
+        let titleFont = Theme.ui(12, weight: .semibold)
+        let bodyFont = Theme.ui(12)
         (title as NSString).draw(at: NSPoint(x: 8, y: bounds.height - 18), withAttributes: [
-            .font: titleFont, .foregroundColor: NSColor(calibratedWhite: 0.1, alpha: 1)
+            .font: titleFont, .foregroundColor: Theme.text
         ])
         (body as NSString).draw(
-            with: NSRect(x: 8, y: 6, width: bounds.width - 16, height: bounds.height - 26),
+            with: NSRect(x: 8, y: 4, width: bounds.width - 16, height: bounds.height - 22),
             options: [.usesLineFragmentOrigin],
-            attributes: [.font: bodyFont, .foregroundColor: NSColor(calibratedWhite: 0.28, alpha: 1)]
+            attributes: [.font: bodyFont, .foregroundColor: Theme.text]
         )
     }
 }

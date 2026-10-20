@@ -73,6 +73,11 @@ final class AppRoot: NSView {
         dialog.onCreate = { [weak self] spec in
             self?.create(spec)
         }
+        workspace.onAcceptDialog = { [weak self] in
+            guard let self, !self.dialog.isHidden else { return false }
+            self.dialog.accept()
+            return true
+        }
         home.onNew = { [weak self] in self?.showDialog() }
         home.onOpen = { [weak self] in self?.workspace.perform("打开文档") }
         addSubview(home)
@@ -160,8 +165,8 @@ final class AppRoot: NSView {
             rasterPPI: spec.raster,
             zoomTo: 1.0 / 3.0
         )
-        session.model.pixelPreview = spec.preview == "像素预览"
-        session.model.overprintPreview = spec.preview == "叠印预览"
+        session.model.pixelPreview = spec.preview == "像素" || spec.preview == "像素预览"
+        session.model.overprintPreview = spec.preview == "叠印" || spec.preview == "叠印预览"
         session.model.outline = false
         showEditor()
     }
@@ -184,7 +189,7 @@ final class DocumentTabBar: NSView {
         let mode = model.document.colorMode == .cmyk ? "CMYK" : "RGB"
         let preview = model.outline ? "轮廓" : "预览"
         let title = "\(model.document.title) @ \(zoom) (\(mode)/\(preview))" as NSString
-        let font = NSFont.systemFont(ofSize: 12)
+        let font = Theme.ui(12)
         let size = title.size(withAttributes: [.font: font])
         let rect = NSRect(x: 12, y: 4, width: size.width + 28, height: bounds.height - 6)
         Theme.pasteboard.setFill()
@@ -207,13 +212,13 @@ final class IllustratorStatusBar: NSView {
         guard let model = workspace?.active.model else { return }
         let hint = Self.hint(for: model.tool) as NSString
         hint.draw(at: NSPoint(x: 10, y: 6), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.dim
+            .font: Theme.ui(11), .foregroundColor: Theme.dim
         ])
         let zoom = String(format: "%.2f%%", model.zoom * 100)
         let boards = max(model.document.artboards.count, 1)
         let index = min(model.document.activeArtboard + 1, boards)
         let right = "\(zoom) ▾    0°    ‹ \(index) / \(boards) ›    \(model.tool.title)" as NSString
-        let font = NSFont.systemFont(ofSize: 11)
+        let font = Theme.ui(11)
         let size = right.size(withAttributes: [.font: font])
         right.draw(at: NSPoint(x: bounds.width - size.width - 12, y: 6), withAttributes: [
             .font: font, .foregroundColor: Theme.text
@@ -264,7 +269,7 @@ final class ContextBar: NSView {
     }
 
     private func label(_ text: String, x: CGFloat, weight: NSFont.Weight = .regular) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: 11, weight: weight)
+        let font = Theme.ui(11, weight: weight)
         let size = (text as NSString).size(withAttributes: [.font: font])
         (text as NSString).draw(at: NSPoint(x: x, y: (bounds.height - size.height) / 2), withAttributes: [
             .font: font, .foregroundColor: Theme.text
@@ -375,7 +380,7 @@ final class FloatingPanels: NSView {
         NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
         var x: CGFloat = 8
         for (index, tab) in tabs.enumerated() {
-            let font = NSFont.systemFont(ofSize: 11, weight: index == active ? .semibold : .regular)
+            let font = Theme.ui(11, weight: index == active ? .semibold : .regular)
             let color = index == active ? Theme.text : Theme.dim
             (tab as NSString).draw(at: NSPoint(x: x, y: y + 6), withAttributes: [.font: font, .foregroundColor: color])
             x += (tab as NSString).size(withAttributes: [.font: font]).width + 10
@@ -385,12 +390,12 @@ final class FloatingPanels: NSView {
 
     private func drawAppearance(_ rect: NSRect) {
         ("未选择对象" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold), .foregroundColor: Theme.text
+            .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
         ])
         rowEye(rect.minX, rect.minY + 22, open: strokeVisible, color: .black, title: "描边", detail: "1 pt")
         rowEye(rect.minX, rect.minY + 44, open: fillVisible, color: .white, title: "填色", detail: "")
         ("不透明度" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 70), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.dim
+            .font: Theme.ui(11), .foregroundColor: Theme.dim
         ])
         PanelIcons.popup(NSRect(x: rect.minX + 64, y: rect.minY + 66, width: rect.width - 64, height: 20), title: "默认")
     }
@@ -399,11 +404,11 @@ final class FloatingPanels: NSView {
         PanelIcons.eye(in: NSRect(x: x, y: y, width: 16, height: 12), open: open)
         PanelIcons.swatch(in: NSRect(x: x + 22, y: y - 1, width: 14, height: 14), color: color)
         (title as NSString).draw(at: NSPoint(x: x + 42, y: y), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.text
+            .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
         if !detail.isEmpty {
             (detail as NSString).draw(at: NSPoint(x: x + 78, y: y), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.dim
+                .font: Theme.ui(11), .foregroundColor: Theme.dim
             ])
         }
     }
@@ -416,7 +421,7 @@ final class FloatingPanels: NSView {
             for index in 0..<4 {
                 let y = rect.minY + CGFloat(index) * 28
                 (labels[index] as NSString).draw(at: NSPoint(x: rect.minX, y: y + 2), withAttributes: [
-                    .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.dim
+                    .font: Theme.ui(11), .foregroundColor: Theme.dim
                 ])
                 PanelIcons.stepper(NSRect(x: rect.minX + 22, y: y, width: 120, height: 20), title: values[index])
             }
@@ -440,11 +445,11 @@ final class FloatingPanels: NSView {
     private func drawStroke(_ rect: NSRect) {
         if strokeTab == 1 {
             ("不透明度" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 4), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.dim
+                .font: Theme.ui(11), .foregroundColor: Theme.dim
             ])
             PanelIcons.stepper(NSRect(x: rect.minX + 64, y: rect.minY, width: 110, height: 22), title: "100%")
             ("混合模式" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 36), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.dim
+                .font: Theme.ui(11), .foregroundColor: Theme.dim
             ])
             PanelIcons.popup(NSRect(x: rect.minX, y: rect.minY + 56, width: rect.width, height: 22), title: "正常")
             return
@@ -484,7 +489,7 @@ final class FloatingPanels: NSView {
 
     private func caption(_ text: String, y: CGFloat) {
         (text as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .medium), .foregroundColor: Theme.dim
+            .font: Theme.ui(11), .foregroundColor: Theme.dim
         ])
     }
 
@@ -522,7 +527,7 @@ final class FloatingPanels: NSView {
 
     private func tabIndex(_ titles: [String], x: CGFloat) -> Int? {
         var cursor: CGFloat = 8
-        let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        let font = Theme.ui(11, weight: .semibold)
         for (index, title) in titles.enumerated() {
             let width = (title as NSString).size(withAttributes: [.font: font]).width + 10
             if x >= cursor && x < cursor + width { return index }
@@ -640,7 +645,7 @@ final class PropertiesDock: NSView {
         bounds.fill()
         var x: CGFloat = 8
         for name in tabs {
-            let font = NSFont.systemFont(ofSize: 12, weight: name == tab ? .semibold : .regular)
+            let font = Theme.ui(12, weight: name == tab ? .semibold : .regular)
             let color = name == tab ? Theme.text : Theme.dim
             (name as NSString).draw(at: NSPoint(x: x, y: 8), withAttributes: [.font: font, .foregroundColor: color])
             if name == tab {
@@ -653,7 +658,7 @@ final class PropertiesDock: NSView {
         guard tab == "属性", let model = workspace?.active.model else {
             let note = tab == "图层" ? layerText() : "\(tab) 为空"
             (note as NSString).draw(at: NSPoint(x: 12, y: 48), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.dim
+                .font: Theme.ui(12), .foregroundColor: Theme.dim
             ])
             return
         }
@@ -662,7 +667,7 @@ final class PropertiesDock: NSView {
             ? model.document.artboards[model.document.activeArtboard].name
             : "画板 1"
         ("未选择对象" as NSString).draw(at: NSPoint(x: 12, y: 40), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .semibold), .foregroundColor: Theme.text
+            .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
         ])
         section("文档", y: 66)
         labeledPopup("单位", unit, y: 88)
@@ -670,7 +675,7 @@ final class PropertiesDock: NSView {
         PanelIcons.well(NSRect(x: 12, y: 140, width: 28, height: 24), selected: false)
         PanelIcons.artboard(in: NSRect(x: 16, y: 143, width: 20, height: 18))
         ("编辑画板" as NSString).draw(at: NSPoint(x: 46, y: 144), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.text
+            .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
         section("标尺与网格", y: 176)
         PanelIcons.checkbox(at: NSPoint(x: 12, y: 198), on: model.showRulers, title: "显示标尺")
@@ -684,7 +689,7 @@ final class PropertiesDock: NSView {
         PanelIcons.checkbox(at: NSPoint(x: 12, y: 390), on: model.smartGuides, title: "智能参考线")
         section("首选项", y: 420)
         ("键盘增量" as NSString).draw(at: NSPoint(x: 12, y: 446), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.text
+            .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
         PanelIcons.stepper(NSRect(x: bounds.width - 108, y: 442, width: 96, height: 22), title: "\(Int(model.nudge)) pt")
         PanelIcons.checkbox(at: NSPoint(x: 12, y: 472), on: usePreviewBounds, title: "使用预览边界")
@@ -697,13 +702,13 @@ final class PropertiesDock: NSView {
 
     private func section(_ title: String, y: CGFloat) {
         (title as NSString).draw(at: NSPoint(x: 12, y: y), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 11, weight: .semibold), .foregroundColor: Theme.text
+            .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
         ])
     }
 
     private func labeledPopup(_ label: String, _ value: String, y: CGFloat) {
         (label as NSString).draw(at: NSPoint(x: 12, y: y + 2), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.dim
+            .font: Theme.ui(11), .foregroundColor: Theme.dim
         ])
         PanelIcons.popup(NSRect(x: 72, y: y, width: bounds.width - 84, height: 22), title: value)
     }
@@ -712,7 +717,7 @@ final class PropertiesDock: NSView {
         PanelIcons.well(rect, selected: false)
         draw(NSRect(x: rect.minX + 4, y: rect.minY + 4, width: 16, height: 16))
         (title as NSString).draw(at: NSPoint(x: rect.minX + 24, y: rect.minY + 5), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.text
+            .font: Theme.ui(11), .foregroundColor: Theme.text
         ])
     }
 
@@ -818,14 +823,14 @@ final class HomeView: NSView {
         newButton.isBordered = false
         newButton.attributedTitle = NSAttributedString(string: "新文件", attributes: [
             .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: 14, weight: .semibold)
+            .font: Theme.ui(14, weight: .semibold)
         ])
         openButton.target = self
         openButton.action = #selector(pressOpen)
         openButton.refusesFirstResponder = true
         openButton.isBordered = false
         openButton.contentTintColor = Theme.text
-        openButton.font = NSFont.systemFont(ofSize: 14)
+        openButton.font = Theme.ui(14)
         addSubview(newButton)
         addSubview(openButton)
     }
@@ -849,7 +854,7 @@ final class HomeView: NSView {
         Theme.window.setFill()
         bounds.fill()
         let title = "Lamina" as NSString
-        let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        let font = Theme.ui(13, weight: .semibold)
         let size = title.size(withAttributes: [.font: font])
         title.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: 8), withAttributes: [
             .font: font, .foregroundColor: Theme.text
@@ -859,7 +864,7 @@ final class HomeView: NSView {
         Theme.homeBlue.setFill()
         NSBezierPath(roundedRect: NSRect(x: 24, y: 64, width: 172, height: 36), xRadius: 4, yRadius: 4).fill()
         ("最近使用项" as NSString).draw(at: NSPoint(x: 248, y: 56), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 18, weight: .semibold), .foregroundColor: Theme.text
+            .font: Theme.ui(18, weight: .semibold), .foregroundColor: Theme.text
         ])
         let recent = UserDefaults.standard.stringArray(forKey: Workspace.recentKey) ?? []
         let names = recent.isEmpty ? ["尚无最近使用的文件"] : recent.map { URL(fileURLWithPath: $0).lastPathComponent }
@@ -873,7 +878,7 @@ final class HomeView: NSView {
             NSColor.white.setFill()
             NSBezierPath(rect: NSRect(x: rect.minX + 28, y: rect.minY + 18, width: 104, height: 86)).fill()
             (name as NSString).draw(in: NSRect(x: rect.minX + 8, y: rect.maxY - 28, width: rect.width - 16, height: 20), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.text
+                .font: Theme.ui(11), .foregroundColor: Theme.text
             ])
         }
     }
@@ -885,16 +890,6 @@ final class HomeView: NSView {
     }
 }
 
-private enum DialogInk {
-    static let sheet = NSColor(srgbRed: 0.965, green: 0.965, blue: 0.965, alpha: 1)
-    static let rail = NSColor(srgbRed: 0.90, green: 0.90, blue: 0.905, alpha: 1)
-    static let line = NSColor(srgbRed: 0.72, green: 0.72, blue: 0.74, alpha: 1)
-    static let text = NSColor(srgbRed: 0.12, green: 0.12, blue: 0.12, alpha: 1)
-    static let dim = NSColor(srgbRed: 0.38, green: 0.38, blue: 0.40, alpha: 1)
-    static let blue = NSColor(srgbRed: 0.078, green: 0.451, blue: 0.902, alpha: 1)
-    static let selected = NSColor(srgbRed: 0.078, green: 0.451, blue: 0.902, alpha: 0.14)
-}
-
 private struct DocPreset {
     var name: String
     var detail: String
@@ -902,10 +897,49 @@ private struct DocPreset {
     var height: Double
     var unit: UnitKind
     var mode: ColorMode
+    var raster: Double = 72
+}
+
+/// Left padding for the new-document fields. The system bezel is not used.
+final class DialogFieldCell: NSTextFieldCell {
+    override func drawingRect(forBounds rect: NSRect) -> NSRect {
+        let box = super.drawingRect(forBounds: rect)
+        return NSRect(x: box.minX + 6, y: box.minY, width: max(0, box.width - 10), height: box.height)
+    }
+
+    override func titleRect(forBounds rect: NSRect) -> NSRect {
+        drawingRect(forBounds: rect)
+    }
+}
+
+final class DialogField: PanelField {
+    convenience init(text: String, size: CGFloat = 12) {
+        self.init(frame: .zero)
+        let cell = DialogFieldCell(textCell: text)
+        cell.isEditable = true
+        cell.isSelectable = true
+        cell.isScrollable = true
+        cell.usesSingleLineMode = true
+        cell.drawsBackground = true
+        cell.backgroundColor = Theme.field
+        cell.textColor = Theme.text
+        cell.font = Theme.ui(size)
+        cell.alignment = .left
+        cell.isBordered = false
+        cell.isBezeled = false
+        self.cell = cell
+        stringValue = text
+        font = Theme.ui(size)
+        alignment = .left
+        backgroundColor = Theme.field
+        textColor = Theme.text
+    }
 }
 
 final class DialogPushButton: NSButton {
     var primary = false
+    private var hovered = false
+    private var pressed = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -921,22 +955,53 @@ final class DialogPushButton: NSButton {
 
     override var mouseDownCanMoveWindow: Bool { false }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        hovered = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hovered = false
+        pressed = false
+        needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        pressed = true
+        needsDisplay = true
+        super.mouseDown(with: event)
+        pressed = false
+        needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let rect = bounds.insetBy(dx: 0.5, dy: 0.5)
-        let path = NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 16, yRadius: 16)
+        let word = primary ? "创建" : "关闭"
+        let font = Theme.ui(13, weight: .semibold)
         if primary {
-            DialogInk.blue.setFill()
+            let fill = pressed ? Theme.accentDown : (hovered ? Theme.accentHover : Theme.accent)
+            fill.setFill()
             path.fill()
         } else {
-            NSColor.white.setFill()
-            path.fill()
-            DialogInk.line.setStroke()
+            if pressed {
+                Theme.fieldBorder.setFill()
+                path.fill()
+            } else if hovered {
+                Theme.line.setFill()
+                path.fill()
+            }
+            Theme.secondaryStroke.setStroke()
             path.lineWidth = 1
             path.stroke()
         }
-        let word = primary ? "创建" : "关闭"
-        let font = NSFont.systemFont(ofSize: 13, weight: primary ? .semibold : .medium)
-        let color: NSColor = primary ? .white : DialogInk.text
+        let color: NSColor = primary ? .white : Theme.text
         let size = (word as NSString).size(withAttributes: [.font: font])
         (word as NSString).draw(
             at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2 - 1),
@@ -945,7 +1010,7 @@ final class DialogPushButton: NSButton {
     }
 }
 
-/// Illustrator 2026「新建文档」: dimmed workspace, bordered sheet, preset column, labeled details.
+/// Illustrator 2026「新建文档」: dimmed workspace and the dark preset sheet.
 final class NewDocumentDialog: NSView {
     var onCreate: ((NewDocSpec) -> Void)? {
         get { sheet.onCreate }
@@ -961,21 +1026,26 @@ final class NewDocumentDialog: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
-        layer?.masksToBounds = false
         addSubview(sheet)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override var mouseDownCanMoveWindow: Bool { false }
+    override var isOpaque: Bool { false }
 
     func syncPresets() {
         sheet.needsDisplay = true
+        sheet.needsLayout = true
+    }
+
+    func accept() {
+        sheet.submit()
     }
 
     override func layout() {
         super.layout()
-        let size = NSSize(width: min(980, bounds.width - 40), height: min(640, bounds.height - 40))
+        let size = NSSize(width: min(1000, bounds.width - 80), height: min(680, bounds.height - 80))
         sheet.frame = NSRect(
             x: (bounds.width - size.width) / 2,
             y: (bounds.height - size.height) / 2,
@@ -986,8 +1056,18 @@ final class NewDocumentDialog: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(0.58).setFill()
+        NSColor.black.withAlphaComponent(0.5).setFill()
         bounds.fill()
+        guard sheet.frame.width > 1 else { return }
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.5)
+        shadow.shadowOffset = NSSize(width: 0, height: -4)
+        shadow.shadowBlurRadius = 16
+        NSGraphicsContext.saveGraphicsState()
+        shadow.set()
+        Theme.window.setFill()
+        NSBezierPath(roundedRect: sheet.frame, xRadius: 8, yRadius: 8).fill()
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     func createButtonCenter() -> NSPoint {
@@ -1000,64 +1080,93 @@ final class NewDocumentDialog: NSView {
         guard bounds.contains(local) else { return nil }
         return super.hitTest(point) ?? self
     }
+
+    override func mouseDown(with event: NSEvent) {}
 }
 
 final class NewDocSheet: NSView {
     var onCreate: ((NewDocSpec) -> Void)?
     var onClose: (() -> Void)?
 
-    private let categories = ["移动设备", "Web", "打印", "胶片和视频", "图稿和插图"]
+    static let tabHeight: CGFloat = 44
+    static let detailWidth: CGFloat = 320
+    static let cardSize = NSSize(width: 196, height: 184)
+    static let cardGap: CGFloat = 16
+    static let cardMargin: CGFloat = 24
+
+    private let categories = ["最近使用项", "已保存", "移动设备", "Web", "打印", "品牌", "社交媒体", "图稿和插图", "电影和视频", "免费模板"]
     private let catalog: [String: [DocPreset]] = [
         "移动设备": [
             DocPreset(name: "iPhone", detail: "390 × 844 像素", width: 390, height: 844, unit: .px, mode: .rgb),
             DocPreset(name: "iPad", detail: "768 × 1024 像素", width: 768, height: 1024, unit: .px, mode: .rgb),
+            DocPreset(name: "Android", detail: "360 × 800 像素", width: 360, height: 800, unit: .px, mode: .rgb),
             DocPreset(name: "Apple Watch", detail: "184 × 224 像素", width: 184, height: 224, unit: .px, mode: .rgb)
         ],
         "Web": [
-            DocPreset(name: "网页-大", detail: "1920 × 1080 像素", width: 1920, height: 1080, unit: .px, mode: .rgb),
-            DocPreset(name: "网页-中", detail: "1366 × 768 像素", width: 1366, height: 768, unit: .px, mode: .rgb),
-            DocPreset(name: "网页-小", detail: "1280 × 800 像素", width: 1280, height: 800, unit: .px, mode: .rgb)
+            DocPreset(name: "网页 — 大", detail: "1920 × 1080 像素", width: 1920, height: 1080, unit: .px, mode: .rgb),
+            DocPreset(name: "网页 — 中", detail: "1366 × 768 像素", width: 1366, height: 768, unit: .px, mode: .rgb),
+            DocPreset(name: "网页 — 小", detail: "1280 × 800 像素", width: 1280, height: 800, unit: .px, mode: .rgb)
         ],
         "打印": [
-            DocPreset(name: "A4", detail: "210 × 297 毫米", width: 210, height: 297, unit: .mm, mode: .cmyk),
-            DocPreset(name: "A3", detail: "297 × 420 毫米", width: 297, height: 420, unit: .mm, mode: .cmyk),
-            DocPreset(name: "信纸", detail: "216 × 279 毫米", width: 215.9, height: 279.4, unit: .mm, mode: .cmyk),
-            DocPreset(name: "A5", detail: "148 × 210 毫米", width: 148, height: 210, unit: .mm, mode: .cmyk)
+            DocPreset(name: "A4", detail: "210 × 297 毫米", width: 210, height: 297, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "A3", detail: "297 × 420 毫米", width: 297, height: 420, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "A5", detail: "148 × 210 毫米", width: 148, height: 210, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "信纸", detail: "216 × 279 毫米", width: 215.9, height: 279.4, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "Tabloid", detail: "279 × 432 毫米", width: 279.4, height: 431.8, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "A2", detail: "420 × 594 毫米", width: 420, height: 594, unit: .mm, mode: .cmyk, raster: 300)
         ],
-        "胶片和视频": [
-            DocPreset(name: "HDTV 1080", detail: "1920 × 1080 像素", width: 1920, height: 1080, unit: .px, mode: .rgb),
-            DocPreset(name: "4K UHD", detail: "3840 × 2160 像素", width: 3840, height: 2160, unit: .px, mode: .rgb),
-            DocPreset(name: "电影 2K", detail: "2048 × 1080 像素", width: 2048, height: 1080, unit: .px, mode: .rgb)
+        "品牌": [
+            DocPreset(name: "名片", detail: "90 × 50 毫米", width: 90, height: 50, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "信头", detail: "210 × 297 毫米", width: 210, height: 297, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "标志", detail: "500 × 500 像素", width: 500, height: 500, unit: .px, mode: .rgb)
+        ],
+        "社交媒体": [
+            DocPreset(name: "Instagram 帖子", detail: "1080 × 1080 像素", width: 1080, height: 1080, unit: .px, mode: .rgb),
+            DocPreset(name: "Instagram 故事", detail: "1080 × 1920 像素", width: 1080, height: 1920, unit: .px, mode: .rgb),
+            DocPreset(name: "Facebook 封面", detail: "820 × 312 像素", width: 820, height: 312, unit: .px, mode: .rgb)
         ],
         "图稿和插图": [
             DocPreset(name: "自定", detail: "800 × 600 点", width: 800, height: 600, unit: .pt, mode: .rgb),
             DocPreset(name: "正方形", detail: "1000 × 1000 像素", width: 1000, height: 1000, unit: .px, mode: .rgb),
-            DocPreset(name: "A4", detail: "210 × 297 毫米", width: 210, height: 297, unit: .mm, mode: .cmyk)
+            DocPreset(name: "A4", detail: "210 × 297 毫米", width: 210, height: 297, unit: .mm, mode: .cmyk, raster: 300)
+        ],
+        "电影和视频": [
+            DocPreset(name: "HDTV 1080", detail: "1920 × 1080 像素", width: 1920, height: 1080, unit: .px, mode: .rgb),
+            DocPreset(name: "4K UHD", detail: "3840 × 2160 像素", width: 3840, height: 2160, unit: .px, mode: .rgb),
+            DocPreset(name: "电影 2K", detail: "2048 × 1080 像素", width: 2048, height: 1080, unit: .px, mode: .rgb)
+        ],
+        "免费模板": [
+            DocPreset(name: "海报", detail: "1080 × 1920 像素", width: 1080, height: 1920, unit: .px, mode: .rgb),
+            DocPreset(name: "传单", detail: "148 × 210 毫米", width: 148, height: 210, unit: .mm, mode: .cmyk, raster: 300),
+            DocPreset(name: "名片", detail: "90 × 50 毫米", width: 90, height: 50, unit: .mm, mode: .cmyk, raster: 300)
         ]
     ]
 
+    private var saved: [DocPreset] = []
     private var category = "打印"
     private var presetIndex = 0
+    private var hoverIndex: Int?
     private var unit: UnitKind = .mm
     private var mode: ColorMode = .cmyk
     private var portrait = true
-    private var raster = 72.0
-    private var preview = "默认"
+    private var raster = 300.0
+    private var preview = "默认值"
+    private var advancedOpen = true
+    private var moreOpen = false
+    private var bleedLinked = true
 
-    private let nameField = PanelField(text: "未标题-1")
-    private let widthField = PanelField(text: "210")
-    private let heightField = PanelField(text: "297")
-    private let countField = PanelField(text: "1")
-    private let bleedTop = PanelField(text: "0")
-    private let bleedBottom = PanelField(text: "0")
-    private let bleedLeft = PanelField(text: "0")
-    private let bleedRight = PanelField(text: "0")
+    private let nameField = DialogField(text: "未标题-1", size: 13)
+    private let widthField = DialogField(text: "210")
+    private let heightField = DialogField(text: "297")
+    private let countField = DialogField(text: "1")
+    private let bleedTop = DialogField(text: "0")
+    private let bleedBottom = DialogField(text: "0")
+    private let bleedLeft = DialogField(text: "0")
+    private let bleedRight = DialogField(text: "0")
     private let closeButton = DialogPushButton()
     private let createButton = DialogPushButton()
 
-    private let titleLabel = NewDocSheet.makeLabel("新建文档", size: 18, bold: true)
-    private let sectionLabel = NewDocSheet.makeLabel("预设详细信息", size: 14, bold: true)
-    private let presetLabel = NewDocSheet.makeLabel("A4", size: 13, bold: true)
+    private let sectionLabel = NewDocSheet.makeLabel("预设详细信息")
     private let nameLabel = NewDocSheet.makeLabel("名称")
     private let widthLabel = NewDocSheet.makeLabel("宽度")
     private let heightLabel = NewDocSheet.makeLabel("高度")
@@ -1069,37 +1178,40 @@ final class NewDocSheet: NSView {
     private let bottomLabel = NewDocSheet.makeLabel("下")
     private let leftLabel = NewDocSheet.makeLabel("左")
     private let rightLabel = NewDocSheet.makeLabel("右")
-    private let advancedLabel = NewDocSheet.makeLabel("高级选项", bold: true)
+    private let advancedLabel = NewDocSheet.makeLabel("高级选项", size: 11, weight: .semibold, color: Theme.heading)
     private let modeLabel = NewDocSheet.makeLabel("颜色模式")
-    private let rasterLabel = NewDocSheet.makeLabel("光栅效果")
+    private let rasterLabel = NewDocSheet.makeLabel("栅格效果")
     private let previewLabel = NewDocSheet.makeLabel("预览模式")
 
     private var categoryRects: [NSRect] = []
+    private var moreRect = NSRect.zero
     private var presetRects: [NSRect] = []
+    private var saveRect = NSRect.zero
     private var unitRect = NSRect.zero
     private var portraitRect = NSRect.zero
     private var landscapeRect = NSRect.zero
+    private var linkRect = NSRect.zero
+    private var advancedRect = NSRect.zero
     private var modeRect = NSRect.zero
     private var rasterRect = NSRect.zero
     private var previewRect = NSRect.zero
+    private var moreSettingsRect = NSRect.zero
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.masksToBounds = false
-        appearance = NSAppearance(named: .aqua)
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
-        shadow.shadowOffset = NSSize(width: 0, height: -10)
-        shadow.shadowBlurRadius = 28
-        self.shadow = shadow
+        layer?.backgroundColor = NSColor.clear.cgColor
+        appearance = NSAppearance(named: .darkAqua)
         for field in [nameField, widthField, heightField, countField, bleedTop, bleedBottom, bleedLeft, bleedRight] {
-            style(field)
             addSubview(field)
         }
-        for label in [titleLabel, sectionLabel, presetLabel, nameLabel, widthLabel, heightLabel, unitLabel, orientLabel, countLabel, bleedLabel, topLabel, bottomLabel, leftLabel, rightLabel, advancedLabel, modeLabel, rasterLabel, previewLabel] {
+        for label in [sectionLabel, nameLabel, widthLabel, heightLabel, unitLabel, orientLabel, countLabel, bleedLabel, topLabel, bottomLabel, leftLabel, rightLabel, advancedLabel, modeLabel, rasterLabel, previewLabel] {
             addSubview(label)
         }
+        bleedTop.onLeave = { [weak self] in self?.syncBleeds(from: self?.bleedTop) }
+        bleedBottom.onLeave = { [weak self] in self?.syncBleeds(from: self?.bleedBottom) }
+        bleedLeft.onLeave = { [weak self] in self?.syncBleeds(from: self?.bleedLeft) }
+        bleedRight.onLeave = { [weak self] in self?.syncBleeds(from: self?.bleedRight) }
         closeButton.target = self
         closeButton.action = #selector(pressClose)
         createButton.primary = true
@@ -1112,199 +1224,290 @@ final class NewDocSheet: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override var mouseDownCanMoveWindow: Bool { false }
+    override var isOpaque: Bool { false }
 
     func createButtonLocalCenter() -> NSPoint {
         NSPoint(x: createButton.frame.midX, y: createButton.frame.midY)
     }
 
-    @objc private func pressClose() { onClose?() }
-    @objc private func pressCreate() { onCreate?(currentSpec()) }
+    func submit() { onCreate?(currentSpec()) }
 
-    private static func makeLabel(_ text: String, size: CGFloat = 12, bold: Bool = false) -> NSTextField {
+    @objc private func pressClose() { onClose?() }
+    @objc private func pressCreate() { submit() }
+
+    private static func makeLabel(_ text: String, size: CGFloat = 11, weight: NSFont.Weight = .regular, color: NSColor = Theme.dim) -> NSTextField {
         let field = NSTextField(labelWithString: text)
-        field.font = NSFont.systemFont(ofSize: size, weight: bold ? .semibold : .regular)
-        field.textColor = DialogInk.text
+        field.font = Theme.ui(size, weight: weight)
+        field.textColor = color
         field.refusesFirstResponder = true
         field.lineBreakMode = .byTruncatingTail
         return field
     }
 
-    private func style(_ field: PanelField) {
-        field.font = NSFont.systemFont(ofSize: 12)
-        field.alignment = .left
-        field.backgroundColor = .white
-        field.textColor = DialogInk.text
-        field.isBezeled = true
-        field.bezelStyle = .squareBezel
-        field.drawsBackground = true
+    private func presets(for name: String) -> [DocPreset] {
+        if name == "已保存" { return saved }
+        if name == "最近使用项" {
+            let recent = UserDefaults.standard.stringArray(forKey: Workspace.recentKey) ?? []
+            return recent.prefix(6).map { path in
+                let title = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+                return DocPreset(name: title, detail: "最近使用", width: 210, height: 297, unit: .mm, mode: .cmyk, raster: 300)
+            }
+        }
+        return catalog[name] ?? []
     }
 
-    private var presets: [DocPreset] { catalog[category] ?? [] }
+    private var currentPresets: [DocPreset] { presets(for: category) }
 
-    override func layout() {
-        super.layout()
-        let width = bounds.width
-        let height = bounds.height
-        let header: CGFloat = 52
-        let rail: CGFloat = 176
-        let detailX = min(width - 292, rail + 16 + 214 + 14 + 214 + 24)
-        let detailW = width - detailX - 18
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
+    }
 
-        titleLabel.frame = NSRect(x: 20, y: height - 36, width: 240, height: 24)
-
-        var y = height - header - 18
-        sectionLabel.frame = NSRect(x: detailX, y: y, width: detailW, height: 20)
-        y -= 24
-        presetLabel.frame = NSRect(x: detailX, y: y, width: detailW, height: 18)
-        y -= 32
-        nameLabel.frame = NSRect(x: detailX, y: y, width: 64, height: 18)
-        nameField.frame = NSRect(x: detailX + 72, y: y - 3, width: detailW - 72, height: 24)
-        y -= 32
-        widthLabel.frame = NSRect(x: detailX, y: y, width: 36, height: 18)
-        widthField.frame = NSRect(x: detailX + 40, y: y - 3, width: 78, height: 24)
-        heightLabel.frame = NSRect(x: detailX + 128, y: y, width: 36, height: 18)
-        heightField.frame = NSRect(x: detailX + 168, y: y - 3, width: 78, height: 24)
-        y -= 32
-        unitLabel.frame = NSRect(x: detailX, y: y, width: 64, height: 18)
-        unitRect = NSRect(x: detailX + 72, y: y - 3, width: 132, height: 24)
-        y -= 34
-        orientLabel.frame = NSRect(x: detailX, y: y, width: 64, height: 18)
-        portraitRect = NSRect(x: detailX + 72, y: y - 4, width: 72, height: 26)
-        landscapeRect = NSRect(x: portraitRect.maxX + 8, y: y - 4, width: 72, height: 26)
-        y -= 34
-        countLabel.frame = NSRect(x: detailX, y: y, width: 64, height: 18)
-        countField.frame = NSRect(x: detailX + 72, y: y - 3, width: 64, height: 24)
-        y -= 28
-        bleedLabel.frame = NSRect(x: detailX, y: y, width: detailW, height: 18)
-        y -= 28
-        topLabel.frame = NSRect(x: detailX, y: y, width: 18, height: 18)
-        bleedTop.frame = NSRect(x: detailX + 20, y: y - 3, width: 52, height: 24)
-        bottomLabel.frame = NSRect(x: detailX + 84, y: y, width: 18, height: 18)
-        bleedBottom.frame = NSRect(x: detailX + 104, y: y - 3, width: 52, height: 24)
-        y -= 30
-        leftLabel.frame = NSRect(x: detailX, y: y, width: 18, height: 18)
-        bleedLeft.frame = NSRect(x: detailX + 20, y: y - 3, width: 52, height: 24)
-        rightLabel.frame = NSRect(x: detailX + 84, y: y, width: 18, height: 18)
-        bleedRight.frame = NSRect(x: detailX + 104, y: y - 3, width: 52, height: 24)
-        y -= 32
-        advancedLabel.frame = NSRect(x: detailX, y: y, width: detailW, height: 18)
-        y -= 30
-        modeLabel.frame = NSRect(x: detailX, y: y, width: 64, height: 18)
-        modeRect = NSRect(x: detailX + 72, y: y - 3, width: detailW - 72, height: 24)
-        y -= 32
-        rasterLabel.frame = NSRect(x: detailX, y: y, width: 64, height: 18)
-        rasterRect = NSRect(x: detailX + 72, y: y - 3, width: detailW - 72, height: 24)
-        y -= 32
-        previewLabel.frame = NSRect(x: detailX, y: y, width: 64, height: 18)
-        previewRect = NSRect(x: detailX + 72, y: y - 3, width: detailW - 72, height: 24)
-
-        createButton.frame = NSRect(x: width - 28 - 108, y: 20, width: 108, height: 32)
-        closeButton.frame = NSRect(x: createButton.frame.minX - 12 - 88, y: 20, width: 88, height: 32)
-
-        categoryRects = []
-        let rowH: CGFloat = 42
-        var rowY = height - header - 12 - rowH
-        for _ in categories {
-            categoryRects.append(NSRect(x: 0, y: rowY, width: rail, height: rowH))
-            rowY -= rowH
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let next = presetRects.firstIndex { $0.contains(point) }
+        if next != hoverIndex {
+            hoverIndex = next
+            needsDisplay = true
         }
+    }
 
-        presetRects = []
-        let cardW: CGFloat = 214
-        let cardH: CGFloat = 150
-        let originX = rail + 16
-        var cardY = height - header - 16 - cardH
-        let items = presets
-        var index = 0
-        while index < items.count {
-            presetRects.append(NSRect(x: originX, y: cardY, width: cardW, height: cardH))
-            index += 1
-            if index < items.count {
-                presetRects.append(NSRect(x: originX + cardW + 14, y: cardY, width: cardW, height: cardH))
-                index += 1
-            }
-            cardY -= cardH + 14
-        }
+    override func mouseExited(with event: NSEvent) {
+        hoverIndex = nil
         needsDisplay = true
     }
 
+    override func layout() {
+        super.layout()
+        layoutTabs()
+        layoutCards()
+        layoutDetails()
+        needsDisplay = true
+    }
+
+    private func layoutTabs() {
+        let moreFont = Theme.ui(13)
+        let moreWidth = ("查看更多" as NSString).size(withAttributes: [.font: moreFont]).width
+        moreRect = NSRect(x: bounds.width - 16 - moreWidth, y: bounds.height - Self.tabHeight, width: moreWidth, height: Self.tabHeight)
+        let fonts = categories.map { Theme.ui(13, weight: $0 == category ? .semibold : .regular) }
+        let widths = zip(categories, fonts).map { name, font in
+            (name as NSString).size(withAttributes: [.font: font]).width
+        }
+        let limit = moreRect.minX - 16
+        var gap: CGFloat = 18
+        let textWidth = widths.reduce(0, +)
+        let needed = textWidth + gap * CGFloat(max(categories.count - 1, 1))
+        if 12 + needed > limit {
+            gap = max(8, (limit - 12 - textWidth) / CGFloat(max(categories.count - 1, 1)))
+        }
+        categoryRects = []
+        var x: CGFloat = 16
+        for width in widths {
+            categoryRects.append(NSRect(x: x, y: bounds.height - Self.tabHeight, width: width, height: Self.tabHeight))
+            x += width + gap
+        }
+    }
+
+    private func layoutCards() {
+        presetRects = []
+        let items = currentPresets
+        let columns = 3
+        let card = Self.cardSize
+        let originX = Self.cardMargin
+        var y = bounds.height - Self.tabHeight - Self.cardMargin - card.height
+        var index = 0
+        while index < items.count && presetRects.count < 9 {
+            for column in 0..<columns where index < items.count {
+                let x = originX + CGFloat(column) * (card.width + Self.cardGap)
+                presetRects.append(NSRect(x: x, y: y, width: card.width, height: card.height))
+                index += 1
+            }
+            y -= card.height + Self.cardGap
+        }
+    }
+
+    private func layoutDetails() {
+        let pad: CGFloat = 20
+        let x = bounds.width - Self.detailWidth + pad
+        let width = Self.detailWidth - pad * 2
+        var top = bounds.height - Self.tabHeight - 16
+
+        func place(_ label: NSTextField) {
+            label.isHidden = false
+            label.frame = NSRect(x: x, y: top - 14, width: width, height: 14)
+            top -= 16
+        }
+
+        place(sectionLabel)
+        place(nameLabel)
+        let save: CGFloat = 28
+        nameField.frame = NSRect(x: x, y: top - 24, width: width - save - 8, height: 24)
+        saveRect = NSRect(x: x + width - save, y: top - 24, width: save, height: 24)
+        top -= 32
+
+        let column = (width - 8) / 2
+        widthLabel.isHidden = false
+        heightLabel.isHidden = false
+        widthLabel.frame = NSRect(x: x, y: top - 14, width: column, height: 14)
+        heightLabel.frame = NSRect(x: x + column + 8, y: top - 14, width: column, height: 14)
+        top -= 16
+        widthField.frame = NSRect(x: x, y: top - 24, width: column, height: 24)
+        heightField.frame = NSRect(x: x + column + 8, y: top - 24, width: column, height: 24)
+        top -= 32
+
+        place(unitLabel)
+        unitRect = NSRect(x: x, y: top - 24, width: width, height: 24)
+        top -= 32
+
+        place(orientLabel)
+        portraitRect = NSRect(x: x, y: top - 32, width: 88, height: 32)
+        landscapeRect = NSRect(x: x + 96, y: top - 32, width: 88, height: 32)
+        top -= 40
+
+        place(countLabel)
+        countField.frame = NSRect(x: x, y: top - 24, width: width, height: 24)
+        top -= 32
+
+        place(bleedLabel)
+        let box: CGFloat = 56
+        topLabel.frame = NSRect(x: x, y: top - 18, width: 14, height: 16)
+        bleedTop.frame = NSRect(x: x + 16, y: top - 24, width: box, height: 24)
+        bottomLabel.frame = NSRect(x: x + 80, y: top - 18, width: 14, height: 16)
+        bleedBottom.frame = NSRect(x: x + 96, y: top - 24, width: box, height: 24)
+        linkRect = NSRect(x: x + width - 24, y: top - 24, width: 24, height: 24)
+        top -= 28
+        leftLabel.frame = NSRect(x: x, y: top - 18, width: 14, height: 16)
+        bleedLeft.frame = NSRect(x: x + 16, y: top - 24, width: box, height: 24)
+        rightLabel.frame = NSRect(x: x + 80, y: top - 18, width: 14, height: 16)
+        bleedRight.frame = NSRect(x: x + 96, y: top - 24, width: box, height: 24)
+        top -= 32
+
+        advancedLabel.isHidden = false
+        advancedRect = NSRect(x: x, y: top - 16, width: width, height: 16)
+        advancedLabel.frame = NSRect(x: x + 16, y: top - 16, width: width - 16, height: 16)
+        top -= 22
+
+        if advancedOpen {
+            modeLabel.isHidden = false
+            rasterLabel.isHidden = false
+            previewLabel.isHidden = false
+            place(modeLabel)
+            modeRect = NSRect(x: x, y: top - 24, width: width, height: 24)
+            top -= 32
+            place(rasterLabel)
+            rasterRect = NSRect(x: x, y: top - 24, width: width, height: 24)
+            top -= 32
+            place(previewLabel)
+            previewRect = NSRect(x: x, y: top - 24, width: width, height: 24)
+            top -= 28
+        } else {
+            modeLabel.isHidden = true
+            rasterLabel.isHidden = true
+            previewLabel.isHidden = true
+            modeRect = .zero
+            rasterRect = .zero
+            previewRect = .zero
+        }
+
+        moreSettingsRect = NSRect(x: x, y: max(56, top - 16), width: width, height: 16)
+        let buttonWidth: CGFloat = 76
+        createButton.frame = NSRect(x: bounds.width - 20 - buttonWidth, y: 16, width: buttonWidth, height: 32)
+        closeButton.frame = NSRect(x: createButton.frame.minX - 12 - buttonWidth, y: 16, width: buttonWidth, height: 32)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        let radius: CGFloat = 12
-        let shape = NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius)
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: 8, yRadius: 8)
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
-        DialogInk.sheet.setFill()
+        Theme.window.setFill()
         bounds.fill()
-        let header: CGFloat = 52
-        let rail: CGFloat = 176
-        DialogInk.rail.setFill()
-        NSRect(x: 0, y: 0, width: rail, height: bounds.height - header).fill()
-        DialogInk.line.setFill()
-        NSRect(x: 0, y: bounds.height - header, width: bounds.width, height: 1).fill()
-        NSRect(x: rail, y: 0, width: 1, height: bounds.height - header).fill()
 
-        for (index, name) in categories.enumerated() where index < categoryRects.count {
-            let rect = categoryRects[index]
-            let on = name == category
-            if on {
-                DialogInk.selected.setFill()
-                rect.fill()
-                DialogInk.blue.setFill()
-                NSRect(x: 0, y: rect.minY + 6, width: 3, height: rect.height - 12).fill()
-            }
-            (name as NSString).draw(at: NSPoint(x: 18, y: rect.midY - 8), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: on ? .semibold : .regular),
-                .foregroundColor: on ? DialogInk.text : DialogInk.dim
-            ])
-        }
+        let detail = NSRect(x: bounds.width - Self.detailWidth, y: 0, width: Self.detailWidth, height: bounds.height - Self.tabHeight)
+        Theme.panel.setFill()
+        detail.fill()
+        Theme.line.setFill()
+        NSRect(x: detail.minX, y: detail.minY, width: 1, height: detail.height).fill()
+        NSRect(x: 0, y: bounds.height - Self.tabHeight, width: bounds.width, height: 1).fill()
 
-        let items = presets
-        for (index, item) in items.enumerated() where index < presetRects.count {
-            let rect = presetRects[index]
-            let on = index == presetIndex
-            let card = NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6)
-            NSColor.white.setFill()
-            card.fill()
-            (on ? DialogInk.blue : DialogInk.line).setStroke()
-            card.lineWidth = on ? 2 : 1
-            card.stroke()
-            let page = pageRect(in: rect, preset: item)
-            NSColor.white.setFill()
-            NSBezierPath(rect: page).fill()
-            DialogInk.line.setStroke()
-            let pagePath = NSBezierPath(rect: page)
-            pagePath.lineWidth = 1
-            pagePath.stroke()
-            DialogInk.blue.withAlphaComponent(0.25).setFill()
-            NSRect(x: page.minX + 6, y: page.midY, width: page.width - 12, height: 4).fill()
-            NSRect(x: page.minX + 6, y: page.midY - 10, width: page.width * 0.55, height: 4).fill()
-            (item.name as NSString).draw(at: NSPoint(x: rect.minX + 12, y: rect.minY + 24), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
-                .foregroundColor: DialogInk.text
-            ])
-            (item.detail as NSString).draw(at: NSPoint(x: rect.minX + 12, y: rect.minY + 8), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: DialogInk.dim
-            ])
-        }
-
-        drawChip(unitRect, title: unitTitle, selected: false, chevron: true)
-        drawChip(portraitRect, title: "纵向", selected: portrait, chevron: false)
-        drawChip(landscapeRect, title: "横向", selected: !portrait, chevron: false)
-        drawChip(modeRect, title: mode == .cmyk ? "CMYK" : "RGB", selected: false, chevron: true)
-        drawChip(rasterRect, title: "\(Int(raster)) ppi", selected: false, chevron: true)
-        drawChip(previewRect, title: preview, selected: false, chevron: true)
+        drawTabs()
+        drawCards()
+        drawControls()
         NSGraphicsContext.restoreGraphicsState()
-        DialogInk.line.setStroke()
+
+        Theme.line.setStroke()
         shape.lineWidth = 1
         shape.stroke()
     }
 
+    private func drawTabs() {
+        for (index, name) in categories.enumerated() where index < categoryRects.count {
+            let rect = categoryRects[index]
+            let on = name == category
+            let font = Theme.ui(13, weight: on ? .semibold : .regular)
+            let color: NSColor = on ? Theme.text : Theme.dim
+            (name as NSString).draw(at: NSPoint(x: rect.minX, y: rect.midY - 8), withAttributes: [
+                .font: font, .foregroundColor: color
+            ])
+            if on {
+                Theme.text.setFill()
+                NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: 2).fill()
+            }
+        }
+        ("查看更多" as NSString).draw(at: NSPoint(x: moreRect.minX, y: moreRect.midY - 8), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: Theme.dim
+        ])
+    }
+
+    private func drawCards() {
+        let items = currentPresets
+        if items.isEmpty {
+            let note = category == "已保存" ? "尚无已保存的预设" : "尚无最近使用的文件"
+            (note as NSString).draw(at: NSPoint(x: Self.cardMargin, y: bounds.midY), withAttributes: [
+                .font: Theme.ui(12), .foregroundColor: Theme.dim
+            ])
+            return
+        }
+        for (index, item) in items.enumerated() where index < presetRects.count {
+            let rect = presetRects[index]
+            let on = index == presetIndex
+            let hover = index == hoverIndex
+            let card = NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4)
+            if on || hover {
+                Theme.panel.setFill()
+                card.fill()
+            }
+            if on {
+                Theme.focus.setStroke()
+                card.lineWidth = 1
+                card.stroke()
+            }
+            let page = pageRect(in: rect, preset: item)
+            NSColor.white.setFill()
+            NSBezierPath(roundedRect: page, xRadius: 1, yRadius: 1).fill()
+            Theme.fieldBorder.setStroke()
+            let pagePath = NSBezierPath(roundedRect: page, xRadius: 1, yRadius: 1)
+            pagePath.lineWidth = 1
+            pagePath.stroke()
+            Theme.accent.withAlphaComponent(0.35).setFill()
+            NSRect(x: page.minX + 8, y: page.midY + 4, width: page.width - 16, height: 3).fill()
+            NSRect(x: page.minX + 8, y: page.midY - 6, width: page.width * 0.55, height: 3).fill()
+            (item.name as NSString).draw(in: NSRect(x: rect.minX + 12, y: rect.minY + 26, width: rect.width - 24, height: 16), withAttributes: [
+                .font: Theme.ui(12, weight: .semibold),
+                .foregroundColor: Theme.text
+            ])
+            (item.detail as NSString).draw(in: NSRect(x: rect.minX + 12, y: rect.minY + 10, width: rect.width - 24, height: 14), withAttributes: [
+                .font: Theme.ui(11),
+                .foregroundColor: Theme.dim
+            ])
+        }
+    }
+
     private func pageRect(in card: NSRect, preset: DocPreset) -> NSRect {
-        let box = NSRect(x: card.minX + 36, y: card.minY + 52, width: card.width - 72, height: card.height - 78)
+        let box = NSRect(x: card.minX + 28, y: card.minY + 56, width: card.width - 56, height: card.height - 78)
         let aspect = CGFloat(preset.width / max(preset.height, 1))
         var pageW = box.width
-        var pageH = pageW / max(aspect, 0.15)
+        var pageH = pageW / max(aspect, 0.2)
         if pageH > box.height {
             pageH = box.height
             pageW = pageH * aspect
@@ -1312,25 +1515,130 @@ final class NewDocSheet: NSView {
         return NSRect(x: box.midX - pageW / 2, y: box.midY - pageH / 2, width: pageW, height: pageH)
     }
 
-    private func drawChip(_ rect: NSRect, title: String, selected: Bool, chevron: Bool) {
-        guard rect.width > 1 else { return }
-        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4)
-        NSColor.white.setFill()
-        path.fill()
-        (selected ? DialogInk.blue : DialogInk.line).setStroke()
-        path.lineWidth = selected ? 1.6 : 1
-        path.stroke()
-        let font = NSFont.systemFont(ofSize: 12, weight: selected ? .semibold : .regular)
-        let color: NSColor = selected ? DialogInk.blue : DialogInk.text
-        (title as NSString).draw(at: NSPoint(x: rect.minX + 8, y: rect.midY - 7), withAttributes: [
-            .font: font, .foregroundColor: color
+    private func drawControls() {
+        drawSave(saveRect)
+        drawMenu(unitRect, title: unitTitle)
+        drawOrient(portraitRect, portrait: true, selected: portrait)
+        drawOrient(landscapeRect, portrait: false, selected: !portrait)
+        drawLink(linkRect)
+        drawDisclosure(advancedRect, open: advancedOpen)
+        if advancedOpen {
+            drawMenu(modeRect, title: mode == .cmyk ? "CMYK 颜色" : "RGB 颜色")
+            drawMenu(rasterRect, title: "\(Int(raster)) ppi")
+            drawMenu(previewRect, title: preview)
+        }
+        ("更多设置" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX + 16, y: moreSettingsRect.minY), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
-        if chevron {
-            ("▾" as NSString).draw(at: NSPoint(x: rect.maxX - 16, y: rect.midY - 7), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 11),
-                .foregroundColor: DialogInk.dim
+        drawDisclosure(moreSettingsRect, open: moreOpen)
+        if moreOpen {
+            ("颜色配置文件    默认" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX, y: moreSettingsRect.minY - 22), withAttributes: [
+                .font: Theme.ui(11), .foregroundColor: Theme.dim
             ])
         }
+    }
+
+    private func drawMenu(_ rect: NSRect, title: String) {
+        guard rect.width > 1 else { return }
+        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
+        Theme.field.setFill()
+        path.fill()
+        Theme.fieldBorder.setStroke()
+        path.lineWidth = 1
+        path.stroke()
+        (title as NSString).draw(at: NSPoint(x: rect.minX + 8, y: rect.midY - 7), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: Theme.text
+        ])
+        chevronDown(in: NSRect(x: rect.maxX - 16, y: rect.midY - 3, width: 8, height: 6))
+    }
+
+    private func drawOrient(_ rect: NSRect, portrait flag: Bool, selected: Bool) {
+        guard rect.width > 1 else { return }
+        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
+        Theme.field.setFill()
+        path.fill()
+        (selected ? Theme.focus : Theme.fieldBorder).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+        let page = flag
+            ? NSRect(x: rect.minX + 10, y: rect.minY + 6, width: 12, height: 18)
+            : NSRect(x: rect.minX + 8, y: rect.minY + 8, width: 18, height: 12)
+        NSColor.white.setFill()
+        NSBezierPath(rect: page).fill()
+        Theme.dim.setStroke()
+        NSBezierPath(rect: page).stroke()
+        let word = flag ? "纵向" : "横向"
+        (word as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.midY - 7), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: Theme.text
+        ])
+    }
+
+    private func drawSave(_ rect: NSRect) {
+        guard rect.width > 1 else { return }
+        Theme.icon.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.move(to: NSPoint(x: rect.minX + 6, y: rect.midY))
+        path.line(to: NSPoint(x: rect.minX + 6, y: rect.minY + 6))
+        path.line(to: NSPoint(x: rect.maxX - 6, y: rect.minY + 6))
+        path.line(to: NSPoint(x: rect.maxX - 6, y: rect.midY))
+        path.move(to: NSPoint(x: rect.midX, y: rect.maxY - 5))
+        path.line(to: NSPoint(x: rect.midX, y: rect.midY - 1))
+        path.move(to: NSPoint(x: rect.midX - 4, y: rect.midY + 3))
+        path.line(to: NSPoint(x: rect.midX, y: rect.midY - 1))
+        path.line(to: NSPoint(x: rect.midX + 4, y: rect.midY + 3))
+        path.stroke()
+    }
+
+    private func drawLink(_ rect: NSRect) {
+        guard rect.width > 1 else { return }
+        let color: NSColor = bleedLinked ? Theme.focus : Theme.dim
+        color.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.3
+        path.lineCapStyle = .round
+        let left = NSRect(x: rect.minX + 3, y: rect.midY - 4, width: 8, height: 8)
+        let right = NSRect(x: rect.midX, y: rect.midY - 4, width: 8, height: 8)
+        path.appendOval(in: left)
+        path.appendOval(in: right)
+        path.move(to: NSPoint(x: left.midX, y: left.midY))
+        path.line(to: NSPoint(x: right.midX, y: right.midY))
+        path.stroke()
+    }
+
+    private func drawDisclosure(_ rect: NSRect, open: Bool) {
+        guard rect.width > 1 else { return }
+        if open {
+            chevronDown(in: NSRect(x: rect.minX, y: rect.midY - 3, width: 8, height: 6))
+        } else {
+            chevronRight(in: NSRect(x: rect.minX, y: rect.midY - 4, width: 6, height: 8))
+        }
+    }
+
+    private func chevronDown(in rect: NSRect) {
+        Theme.dim.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.move(to: NSPoint(x: rect.minX, y: rect.maxY))
+        path.line(to: NSPoint(x: rect.midX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY))
+        path.stroke()
+    }
+
+    private func chevronRight(in rect: NSRect) {
+        Theme.dim.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
+        path.line(to: NSPoint(x: rect.minX, y: rect.maxY))
+        path.stroke()
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -1338,12 +1646,25 @@ final class NewDocSheet: NSView {
         for (index, rect) in categoryRects.enumerated() where rect.contains(point) {
             category = categories[index]
             presetIndex = 0
-            if let first = presets.first { apply(first) }
+            hoverIndex = nil
+            if let first = currentPresets.first { apply(first) }
+            needsLayout = true
             return
         }
-        for (index, rect) in presetRects.enumerated() where rect.contains(point) && index < presets.count {
+        if moreRect.contains(point) {
+            category = "免费模板"
+            presetIndex = 0
+            if let first = currentPresets.first { apply(first) }
+            needsLayout = true
+            return
+        }
+        for (index, rect) in presetRects.enumerated() where rect.contains(point) && index < currentPresets.count {
             presetIndex = index
-            apply(presets[index])
+            apply(currentPresets[index])
+            return
+        }
+        if saveRect.contains(point) {
+            saveCurrent()
             return
         }
         if unitRect.contains(point) {
@@ -1358,6 +1679,17 @@ final class NewDocSheet: NSView {
         }
         if portraitRect.contains(point) { choosePortrait(true); return }
         if landscapeRect.contains(point) { choosePortrait(false); return }
+        if linkRect.contains(point) {
+            bleedLinked.toggle()
+            if bleedLinked { syncBleeds(from: bleedTop) }
+            needsDisplay = true
+            return
+        }
+        if advancedRect.contains(point) {
+            advancedOpen.toggle()
+            needsLayout = true
+            return
+        }
         if modeRect.contains(point) {
             mode = mode == .cmyk ? .rgb : .cmyk
             needsDisplay = true
@@ -1372,11 +1704,16 @@ final class NewDocSheet: NSView {
         }
         if previewRect.contains(point) {
             switch preview {
-            case "默认": preview = "像素预览"
-            case "像素预览": preview = "叠印预览"
-            default: preview = "默认"
+            case "默认值": preview = "像素"
+            case "像素": preview = "叠印"
+            default: preview = "默认值"
             }
             needsDisplay = true
+            return
+        }
+        if moreSettingsRect.contains(point) {
+            moreOpen.toggle()
+            needsLayout = true
         }
     }
 
@@ -1390,13 +1727,42 @@ final class NewDocSheet: NSView {
     }
 
     private func apply(_ preset: DocPreset) {
-        presetLabel.stringValue = preset.name
         widthField.stringValue = formatNumber(preset.width)
         heightField.stringValue = formatNumber(preset.height)
         unit = preset.unit
         mode = preset.mode
+        raster = preset.raster
         portrait = preset.width <= preset.height
+        bleedTop.stringValue = "0"
+        bleedBottom.stringValue = "0"
+        bleedLeft.stringValue = "0"
+        bleedRight.stringValue = "0"
         needsDisplay = true
+    }
+
+    private func saveCurrent() {
+        let spec = currentSpec()
+        let preset = DocPreset(
+            name: spec.name.isEmpty ? "未标题-1" : spec.name,
+            detail: "\(formatNumber(spec.width)) × \(formatNumber(spec.height)) \(unitTitle)",
+            width: spec.width,
+            height: spec.height,
+            unit: spec.unit,
+            mode: spec.colorMode,
+            raster: spec.raster
+        )
+        saved.insert(preset, at: 0)
+        category = "已保存"
+        presetIndex = 0
+        needsLayout = true
+    }
+
+    private func syncBleeds(from source: DialogField?) {
+        guard bleedLinked, let source else { return }
+        let value = source.stringValue
+        for field in [bleedTop, bleedBottom, bleedLeft, bleedRight] where field !== source {
+            field.stringValue = value
+        }
     }
 
     private func formatNumber(_ value: Double) -> String {
@@ -1431,9 +1797,9 @@ final class NewDocSheet: NSView {
             raster: raster,
             portrait: portrait,
             bleedTop: top,
-            bleedBottom: bottom,
-            bleedLeft: left,
-            bleedRight: right,
+            bleedBottom: bleedLinked ? top : bottom,
+            bleedLeft: bleedLinked ? top : left,
+            bleedRight: bleedLinked ? top : right,
             preview: preview
         )
     }

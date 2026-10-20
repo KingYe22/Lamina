@@ -17,16 +17,33 @@ final class PanelField: NSTextField, NSTextFieldDelegate {
         super.init(frame: frameRect)
         isEditable = true
         isSelectable = true
-        isBezeled = true
-        bezelStyle = .roundedBezel
+        isBezeled = false
+        isBordered = false
         drawsBackground = true
-        backgroundColor = Theme.raised
+        backgroundColor = Theme.field
         textColor = Theme.text
-        font = NSFont.systemFont(ofSize: 11)
+        font = Theme.ui(12)
         alignment = .center
         focusRingType = .none
         refusesFirstResponder = true
         delegate = self
+    }
+
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
+        (fieldIsEditing ? Theme.focus : Theme.fieldBorder).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    var fieldIsEditing: Bool {
+        guard let responder = window?.firstResponder else { return false }
+        if responder === self { return true }
+        if let text = responder as? NSText, (text.delegate as AnyObject?) === self { return true }
+        return false
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -36,7 +53,9 @@ final class PanelField: NSTextField, NSTextFieldDelegate {
     override func becomeFirstResponder() -> Bool {
         guard armed else { return false }
         refusesFirstResponder = false
-        return super.becomeFirstResponder()
+        let ok = super.becomeFirstResponder()
+        needsDisplay = true
+        return ok
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -68,6 +87,7 @@ final class PanelField: NSTextField, NSTextFieldDelegate {
     func controlTextDidEndEditing(_ obj: Notification) {
         armed = false
         refusesFirstResponder = true
+        needsDisplay = true
     }
 
     func leave() {

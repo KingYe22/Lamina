@@ -71,7 +71,7 @@ final class EditorShell: NSView {
         Theme.window.setFill()
         dirtyRect.intersection(bounds).fill()
         let title = "Lamina" as NSString
-        let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        let font = Theme.ui(13, weight: .semibold)
         let size = title.size(withAttributes: [.font: font])
         title.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: bounds.height - 20), withAttributes: [
             .font: font, .foregroundColor: Theme.text

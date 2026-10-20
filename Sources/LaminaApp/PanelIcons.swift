@@ -30,11 +30,11 @@ enum PanelIcons {
     static func field(_ rect: NSRect, text: String, align: NSTextAlignment = .left) {
         Theme.raised.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
-        Theme.line.setStroke()
+        Theme.fieldBorder.setStroke()
         let border = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
         border.lineWidth = 1
         border.stroke()
-        let font = NSFont.systemFont(ofSize: 11)
+        let font = Theme.ui(12)
         let size = (text as NSString).size(withAttributes: [.font: font])
         let x = align == .center ? rect.midX - size.width / 2 : rect.minX + 6
         (text as NSString).draw(at: NSPoint(x: x, y: rect.midY - size.height / 2), withAttributes: [
@@ -67,7 +67,7 @@ enum PanelIcons {
         let box = NSRect(x: origin.x, y: origin.y, width: 13, height: 13)
         Theme.raised.setFill()
         NSBezierPath(roundedRect: box, xRadius: 2, yRadius: 2).fill()
-        (on ? Theme.accent : Theme.line).setStroke()
+        (on ? Theme.accent : Theme.fieldBorder).setStroke()
         let border = NSBezierPath(roundedRect: box, xRadius: 2, yRadius: 2)
         border.lineWidth = 1
         border.stroke()
@@ -83,7 +83,7 @@ enum PanelIcons {
             mark.stroke()
         }
         (title as NSString).draw(at: NSPoint(x: box.maxX + 6, y: origin.y - 1), withAttributes: [
-            .font: NSFont.systemFont(ofSize: 12), .foregroundColor: Theme.text
+            .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
     }
 

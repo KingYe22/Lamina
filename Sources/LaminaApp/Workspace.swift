@@ -20,6 +20,7 @@ final class Workspace: ObservableObject {
     var onChange: (() -> Void)?
     var onNewDocument: (() -> Void)?
     var onDismissDialog: (() -> Bool)?
+    var onAcceptDialog: (() -> Bool)?
     var onRevealEditor: (() -> Void)?
     var onShortcutDiagnostics: (() -> Void)?
     var editorIsKey = false

@@ -199,15 +199,35 @@ final class ToolSlotButton: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override var isFlipped: Bool { true }
+    private var hovered = false
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect], owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        hovered = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hovered = false
+        needsDisplay = true
+    }
 
     override func draw(_ dirtyRect: NSRect) {
         if isCurrent {
-            Theme.accent.withAlphaComponent(0.9).setFill()
+            Theme.field.setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 3, dy: 1), xRadius: 4, yRadius: 4).fill()
+        } else if hovered {
+            Theme.line.setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 3, dy: 1), xRadius: 4, yRadius: 4).fill()
         }
         let side: CGFloat = 18
         let icon = NSRect(x: (bounds.width - side) / 2 - 1, y: (bounds.height - side) / 2, width: side, height: side)
-        ToolIcons.draw(tool, in: icon, color: isCurrent ? .white : Theme.text)
+        ToolIcons.draw(tool, in: icon, color: isCurrent ? .white : Theme.icon)
         if tools.count > 1 {
             let tri = NSBezierPath()
             let x = bounds.maxX - 7
@@ -258,18 +278,20 @@ final class ToolFlyoutView: NSView {
     override var isFlipped: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor(calibratedWhite: 0.2, alpha: 0.98).setFill()
+        Theme.panel.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill()
-        NSColor(calibratedWhite: 0.45, alpha: 1).setStroke()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4).stroke()
+        Theme.field.setStroke()
+        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4)
+        border.lineWidth = 1
+        border.stroke()
         for (index, tool) in tools.enumerated() {
             let y = 4 + CGFloat(index) * 28
             let icon = NSRect(x: 8, y: y + 4, width: 18, height: 18)
-            ToolIcons.draw(tool, in: icon, color: .white)
+            ToolIcons.draw(tool, in: icon, color: Theme.icon)
             let title = ToolTips.heading(tool) as NSString
             title.draw(at: NSPoint(x: 32, y: y + 6), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 12),
-                .foregroundColor: NSColor.white
+                .font: Theme.ui(12),
+                .foregroundColor: Theme.text
             ])
         }
     }

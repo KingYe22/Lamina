@@ -37,17 +37,16 @@ func masked(_ source: NSImage, pixels: Int) -> NSBitmapImageRep? {
     NSGraphicsContext.current = graphics
     let size = CGFloat(pixels)
     let canvas = CGRect(x: 0, y: 0, width: size, height: size)
-    if let ctx = graphics.cgContext {
-        ctx.clear(canvas)
-        ctx.interpolationQuality = .high
-        ctx.saveGState()
-        let radius = size * 0.2237
-        ctx.addPath(CGPath(roundedRect: canvas, cornerWidth: radius, cornerHeight: radius, transform: nil))
-        ctx.clip()
-        let from = NSRect(origin: .zero, size: source.size)
-        source.draw(in: canvas, from: from, operation: .copy, fraction: 1)
-        ctx.restoreGState()
-    }
+    let ctx = graphics.cgContext
+    ctx.clear(canvas)
+    ctx.interpolationQuality = .high
+    ctx.saveGState()
+    let radius = size * 0.2237
+    ctx.addPath(CGPath(roundedRect: canvas, cornerWidth: radius, cornerHeight: radius, transform: nil))
+    ctx.clip()
+    let from = NSRect(origin: .zero, size: source.size)
+    source.draw(in: canvas, from: from, operation: .copy, fraction: 1)
+    ctx.restoreGState()
     NSGraphicsContext.restoreGraphicsState()
     return rep
 }

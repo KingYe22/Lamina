@@ -249,6 +249,10 @@ enum KeyRouter {
             workspace.touch()
             return consume("绘制中", model.status)
         }
+        if event.keyCode == VirtualKey.returnKey, model.editingText == nil, !isActivelyEditing(event),
+           workspace.onAcceptDialog?() == true {
+            return consume("Return", "创建文档")
+        }
         if event.keyCode == VirtualKey.returnKey, model.editingText == nil {
             if (model.tool == .pen || model.tool == .curvature), model.penNodes.count >= 2 {
                 model.finishPen()
