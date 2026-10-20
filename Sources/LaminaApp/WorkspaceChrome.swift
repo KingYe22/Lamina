@@ -1065,12 +1065,11 @@ final class DialogPopup: NSPopUpButton {
         )
         Theme.dim.setStroke()
         let chevron = NSBezierPath()
-        chevron.lineWidth = 1
-        chevron.lineCapStyle = .butt
+        chevron.lineWidth = 1.2
+        chevron.lineCapStyle = .round
         chevron.lineJoinStyle = .miter
-        // Smaller y is the top of the captured window, so the vertex uses the larger y.
-        // The mark sits 4.5pt right and 3pt up of the previous tip, on the reference chevron.
-        let tip = NSPoint(x: bounds.maxX - 12.5, y: bounds.midY + 8)
+        // Smaller y is the top of the captured window, so a smaller tip y moves the mark up.
+        let tip = NSPoint(x: bounds.maxX - 12.5, y: bounds.midY + 2)
         chevron.move(to: NSPoint(x: tip.x - 4, y: tip.y - 4))
         chevron.line(to: tip)
         chevron.line(to: NSPoint(x: tip.x + 4, y: tip.y - 4))

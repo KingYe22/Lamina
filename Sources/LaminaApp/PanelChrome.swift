@@ -148,7 +148,7 @@ final class FloatPanel: NSView {
         return tabs.contains(.stroke) ? 26 : 24
     }
     private var tabLabelY: CGFloat {
-        if tabs.contains(.stroke) { return titleHeight + 1 }
+        if tabs.contains(.stroke) { return titleHeight - 4 }
         if tabs.contains(.align) { return titleHeight - 4 }
         return titleHeight
     }
@@ -250,7 +250,7 @@ final class FloatPanel: NSView {
         _ = rect
         let ink = Theme.color(0xF3F3F3)
         let dim = Theme.color(0xD1D1D1)
-        appearanceRow(top: 168.5, title: "描边", swatch: .none, ink: ink, dim: dim)
+        appearanceRow(top: 168.5, title: "描边", swatch: .slash, ink: ink, dim: dim)
         opacityLine(top: 198, indented: true, ink: dim)
         appearanceRow(top: 230, title: "填色", swatch: .black, ink: ink, dim: dim)
         opacityLine(top: 260.5, indented: true, ink: dim)
@@ -262,7 +262,7 @@ final class FloatPanel: NSView {
         }
     }
 
-    private enum SwatchKind { case none, black }
+    private enum SwatchKind { case slash, black }
 
     private func appearanceRow(top: CGFloat, title: String, swatch: SwatchKind?, ink: NSColor, dim: NSColor) {
         let eye = place(33.5, top)
