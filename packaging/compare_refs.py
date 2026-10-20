@@ -89,10 +89,20 @@ def main():
     shots = Path(sys.argv[1])
     refs = Path(sys.argv[2])
     out = Path(sys.argv[3])
+    workspace = Image.open(shots / "workspace.png")
+    document = Image.open(shots / "new-document.png")
+    title, tabs, status, tool = 28, 28, 26, 81
+    body_top = title + tabs
+    body_h = workspace.height - body_top - status
+    sheet_w = min(1000, document.width - 80)
+    sheet_h = min(680, document.height - 80)
+    sheet_x = (document.width - sheet_w) // 2
+    sheet_top = (document.height - sheet_h) // 2
+    detail_x = sheet_x + sheet_w - 320
     jobs = [
-        ("toolbar", shots / "workspace.png", refs / "toolbar.png", (0, 56, 84, 758)),
-        ("newdoc", shots / "new-document.png", refs / "newdoc-details.png", (820, 124, 320, 636)),
-        ("panels", shots / "workspace.png", refs / "panels.png", (84, 56, 1196, 758)),
+        ("toolbar", shots / "workspace.png", refs / "toolbar.png", (0, body_top, tool, body_h)),
+        ("newdoc", shots / "new-document.png", refs / "newdoc-details.png", (detail_x, sheet_top + 44, 320, sheet_h - 44)),
+        ("panels", shots / "workspace.png", refs / "panels.png", (tool, body_top, workspace.width - tool, body_h)),
     ]
     lines = []
     for name, shot, ref, box in jobs:

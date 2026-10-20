@@ -18,7 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         MacGlyphs.install()
         root = AppRoot(workspace: workspace)
         window = LaminaWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 840),
+            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 1011),
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -181,12 +181,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "new=\(Self.cg(root.home, root.home.newButtonCenter()))",
             "create=\(Self.cg(root.dialog, root.dialog.createButtonCenter()))",
             "field=\(Self.cg(root.editor.dock, root.editor.dock.nudgeFieldCenter()))",
-            "down=\(Self.cg(canvas, NSPoint(x: mid.x + 180, y: mid.y - 280)))",
-            "pen=\(Self.cg(canvas, NSPoint(x: mid.x + 210, y: mid.y - 220)))",
-            "drag=\(Self.cg(canvas, NSPoint(x: mid.x + 320, y: mid.y - 200)))",
-            "penA=\(Self.cg(canvas, NSPoint(x: mid.x + 40, y: mid.y - 300)))",
-            "penB=\(Self.cg(canvas, NSPoint(x: mid.x + 160, y: mid.y - 240)))",
-            "penC=\(Self.cg(canvas, NSPoint(x: mid.x + 90, y: mid.y - 160)))"
+            "down=\(Self.cg(canvas, NSPoint(x: mid.x + 260, y: mid.y - 400)))",
+            "pen=\(Self.cg(canvas, NSPoint(x: mid.x + 300, y: mid.y - 360)))",
+            "drag=\(Self.cg(canvas, NSPoint(x: mid.x + 400, y: mid.y - 320)))",
+            "penA=\(Self.cg(canvas, NSPoint(x: mid.x + 180, y: mid.y - 420)))",
+            "penB=\(Self.cg(canvas, NSPoint(x: mid.x + 220, y: mid.y - 340)))",
+            "penC=\(Self.cg(canvas, NSPoint(x: mid.x + 160, y: mid.y - 260)))"
         ].joined(separator: " ")
         let data = Data((line + "\n").utf8)
         try? keyLog.seekToEnd()

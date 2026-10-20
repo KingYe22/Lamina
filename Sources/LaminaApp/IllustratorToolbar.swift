@@ -84,27 +84,33 @@ final class IllustratorToolbar: NSView {
 
     override func layout() {
         super.layout()
-        let footerH: CGFloat = 200
-        footer.frame = NSRect(x: 0, y: max(0, bounds.height - footerH), width: bounds.width, height: min(footerH, bounds.height))
-        var y: CGFloat = 46
-        let slot: CGFloat = 26
-        sectionTitles = []
-        var index = 0
-        for section in Self.sections {
-            sectionTitles.append((section.title, y))
-            y += 12
-            for row in section.rows {
-                for (column, _) in row.enumerated() {
-                    guard index < slots.count else { break }
-                    let x: CGFloat = column == 0 ? 4 : 42
-                    slots[index].isHidden = y + slot > footer.frame.minY - 2
-                    slots[index].frame = NSRect(x: x, y: y, width: 34, height: slot)
-                    index += 1
-                }
-                y += slot + 1
-            }
-            y += 2
+        // Positions are the reference toolbar.png bands divided by 2, in this flipped view.
+        let footerTop: CGFloat = 627
+        footer.frame = NSRect(x: 0, y: min(footerTop, bounds.height), width: bounds.width, height: max(0, bounds.height - footerTop))
+        let frames: [(CGFloat, CGFloat)] = [
+            (4, 80), (42, 80),
+            (4, 114),
+            (4, 170), (42, 170),
+            (4, 200), (42, 200),
+            (4, 252), (42, 252),
+            (4, 284), (42, 284),
+            (4, 315),
+            (4, 368), (42, 368),
+            (4, 400),
+            (4, 453), (42, 453),
+            (4, 508), (42, 508),
+            (4, 539),
+            (4, 593), (42, 593)
+        ]
+        for (index, slot) in slots.enumerated() {
+            let origin = index < frames.count ? frames[index] : (CGFloat(4), CGFloat(80))
+            slot.isHidden = origin.1 + 28 > footer.frame.minY
+            slot.frame = NSRect(x: origin.0, y: origin.1, width: 36, height: 28)
         }
+        sectionTitles = [
+            ("选择", 65), ("形状", 149), ("绘图", 234), ("修改", 349),
+            ("文字", 434), ("导航", 489), ("颜色", 574)
+        ]
     }
 
     override func updateTrackingAreas() {
@@ -140,27 +146,27 @@ final class IllustratorToolbar: NSView {
 
     private func drawHeader() {
         Theme.color(0x383838).setFill()
-        NSRect(x: 0, y: 16, width: bounds.width, height: 1).fill()
+        NSRect(x: 0, y: 17, width: bounds.width, height: 1).fill()
         Theme.icon.setStroke()
         let chevron = NSBezierPath()
         chevron.lineWidth = 1.35
         chevron.lineCapStyle = .round
         chevron.lineJoinStyle = .round
-        chevron.move(to: NSPoint(x: 14, y: 20))
-        chevron.line(to: NSPoint(x: 8, y: 25))
-        chevron.line(to: NSPoint(x: 14, y: 30))
-        chevron.move(to: NSPoint(x: 20, y: 20))
-        chevron.line(to: NSPoint(x: 14, y: 25))
-        chevron.line(to: NSPoint(x: 20, y: 30))
+        chevron.move(to: NSPoint(x: 12, y: 22))
+        chevron.line(to: NSPoint(x: 7, y: 26))
+        chevron.line(to: NSPoint(x: 12, y: 30))
+        chevron.move(to: NSPoint(x: 18, y: 22))
+        chevron.line(to: NSPoint(x: 13, y: 26))
+        chevron.line(to: NSPoint(x: 18, y: 30))
         chevron.stroke()
         Theme.color(0x383838).setFill()
-        NSRect(x: 0, y: 34, width: bounds.width, height: 1).fill()
+        NSRect(x: 0, y: 32, width: bounds.width, height: 1).fill()
         Theme.icon.setFill()
         let count = 6
-        let span = CGFloat(count - 1) * 6
+        let span = CGFloat(count - 1) * 5
         let start = (bounds.width - span) / 2
         for index in 0..<count {
-            NSBezierPath(ovalIn: NSRect(x: start + CGFloat(index) * 6, y: 40, width: 2.6, height: 2.6)).fill()
+            NSBezierPath(ovalIn: NSRect(x: start + CGFloat(index) * 5, y: 38, width: 2.4, height: 2.4)).fill()
         }
     }
 
@@ -417,8 +423,8 @@ final class ToolbarFooter: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let square: CGFloat = 36
-        let behind = NSRect(x: 20, y: 20, width: square, height: square)
+        let square: CGFloat = 41
+        let behind = NSRect(x: 22, y: 22, width: square, height: square)
         let front = NSRect(x: 2, y: 2, width: square, height: square)
         fill.setFill()
         NSBezierPath(rect: behind).fill()
@@ -434,21 +440,21 @@ final class ToolbarFooter: NSView {
         let active = NSBezierPath(rect: fillActive ? behind.insetBy(dx: 1, dy: 1) : front.insetBy(dx: 1, dy: 1))
         active.lineWidth = 1.4
         active.stroke()
-        swapArrows(NSRect(x: 46, y: 8, width: 18, height: 16))
-        defaultMark(NSRect(x: 2, y: 42, width: 16, height: 16))
+        swapArrows(NSRect(x: 48, y: 8, width: 18, height: 16))
+        defaultMark(NSRect(x: 2, y: 52, width: 16, height: 16))
 
-        let chipW: CGFloat = 23
-        chip(NSRect(x: 2, y: 64, width: chipW, height: 22), kind: 0)
-        chip(NSRect(x: 29, y: 64, width: chipW, height: 22), kind: 1)
-        chip(NSRect(x: 56, y: 64, width: chipW, height: 22), kind: 2)
-        iconWell(NSRect(x: 2, y: 92, width: chipW, height: 22)) { PanelIcons.drawMode(self.drawMode, in: $0.insetBy(dx: 3, dy: 3)) }
-        iconWell(NSRect(x: 29, y: 92, width: chipW, height: 22)) { PanelIcons.screenMode(self.screenMode, in: $0.insetBy(dx: 3, dy: 3)) }
-        iconWell(NSRect(x: 56, y: 92, width: chipW, height: 22)) {
+        let chipW: CGFloat = 22
+        chip(NSRect(x: 1, y: 76, width: chipW, height: 23), kind: 0)
+        chip(NSRect(x: 28, y: 76, width: chipW, height: 23), kind: 1)
+        chip(NSRect(x: 54, y: 76, width: chipW, height: 23), kind: 2)
+        iconWell(NSRect(x: 1, y: 108, width: chipW, height: 22)) { PanelIcons.drawMode(self.drawMode, in: $0.insetBy(dx: 3, dy: 3)) }
+        iconWell(NSRect(x: 28, y: 108, width: chipW, height: 22)) { PanelIcons.screenMode(self.screenMode, in: $0.insetBy(dx: 3, dy: 3)) }
+        iconWell(NSRect(x: 54, y: 108, width: chipW, height: 22)) {
             PanelIcons.ellipsis(in: NSRect(x: $0.midX - 7, y: $0.midY - 2, width: 14, height: 4))
         }
-        columnMark(NSRect(x: bounds.midX - 16, y: 120, width: 32, height: 22))
-        gripDots(y: 150)
-        let ai = NSRect(x: 2, y: bounds.height - 36, width: max(20, bounds.width - 4), height: 32)
+        columnMark(NSRect(x: bounds.midX - 16, y: 140, width: 32, height: 20))
+        gripDots(y: 188)
+        let ai = NSRect(x: 1, y: 207, width: max(20, bounds.width - 2), height: 35)
         Theme.accent.setFill()
         NSBezierPath(roundedRect: ai, xRadius: 5, yRadius: 5).fill()
         let title = "生成式 AI" as NSString
@@ -569,26 +575,26 @@ final class ToolbarFooter: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if NSRect(x: 44, y: 6, width: 22, height: 20).contains(point) {
+        if NSRect(x: 46, y: 6, width: 22, height: 20).contains(point) {
             onAction?("互换填色和描边")
-        } else if NSRect(x: 2, y: 42, width: 18, height: 18).contains(point) {
+        } else if NSRect(x: 2, y: 50, width: 18, height: 18).contains(point) {
             onAction?("把填色和描边设置为默认")
-        } else if NSRect(x: 2, y: 2, width: 54, height: 54).contains(point) {
-            let onFront = NSRect(x: 2, y: 2, width: 36, height: 36).contains(point)
+        } else if NSRect(x: 2, y: 2, width: 62, height: 62).contains(point) {
+            let onFront = NSRect(x: 2, y: 2, width: 41, height: 41).contains(point)
             onAction?(onFront ? "描边" : "填色")
-        } else if NSRect(x: 2, y: 64, width: 23, height: 22).contains(point) {
+        } else if NSRect(x: 1, y: 76, width: 22, height: 23).contains(point) {
             onAction?("选择颜色填充模式")
-        } else if NSRect(x: 29, y: 64, width: 23, height: 22).contains(point) {
+        } else if NSRect(x: 28, y: 76, width: 22, height: 23).contains(point) {
             onAction?("选择渐变填色模式")
-        } else if NSRect(x: 56, y: 64, width: 23, height: 22).contains(point) {
+        } else if NSRect(x: 54, y: 76, width: 22, height: 23).contains(point) {
             onAction?("选择无描边/填充模式")
-        } else if NSRect(x: 2, y: 92, width: 23, height: 22).contains(point) {
+        } else if NSRect(x: 1, y: 108, width: 22, height: 22).contains(point) {
             onAction?("绘图模式")
-        } else if NSRect(x: 29, y: 92, width: 23, height: 22).contains(point) {
+        } else if NSRect(x: 28, y: 108, width: 22, height: 22).contains(point) {
             onAction?("屏幕模式")
-        } else if NSRect(x: 56, y: 92, width: 23, height: 22).contains(point) || NSRect(x: bounds.midX - 18, y: 118, width: 36, height: 26).contains(point) {
+        } else if NSRect(x: 54, y: 108, width: 22, height: 22).contains(point) || NSRect(x: bounds.midX - 18, y: 138, width: 36, height: 24).contains(point) {
             onAction?("编辑工具栏")
-        } else if NSRect(x: 2, y: bounds.height - 36, width: max(20, bounds.width - 4), height: 32).contains(point) {
+        } else if NSRect(x: 1, y: 207, width: max(20, bounds.width - 2), height: 35).contains(point) {
             onAction?("生成式 AI")
         }
     }

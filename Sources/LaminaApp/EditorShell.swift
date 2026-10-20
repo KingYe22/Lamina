@@ -35,7 +35,7 @@ final class EditorShell: NSView {
         let titleBand: CGFloat = 28
         let tabHeight: CGFloat = 28
         let statusHeight: CGFloat = 26
-        let toolWidth: CGFloat = 84
+        let toolWidth: CGFloat = 81
         let dockWidth: CGFloat = 280
         let top = bounds.height - titleBand
         tabs.frame = NSRect(x: 0, y: top - tabHeight, width: bounds.width, height: tabHeight)
