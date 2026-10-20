@@ -105,7 +105,7 @@ public enum ShortcutSource {
         if let reason = problem(in: text) {
             failure = reason
             let line = "Lamina: 快捷键表加载失败：\(reason)\n"
-            try? FileHandle.standardError.write(contentsOf: Data(line.utf8))
+            FileHandle.standardError.write(Data(line.utf8))
         } else {
             failure = nil
         }
