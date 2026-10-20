@@ -25,6 +25,8 @@ struct DrawOptions {
     var showAnchors = true
     var showHandles = true
     var rubberBand = true
+    var livePaths: [PathItem] = []
+    var liveOutline = false
     var perspective: PerspectiveGrid?
     var glyphNudge: [UUID: Vec2] = [:]
 }
@@ -96,6 +98,7 @@ enum CanvasDrawing {
         drawSelection(document, options: options, in: context)
         drawPen(options, in: context)
         drawHint(options, in: context)
+        drawLive(document, options, in: context)
     }
 
     static func applyTransform(_ context: CGContext, size: CGSize, zoom: Double, pan: Vec2) {
@@ -457,7 +460,8 @@ enum CanvasDrawing {
     }
 
     private static func drawPen(_ options: DrawOptions, in context: CGContext) {
-        guard options.penNodes.count > 0 else { return }
+        let penLike: Set<Tool> = [.pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor]
+        guard penLike.contains(options.tool), options.penNodes.count > 0 else { return }
         context.beginPath()
         if let first = options.penNodes.first {
             context.move(to: CGPoint(x: first.anchor.x, y: first.anchor.y))
@@ -492,6 +496,46 @@ enum CanvasDrawing {
                 if let handle = node.outHandle { strokeHandle(from: node.anchor, to: handle, zoom: options.zoom, in: context) }
             }
         }
+    }
+
+    private static func drawLive(_ document: LaminaDocument, _ options: DrawOptions, in context: CGContext) {
+        context.saveGState()
+        context.setStrokeColor(CGColor(red: 0.16, green: 0.48, blue: 0.95, alpha: 1))
+        context.setFillColor(CGColor(red: 0.16, green: 0.48, blue: 0.95, alpha: 0.08))
+        context.setLineWidth(1.1 / max(options.zoom, 0.01))
+        context.setLineJoin(.round)
+        context.setLineCap(.round)
+        if options.liveOutline {
+            func walk(_ item: ArtItem) {
+                let chosen = options.selection.contains(item.id)
+                if chosen {
+                    context.saveGState()
+                    context.concatenate(cgAffine(item.transform))
+                    switch item {
+                    case .path(let object):
+                        context.addPath(cgPath(object.path))
+                    case .compound(let object):
+                        for path in object.paths { context.addPath(cgPath(path)) }
+                    default:
+                        break
+                    }
+                    context.strokePath()
+                    context.restoreGState()
+                }
+                for child in item.children { walk(child) }
+            }
+            for item in document.layers.flatMap(\.items) { walk(item) }
+        }
+        if !options.livePaths.isEmpty {
+            for path in options.livePaths {
+                let cg = cgPath(path)
+                context.addPath(cg)
+                if path.closed { context.fillPath() }
+                context.addPath(cg)
+            }
+            context.strokePath()
+        }
+        context.restoreGState()
     }
 
     private static func drawHint(_ options: DrawOptions, in context: CGContext) {

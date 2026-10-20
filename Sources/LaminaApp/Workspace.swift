@@ -20,6 +20,8 @@ final class Workspace: ObservableObject {
     var onChange: (() -> Void)?
     var onNewDocument: (() -> Void)?
     var onRevealEditor: (() -> Void)?
+    var onShortcutDiagnostics: (() -> Void)?
+    var editorIsKey = false
     /// When set, open/save panels record the request instead of running a modal dialog.
     var suppressPanels = false
     var panelRequest = ""
@@ -87,6 +89,15 @@ final class Workspace: ObservableObject {
     }
 
     func handle(_ action: String, session: EditorSession) -> Bool {
+        if action == "快捷键诊断" {
+            onShortcutDiagnostics?()
+            return true
+        }
+        if let tool = Keymap.toolForTitle[action] {
+            session.model.tool = tool
+            session.model.status = tool.title
+            return true
+        }
         switch action {
         case "在不打开“新建文档”对话框的情况下创建文档":
             addDocument()

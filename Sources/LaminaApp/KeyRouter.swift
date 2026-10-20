@@ -131,18 +131,56 @@ enum ChordAppKit {
 }
 
 enum KeyRouter {
-    static func handle(_ event: NSEvent, workspace: Workspace) -> NSEvent? {
-        let model = workspace.active.model
+    private static var lastStamp: TimeInterval = -1
+    private static var lastCode: UInt16 = .max
+
+    /// True only while a visible, editable text view is the field editor.
+    /// A bare NSTextField that is not editing, and the canvas, do not count.
+    /// The decision uses keyCode, never charactersIgnoringModifiers.
+    static func isActivelyEditing(_ event: NSEvent) -> Bool {
+        let window = event.window ?? NSApp.keyWindow
+        guard let text = window?.firstResponder as? NSTextView else { return false }
+        if text.isHiddenOrHasHiddenAncestor { return false }
+        if !text.isEditable { return false }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let commandish = flags.contains(.command) || flags.contains(.control)
-        if shouldYieldToField(event, commandish: commandish, editingDocument: model.editingText != nil) {
+        if !commandish { return true }
+        // a c v x z — physical codes, so Pinyin cannot rename them.
+        let editingChords: Set<UInt16> = [0, 8, 9, 7, 6]
+        if flags.contains(.command), !flags.contains(.option), !flags.contains(.control), editingChords.contains(event.keyCode) {
+            return true
+        }
+        return false
+    }
+
+    static func handle(_ event: NSEvent, workspace: Workspace) -> NSEvent? {
+        if event.type != .keyDown { return event }
+        if event.timestamp == lastStamp, event.keyCode == lastCode {
+            return nil
+        }
+        let model = workspace.active.model
+        if isActivelyEditing(event), model.editingText == nil {
+            ShortcutLog.record(event, route: "交给正在编辑的文本框", action: "—")
             return event
         }
-        if event.keyCode == 49 { model.spaceHeld = true }
+        func consume(_ route: String, _ action: String) -> NSEvent? {
+            lastStamp = event.timestamp
+            lastCode = event.keyCode
+            ShortcutLog.record(event, route: route, action: action)
+            return nil
+        }
+        if event.keyCode == 49 {
+            model.spaceHeld = true
+            return consume("空格", "临时抓手")
+        }
+        if event.keyCode == 126 || event.keyCode == 125, model.adjustLiveSides(up: event.keyCode == 126) {
+            workspace.touch()
+            return consume("绘制中", model.status)
+        }
         if event.keyCode == 36, model.editingText == nil {
             model.requestToolOptions()
             workspace.touch()
-            return nil
+            return consume("keyCode", "工具选项")
         }
         if model.editingText != nil,
            !event.modifierFlags.contains(.command),
@@ -150,52 +188,49 @@ enum KeyRouter {
             if event.keyCode == 53 {
                 model.editingText = nil
                 workspace.touch()
-                return nil
+                return consume("文字", "结束编辑")
             }
-            guard let chars = event.characters, !chars.isEmpty else { return event }
             if event.keyCode == 51 || event.keyCode == 117 {
                 workspace.replaceEditingText { text in
                     if !text.isEmpty { text.removeLast() }
                 }
-                return nil
+                return consume("文字", "删除")
             }
-            workspace.replaceEditingText { text in text += chars }
-            return nil
+            if let chars = event.characters, !chars.isEmpty {
+                workspace.replaceEditingText { text in text += chars }
+                return consume("文字", "输入")
+            }
         }
-        guard let chord = ChordAppKit.chord(from: event) else { return event }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let commandish = flags.contains(.command) || flags.contains(.control)
+        guard let chord = ChordAppKit.chord(from: event) else {
+            if commandish { return event }
+            focusCanvas(workspace)
+            return consume("keyCode 未映射", "吞掉，避免输入法开始组字")
+        }
+        let before = model.tool
         if model.keyDown(chord: chord) {
             workspace.touch()
-            focusCanvas()
-            return nil
+            let action = model.tool != before ? model.tool.title : model.status
+            focusCanvas(workspace)
+            return consume("keyCode", action)
         }
-        return event
-    }
-
-    /// Plain typing belongs to a focused field. Command shortcuts still reach the app,
-    /// except the editing chords a text field is expected to handle itself.
-    private static func shouldYieldToField(_ event: NSEvent, commandish: Bool, editingDocument: Bool) -> Bool {
-        if editingDocument, !commandish { return false }
-        guard isTextInput(NSApp.keyWindow?.firstResponder) else { return false }
-        if !commandish { return true }
-        let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if flags.contains(.command), !flags.contains(.option), !flags.contains(.control),
-           ["a", "c", "v", "x", "z"].contains(chars) {
-            return true
+        if commandish {
+            ShortcutLog.record(event, route: "keyCode", action: "交给菜单")
+            return event
         }
-        return false
+        focusCanvas(workspace)
+        return consume("keyCode", "无匹配，已吞掉")
     }
 
-    private static func isTextInput(_ responder: NSResponder?) -> Bool {
-        guard let view = responder as? NSView else { return false }
-        if view.isHiddenOrHasHiddenAncestor { return false }
-        if view is NSTextView || view is NSTextField { return true }
-        return false
-    }
-
-    private static func focusCanvas() {
+    private static func focusCanvas(_ workspace: Workspace) {
+        guard workspace.editorIsKey else { return }
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
-        if let canvas = findCanvas(window.contentView) {
+        if window.firstResponder is NSTextView, (window.firstResponder as? NSTextView)?.isEditable == true,
+           (window.firstResponder as? NSView)?.isHiddenOrHasHiddenAncestor == false {
+            return
+        }
+        if let canvas = findCanvas(window.contentView), window.firstResponder !== canvas {
             window.makeFirstResponder(canvas)
         }
     }

@@ -496,6 +496,31 @@ final class ToolParityTests: XCTestCase {
         XCTAssertEqual(model.fidelity, 6, accuracy: 0.01)
         XCTAssertEqual(model.wandTolerance, 0.15, accuracy: 0.001)
     }
+
+    func testLiveShapePreviewAndSideCount() {
+        let model = EditorModel(document: .blank())
+        model.document.units = .mm
+        model.tool = .rectangle
+        model.pointerDown(at: Vec2(10, 20), shift: false, option: false, command: false)
+        model.pointerDrag(to: Vec2(82, 92), shift: false, option: false, command: false)
+        XCTAssertFalse(model.livePaths.isEmpty)
+        XCTAssertTrue(model.liveLabel.contains("mm"))
+        XCTAssertTrue(model.liveLabel.contains("宽："))
+        model.pointerUp(at: Vec2(82, 92), shift: false, option: false, command: false)
+        XCTAssertTrue(model.livePaths.isEmpty)
+        XCTAssertEqual(model.document.flatItems().count, 1)
+
+        model.tool = .polygon
+        model.polygonSides = 6
+        model.pointerDown(at: Vec2(0, 0), shift: false, option: false, command: false)
+        model.pointerDrag(to: Vec2(40, 30), shift: false, option: false, command: false)
+        XCTAssertTrue(model.adjustLiveSides(up: true))
+        XCTAssertEqual(model.polygonSides, 7)
+        XCTAssertFalse(model.livePaths.isEmpty)
+        model.pointerUp(at: Vec2(40, 30), shift: false, option: false, command: false)
+        guard case .path(let object) = model.document.flatItems().last else { return XCTFail() }
+        XCTAssertEqual(object.path.nodes.count, 7)
+    }
 }
 
 private extension ArtItem {

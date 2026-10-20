@@ -63,6 +63,7 @@ final class AppRoot: NSView {
 
     func showHome() {
         showingEditor = false
+        workspace.editorIsKey = false
         home.isHidden = false
         editor.isHidden = true
         home.needsDisplay = true
@@ -71,11 +72,15 @@ final class AppRoot: NSView {
 
     func showEditor() {
         showingEditor = true
+        workspace.editorIsKey = true
         home.isHidden = true
         editor.isHidden = false
         dialog.isHidden = true
         editor.sync()
+        window?.endEditing(for: nil)
         window?.makeFirstResponder(editor.canvas.drawing)
+        NSTextInputContext.current?.discardMarkedText()
+        NSTextInputContext.current?.deactivate()
     }
 
     func showDialog() {
@@ -220,6 +225,27 @@ final class ContextBar: NSView {
         workspace?.active.model.status = "上下文任务栏"
         workspace?.touch()
     }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        Hover.install(on: self)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let tool = workspace?.active.model.tool ?? .selection
+        if point.x < 90 {
+            RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(tool), body: ToolTips.body(tool))
+        } else if point.x < 170 {
+            RichTooltip.shared.show(from: self, localPoint: point, title: "属性", body: "打开属性面板，查看当前选择的选项。")
+        } else if point.x < 230 {
+            RichTooltip.shared.show(from: self, localPoint: point, title: "对齐", body: "按所选对象或画板对齐、分布。")
+        } else {
+            RichTooltip.shared.show(from: self, localPoint: point, title: "路径查找器", body: "用形状模式合并、减去或相交路径。")
+        }
+    }
+
+    override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }
 }
 
 final class FloatingPanels: NSView {
@@ -420,6 +446,60 @@ final class FloatingPanels: NSView {
         let index = Int((point.x - 8) / (width + 4))
         return (0..<count).contains(index) ? index : nil
     }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        Hover.install(on: self)
+    }
+
+    override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        guard let tip = panelTip(at: point) else { RichTooltip.shared.hide(); return }
+        RichTooltip.shared.show(from: self, localPoint: point, title: tip.0, body: tip.1)
+    }
+
+    private func panelTip(at point: NSPoint) -> (String, String)? {
+        if point.y < appearanceHeight {
+            if point.y < 48 { return ("外观", "当前对象的填色、描边和不透明度。") }
+            if point.y < 66 { return ("描边", "显示或隐藏描边，单击色块更改描边色。") }
+            if point.y < 88 { return ("填色", "显示或隐藏填色，单击色块更改填色。") }
+            return ("不透明度", "选择对象的不透明度混合。")
+        }
+        if point.y < alignY + alignHeight {
+            if point.y < alignY + 22 { return ("面板菜单", "切换变换、对齐和路径查找器。") }
+            if groupTab == 1 {
+                let names = ["水平左对齐", "水平居中对齐", "水平右对齐", "垂直顶对齐", "垂直居中对齐", "垂直底对齐"]
+                if let index = iconIndex(count: 6, y: alignY + 42, point: point) {
+                    return (names[index], "按所选对象或画板对齐。")
+                }
+                if iconIndex(count: 6, y: alignY + 88, point: point) != nil {
+                    return ("分布对象", "使所选对象的间距或边缘均匀分布。")
+                }
+                if iconIndex(count: 2, y: alignY + 134, point: point, width: 28) != nil {
+                    return ("分布间距", "按输入的间距分布对象。")
+                }
+                return ("对齐", "选择对齐目标：所选对象、画板或关键对象。")
+            }
+            return ("变换", "查看和更改位置与大小。")
+        }
+        if point.y < strokeY + 22 { return ("描边", "打开描边或透明度设置。右上角是面板菜单。") }
+        if strokeTab != 0 { return ("透明度", "设置不透明度和混合模式。") }
+        if iconIndex(count: 3, y: strokeY + 68, point: point, width: 28) != nil {
+            return ("端点", "平头、圆头或方头端点。")
+        }
+        if iconIndex(count: 3, y: strokeY + 112, point: point, width: 28) != nil {
+            return ("边角", "尖角、圆角或斜角。")
+        }
+        if iconIndex(count: 3, y: strokeY + 156, point: point, width: 28) != nil {
+            return ("对齐描边", "描边居中、内侧或外侧。")
+        }
+        if point.y > strokeY + 170 && point.y < strokeY + 200 {
+            return ("虚线", "勾选后用六个数值设置线段和间隙。")
+        }
+        return ("描边", "设置粗细、箭头和宽度配置文件。")
+    }
 }
 
 final class PropertiesDock: NSView {
@@ -569,6 +649,34 @@ final class PropertiesDock: NSView {
 
     private func hit(_ point: NSPoint, y: CGFloat) -> Bool {
         NSRect(x: 8, y: y - 2, width: bounds.width - 16, height: 18).contains(point)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        Hover.install(on: self)
+    }
+
+    override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }
+
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let tip: (String, String)
+        if point.y < 32 {
+            tip = ("属性", "在属性、注释、图层和库之间切换。右侧是面板菜单。")
+        } else if point.y < 160 {
+            tip = ("文档", "更改单位、画板，或进入画板编辑。")
+        } else if point.y < 250 {
+            tip = ("标尺与网格", "显示或隐藏标尺和网格。")
+        } else if point.y < 324 {
+            tip = ("参考线", "显示或锁定参考线。")
+        } else if point.y < 420 {
+            tip = ("对齐选项", "对齐网格、对齐点或智能参考线。")
+        } else if point.y < 546 {
+            tip = ("首选项", "键盘增量、预览边界、缩放圆角和描边。")
+        } else {
+            tip = ("快速操作", "打开文档设置或首选项。")
+        }
+        RichTooltip.shared.show(from: self, localPoint: point, title: tip.0, body: tip.1)
     }
 }
 

@@ -82,10 +82,54 @@ final class VectorCanvas: NSView {
     override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { true }
 
+    /// The canvas is not a text client. Returning nil keeps the Pinyin input method
+    /// from claiming letter keys before keyDown.
+    override var inputContext: NSTextInputContext? { nil }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        NSTextInputContext.current?.discardMarkedText()
+        NSTextInputContext.current?.deactivate()
+        return ok
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard let workspace else { return }
+        _ = KeyRouter.handle(event, workspace: workspace)
+    }
+
+    override func keyUp(with event: NSEvent) {
+        if event.keyCode == 49 {
+            workspace?.active.model.spaceHeld = false
+            if workspace?.active.model.livePaths.isEmpty == false {
+                workspace?.active.model.updateLiveModifiers(
+                    shift: event.modifierFlags.contains(.shift),
+                    option: event.modifierFlags.contains(.option)
+                )
+            }
+            needsDisplay = true
+            return
+        }
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        workspace?.active.model.updateLiveModifiers(
+            shift: event.modifierFlags.contains(.shift),
+            option: event.modifierFlags.contains(.option)
+        )
+        needsDisplay = true
+    }
+
     override func layout() {
         super.layout()
         guard let model = workspace?.active.model else { return }
         model.viewportSize = Vec2(Double(bounds.width), Double(bounds.height))
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil))
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -116,13 +160,33 @@ final class VectorCanvas: NSView {
         options.showAnchors = model.showAnchors
         options.showHandles = model.showHandles
         options.rubberBand = model.rubberBand
+        options.livePaths = model.livePaths
+        options.liveOutline = model.liveOutline
         options.perspective = model.perspectiveGrid
         options.glyphNudge = model.glyphNudge
         context.saveGState()
         CanvasDrawing.draw(model.document, options: options, in: context, size: bounds.size)
         context.restoreGState()
         drawArtboardLabel(model)
+        drawMeasure(model)
         if model.showRulers { drawRulers(model, in: context) }
+    }
+
+    private func drawMeasure(_ model: EditorModel) {
+        guard !model.liveLabel.isEmpty else { return }
+        let viewX = (model.liveAnchor.x - model.pan.x) * model.zoom + 16
+        let viewY = bounds.height - (model.liveAnchor.y - model.pan.y) * model.zoom + 16
+        let text = model.liveLabel as NSString
+        let font = NSFont.systemFont(ofSize: 11)
+        let size = text.size(withAttributes: [.font: font])
+        var rect = NSRect(x: viewX, y: viewY, width: size.width + 12, height: size.height + 6)
+        if rect.maxX > bounds.width - 4 { rect.origin.x = bounds.width - rect.width - 4 }
+        if rect.maxY > bounds.height - 4 { rect.origin.y = bounds.height - rect.height - 4 }
+        NSColor(calibratedWhite: 0.32, alpha: 0.94).setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3).fill()
+        text.draw(at: NSPoint(x: rect.minX + 6, y: rect.minY + 3), withAttributes: [
+            .font: font, .foregroundColor: NSColor(calibratedWhite: 0.95, alpha: 1)
+        ])
     }
 
     private func drawArtboardLabel(_ model: EditorModel) {
@@ -185,6 +249,15 @@ final class VectorCanvas: NSView {
         }
         needsDisplay = true
         workspace?.touch()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        guard let model = workspace?.active.model else { return }
+        model.pointerMove(to: documentPoint(event, pan: model.pan))
+        let penLike: Set<Tool> = [.pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor]
+        if penLike.contains(model.tool), !model.penNodes.isEmpty || model.rubberBand {
+            needsDisplay = true
+        }
     }
 
     override func mouseDragged(with event: NSEvent) {

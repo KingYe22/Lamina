@@ -107,10 +107,19 @@ public final class EditorModel {
         case lasso([Vec2])
     }
     public private(set) var interactionHint: InteractionHint = .none
+    /// Shape under the cursor while a tool is dragging. Cleared on mouse up.
+    public var livePaths: [PathItem] = []
+    public var liveLabel = ""
+    public var liveAnchor = Vec2.zero
+    public var liveOutline = false
 
     private var undoStack: [Data] = []
     private var redoStack: [Data] = []
     private var drag: Drag?
+    private var createShift = Vec2.zero
+    private var spaceLatch: Vec2?
+    private var lastShift = false
+    private var lastOption = false
     private var moveSnapshot: Data?
     private var moveOrigin = Vec2.zero
     private var createOrigin = Vec2.zero
@@ -396,6 +405,7 @@ public final class EditorModel {
                 applyPlaneMove(to: p)
             } else {
                 applyMove(to: p, copy: option)
+                if tool == .freeTransform || tool == .selection { noteLiveBounds() }
             }
         case .marquee(let origin):
             interactionHint = .marquee(Rect2(
@@ -404,13 +414,18 @@ public final class EditorModel {
             ))
         case .scale(let handle, let original):
             applyScale(handle: handle, original: original, to: p, shift: shift, option: option)
+            noteLiveBounds()
         case .create:
+            lastShift = shift
+            lastOption = option
+            trackCreateSpace(p, held: space || spaceHeld)
             if tool == .brush || tool == .pencil || tool == .blobBrush || tool == .shaper || tool == .eraser || tool == .knife || tool == .smooth || tool == .pathEraser || tool == .joinTool {
                 if penNodes.last?.anchor.distance(to: p) ?? 0 > 1.5 {
                     penNodes.append(.corner(p))
                     strokeSamples.append(sample(stylus, at: p))
                 }
             }
+            publishCreatePreview(to: p, shift: shift, option: option)
         case .pen:
             if tool == .curvature { dragCurvature(to: p) }
             else { penDrag(to: p, shift: shift, option: option, space: space) }
@@ -446,6 +461,7 @@ public final class EditorModel {
                 status = String(format: "旋转视图 %.0f°", viewRotation * 180 / Double.pi)
             } else {
                 applyRotateLike(center: center, to: p, shift: shift, option: option)
+                noteLiveBounds()
             }
         case .gradient:
             applyGradient(from: moveOrigin, to: p, shift: shift)
@@ -454,6 +470,10 @@ public final class EditorModel {
 
     public func pointerUp(at p: Vec2, shift: Bool, option: Bool, command: Bool, space: Bool = false, stylus: StylusSample = .mouse) {
         hover = p
+        bakeCreateShift()
+        livePaths = []
+        liveLabel = ""
+        liveOutline = false
         let kind = drag
         drag = nil
         interactionHint = .none
@@ -498,6 +518,35 @@ public final class EditorModel {
         case .none:
             break
         }
+    }
+
+    /// Up/down while drawing a polygon or star changes the side count and rebuilds the preview.
+    @discardableResult
+    public func adjustLiveSides(up: Bool) -> Bool {
+        guard case .create = drag else { return false }
+        switch tool {
+        case .polygon:
+            polygonSides = min(32, max(3, polygonSides + (up ? 1 : -1)))
+            status = "多边形 \(polygonSides) 边"
+        case .star:
+            starPoints = min(32, max(3, starPoints + (up ? 1 : -1)))
+            status = "星形 \(starPoints) 角"
+        default:
+            return false
+        }
+        publishCreatePreview(to: hover, shift: lastShift, option: lastOption)
+        return true
+    }
+
+    public func pointerMove(to p: Vec2) {
+        hover = p
+    }
+
+    public func updateLiveModifiers(shift: Bool, option: Bool) {
+        lastShift = shift
+        lastOption = option
+        guard case .create = drag else { return }
+        publishCreatePreview(to: hover, shift: shift, option: option)
     }
 
     public func keyDown(chord: KeyChord) -> Bool {
@@ -1011,6 +1060,117 @@ public final class EditorModel {
 
     // MARK: Creation
 
+    private func trackCreateSpace(_ p: Vec2, held: Bool) {
+        if held {
+            if spaceLatch == nil { spaceLatch = p }
+            createShift = p - (spaceLatch ?? p)
+        } else if spaceLatch != nil {
+            bakeCreateShift()
+        }
+    }
+
+    private func bakeCreateShift() {
+        createOrigin += createShift
+        createShift = .zero
+        spaceLatch = nil
+    }
+
+    private func createGeometry(to p: Vec2, shift: Bool, option: Bool) -> (a: Vec2, b: Vec2, rect: Rect2) {
+        var a = createOrigin + createShift
+        var b = p
+        if shift {
+            if tool == .line || tool == .arc {
+                b = ToolBehaviors.constrain45(b, from: a)
+            } else {
+                let dx = b.x - a.x
+                let dy = b.y - a.y
+                let side = max(abs(dx), abs(dy))
+                b = Vec2(a.x + (dx < 0 ? -side : side), a.y + (dy < 0 ? -side : side))
+            }
+        }
+        if option {
+            let c = a
+            a = Vec2(c.x - (b.x - c.x), c.y - (b.y - c.y))
+        }
+        let rect = Rect2(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+        return (a, b, rect)
+    }
+
+    private func publishCreatePreview(to p: Vec2, shift: Bool, option: Bool) {
+        let freehand: Set<Tool> = [.brush, .blobBrush, .pencil, .shaper, .eraser, .knife, .smooth, .pathEraser, .joinTool]
+        if freehand.contains(tool) {
+            var nodes = penNodes
+            if nodes.last?.anchor.distance(to: p) ?? 10 > 0.4 {
+                nodes.append(.corner(p))
+            }
+            livePaths = nodes.count >= 2 ? [PathItem(nodes: nodes, closed: tool == .blobBrush, shape: .free)] : []
+            let box = Rect2.enclosing(nodes.map(\.anchor))
+            liveLabel = sizeLabel(width: max(box.width, 0), height: max(box.height, 0))
+            liveAnchor = p
+            liveOutline = false
+            return
+        }
+        let geo = createGeometry(to: p, shift: shift, option: option)
+        livePaths = previewPaths(a: geo.a, b: geo.b, rect: geo.rect, shift: shift)
+        liveLabel = sizeLabel(width: geo.rect.width, height: geo.rect.height)
+        liveAnchor = p
+        liveOutline = false
+    }
+
+    private func previewPaths(a: Vec2, b: Vec2, rect: Rect2, shift: Bool) -> [PathItem] {
+        switch tool {
+        case .rectangle, .artboard, .slice, .columnGraph, .areaText, .verticalText:
+            return [PathBuilder.rectangle(rect)]
+        case .roundedRectangle:
+            return [PathBuilder.roundedRect(rect, radius: cornerRadius)]
+        case .ellipse:
+            return [PathBuilder.ellipse(rect)]
+        case .polygon:
+            let radius = max(rect.width, rect.height) / 2
+            return [PathBuilder.polygon(center: rect.center, radius: max(radius, 1), sides: polygonSides)]
+        case .star:
+            let radius = max(rect.width, rect.height) / 2
+            return [PathBuilder.star(center: rect.center, radius: max(radius, 1), points: starPoints, innerRatio: starInner)]
+        case .line:
+            return [PathBuilder.line(a, b)]
+        case .arc:
+            return [ToolBehaviors.arcPath(rect: rect, sweep: shift ? Double.pi / 2 : arcSweep)]
+        case .spiral:
+            return [PathBuilder.spiral(center: rect.center, startRadius: 4, endRadius: max(rect.width, rect.height) / 2, turns: spiralTurns)]
+        case .rectGrid:
+            return PathBuilder.rectGrid(rect, rows: gridRows, columns: gridColumns)
+        case .polarGrid:
+            return ToolBehaviors.polarGrid(rect, rings: gridRows, divisions: polarDivisions)
+        case .flare:
+            return ToolBehaviors.flare(center: rect.center, radius: max(max(rect.width, rect.height) / 2, 8), rays: flareRays)
+        case .measure:
+            return [PathBuilder.line(a, b)]
+        default:
+            return rect.width > 0.5 || rect.height > 0.5 ? [PathBuilder.rectangle(rect)] : []
+        }
+    }
+
+    private func noteLiveBounds() {
+        guard let box = selectionBounds() else { return }
+        liveLabel = sizeLabel(width: box.width, height: box.height)
+        liveAnchor = hover
+        liveOutline = true
+        livePaths = []
+    }
+
+    private func sizeLabel(width: Double, height: Double) -> String {
+        "宽：\(formatLength(width)) 高：\(formatLength(height))"
+    }
+
+    private func formatLength(_ points: Double) -> String {
+        switch document.units {
+        case .mm: return String(format: "%.2f mm", points * 25.4 / 72.0)
+        case .inch: return String(format: "%.3f in", points / 72.0)
+        case .px: return String(format: "%.1f px", points)
+        case .pt: return String(format: "%.2f pt", points)
+        }
+    }
+
     private func commitCreate(to p: Vec2, shift: Bool, option: Bool) {
         if tool == .hand { return }
         if tool == .measure {
@@ -1025,18 +1185,10 @@ public final class EditorModel {
             finishFreehand(erase: tool == .eraser || tool == .knife)
             return
         }
-        var a = createOrigin
-        var b = p
-        if shift {
-            let dx = b.x - a.x, dy = b.y - a.y
-            let side = max(abs(dx), abs(dy))
-            b = Vec2(a.x + side * (dx < 0 ? -1 : 1), a.y + side * (dy < 0 ? -1 : 1))
-        }
-        if option {
-            let c = a
-            a = Vec2(c.x - (b.x - c.x), c.y - (b.y - c.y))
-        }
-        let rect = Rect2(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
+        let geo = createGeometry(to: p, shift: shift, option: option)
+        let a = geo.a
+        let b = geo.b
+        let rect = geo.rect
         guard rect.width > 0.5 || rect.height > 0.5 || tool == .line else { return }
         beginChange()
         switch tool {
@@ -1060,8 +1212,7 @@ public final class EditorModel {
             }
             insertNew(.group(GroupObject(name: "光晕", children: children)))
         case .line:
-            let end = shift ? ToolBehaviors.constrain45(p, from: createOrigin) : p
-            insertNew(.path(styled(PathObject(name: "直线", path: PathBuilder.line(createOrigin, end), appearance: Appearance(fill: nil, stroke: currentStroke ?? StrokeStyle())))))
+            insertNew(.path(styled(PathObject(name: "直线", path: PathBuilder.line(a, b), appearance: Appearance(fill: nil, stroke: currentStroke ?? StrokeStyle())))))
         case .arc:
             let sweep = shift ? Double.pi / 2 : arcSweep
             insertNew(.path(styled(PathObject(name: "弧形", path: ToolBehaviors.arcPath(rect: rect, sweep: sweep), appearance: Appearance(fill: nil, stroke: currentStroke ?? StrokeStyle())))))

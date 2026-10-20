@@ -29,11 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.setFrameAutosaveName("LaminaMain")
         window.center()
         window.isMovableByWindowBackground = true
+        window.acceptsMouseMovedEvents = true
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         MenuBar.install(workspace: workspace)
         workspace.onNewDocument = { [weak self] in self?.root.showDialog() }
         workspace.onRevealEditor = { [weak self] in self?.root.showEditor() }
+        workspace.onShortcutDiagnostics = { ShortcutDiagnostics.shared.show() }
         workspace.onChange = { [weak self] in
             self?.root.editor.sync()
             if let workspace = self?.workspace {
@@ -287,6 +289,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         root.editor.sync()
         root.displayIfNeeded()
         writePNG(root, to: dir.appendingPathComponent("workspace.png"))
+        let model = workspace.active.model
+        let board = model.document.currentArtboard.rect
+        let start = Vec2(board.midX - 90, board.midY - 60)
+        let end = Vec2(board.midX + 70, board.midY + 50)
+        model.tool = .rectangle
+        model.pointerDown(at: start, shift: false, option: false, command: false)
+        model.pointerDrag(to: end, shift: false, option: false, command: false)
+        root.editor.canvas.drawing.needsDisplay = true
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+        writePNG(root, to: dir.appendingPathComponent("drag-preview.png"))
+        model.pointerUp(at: end, shift: false, option: false, command: false)
+        root.editor.toolbar.revealTooltipForShot()
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+        writePNG(root, to: dir.appendingPathComponent("tooltip.png"))
+        root.editor.toolbar.revealFlyoutForShot()
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+        writePNG(root, to: dir.appendingPathComponent("tool-flyout.png"))
         exit(0)
     }
 

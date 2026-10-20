@@ -458,6 +458,7 @@ public enum MenuCatalog {
     public static let helpMenu = sub("帮助", [
         item("墨线帮助", action: "调用帮助", lookup: "调用帮助"),
         item("键盘快捷键说明", action: "键盘快捷键说明"),
+        item("快捷键诊断", action: "快捷键诊断"),
         item("关于快捷键来源", action: "关于快捷键来源")
     ])
 
