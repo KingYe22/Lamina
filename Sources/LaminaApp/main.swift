@@ -10,6 +10,10 @@ if NSApp != nil, !(NSApp is LaminaApplication) {
     exit(1)
 }
 let app = LaminaApplication()
+guard app is LaminaApplication else {
+    fputs("LaminaApplication() did not return the subclass\n", stderr)
+    exit(1)
+}
 NSApp = app
 let delegate = AppDelegate()
 app.delegate = delegate
