@@ -3,7 +3,7 @@ import AppKit
 /// Principal class. `sendEvent` sees the physical key before the text system,
 /// so a panel field that is not being edited cannot swallow V / M / L.
 @objc(LaminaApplication)
-final class LaminaApplication: NSApplication {
+public final class LaminaApplication: NSApplication {
     override func sendEvent(_ event: NSEvent) {
         let workspace = (delegate as? AppDelegate)?.keyWorkspace
         if event.type == .keyDown, let workspace, !KeyRouter.isActivelyEditing(event) {
