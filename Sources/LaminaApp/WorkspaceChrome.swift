@@ -1439,7 +1439,7 @@ final class NewDocSheet: NSView {
         place(sectionLabel, imageY: 25)
         place(nameLabel, imageY: 57)
         let save: CGFloat = 28
-        nameField.frame = NSRect(x: x, y: originY(imageY: 83, height: 23), width: width - save - 6, height: 23)
+        nameField.frame = NSRect(x: x, y: originY(imageY: 83, height: 24), width: width - save - 6, height: 24)
         saveRect = NSRect(x: columnLeft + 270, y: originY(imageY: 92, height: 14), width: 17, height: 14)
 
         let column = (width - 8) / 2
@@ -1447,11 +1447,11 @@ final class NewDocSheet: NSView {
         heightLabel.isHidden = false
         widthLabel.frame = NSRect(x: labelX, y: originY(imageY: 141, height: 14), width: column, height: 14)
         heightLabel.frame = NSRect(x: labelX + column + 8, y: widthLabel.frame.minY, width: column, height: 14)
-        widthField.frame = NSRect(x: x, y: originY(imageY: 179, height: 23.5), width: column, height: 23.5)
-        heightField.frame = NSRect(x: x + column + 8, y: widthField.frame.minY, width: column, height: 23.5)
+        widthField.frame = NSRect(x: x, y: originY(imageY: 179, height: 24), width: column, height: 24)
+        heightField.frame = NSRect(x: x + column + 8, y: widthField.frame.minY, width: column, height: 24)
 
         place(unitLabel, imageY: 249)
-        unitPopup.frame = NSRect(x: x, y: originY(imageY: 275, height: 23.5), width: width, height: 23.5)
+        unitPopup.frame = NSRect(x: x, y: originY(imageY: 275, height: 24.5), width: width, height: 24.5)
 
         place(orientLabel, imageY: 345)
         portraitRect = NSRect(x: columnLeft + 13.5, y: originY(imageY: 373, height: 30), width: 86, height: 30)
@@ -1484,11 +1484,11 @@ final class NewDocSheet: NSView {
             rasterLabel.isHidden = false
             previewLabel.isHidden = false
             place(modeLabel, imageY: 749)
-            modePopup.frame = NSRect(x: x, y: originY(imageY: 775, height: 23.5), width: width, height: 23.5)
+            modePopup.frame = NSRect(x: x, y: originY(imageY: 775, height: 24.5), width: width, height: 24.5)
             place(rasterLabel, imageY: 845)
-            rasterPopup.frame = NSRect(x: x, y: originY(imageY: 871, height: 23.5), width: width, height: 23.5)
+            rasterPopup.frame = NSRect(x: x, y: originY(imageY: 871, height: 24.5), width: width, height: 24.5)
             place(previewLabel, imageY: 941)
-            previewPopup.frame = NSRect(x: x, y: originY(imageY: 967, height: 23.5), width: width, height: 23.5)
+            previewPopup.frame = NSRect(x: x, y: originY(imageY: 967, height: 24.5), width: width, height: 24.5)
         } else {
             modeLabel.isHidden = true
             rasterLabel.isHidden = true

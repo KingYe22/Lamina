@@ -272,8 +272,8 @@ final class FloatPanel: NSView {
             .font: Theme.ui(13), .foregroundColor: ink
         ])
         guard let swatch else { return }
-        let origin = place(147, top)
-        let chip = NSRect(x: origin.x, y: origin.y, width: 12, height: 11)
+        let origin = place(145.5, top - 1.5)
+        let chip = NSRect(x: origin.x, y: origin.y, width: 13, height: 12)
         if swatch == .black {
             PanelIcons.swatch(in: chip, color: .black)
         } else {
@@ -299,9 +299,9 @@ final class FloatPanel: NSView {
         border.stroke()
         NSColor(calibratedRed: 0.80, green: 0.00, blue: 0.13, alpha: 1).setStroke()
         let slash = NSBezierPath()
-        slash.lineWidth = 1.6
-        slash.move(to: NSPoint(x: rect.minX + 2, y: rect.minY + 2))
-        slash.line(to: NSPoint(x: rect.maxX - 2, y: rect.maxY - 2))
+        slash.lineWidth = 2.2
+        slash.move(to: NSPoint(x: rect.minX + 1, y: rect.minY + 1))
+        slash.line(to: NSPoint(x: rect.maxX - 1, y: rect.maxY - 1))
         slash.stroke()
     }
 
