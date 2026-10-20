@@ -5,6 +5,8 @@ import AppKit
 /// hand focus straight back to the canvas.
 class PanelField: NSTextField, NSTextFieldDelegate {
     var onLeave: (() -> Void)?
+    /// Panel chrome draws the gray rounded border. Dialog fields draw their own.
+    var usesPanelChrome = true
     private var armed = false
     private var leaving = false
 
@@ -33,6 +35,7 @@ class PanelField: NSTextField, NSTextFieldDelegate {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
+        guard usesPanelChrome else { return }
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
         (fieldIsEditing ? Theme.focus : Theme.fieldBorder).setStroke()
         path.lineWidth = 1
