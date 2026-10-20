@@ -48,7 +48,7 @@ enum Theme {
     /// Secondary button stroke.
     static let secondaryStroke = color(0x909090)
     /// Generative-AI blue sampled from the toolbar button.
-    static let accent = color(0x1673E6)
+    static let accent = color(0x1573E6)
     static let accentHover = color(0x0059C2)
     static let accentDown = color(0x004DA3)
     static let focus = color(0x54A3F6)
