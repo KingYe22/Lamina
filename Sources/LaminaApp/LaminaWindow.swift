@@ -35,4 +35,9 @@ final class LaminaWindow: NSWindow {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
+
+    override var isMovableByWindowBackground: Bool {
+        get { false }
+        set { super.isMovableByWindowBackground = false }
+    }
 }

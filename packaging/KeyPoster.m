@@ -466,6 +466,44 @@ int main(int argc, char **argv) {
         BOOL groupOK = [groupStatus containsString:@"请选择多个对象"] || [groupStatus containsString:@"组"];
         note([NSString stringWithFormat:@"%@ Cmd+G status=%@", groupOK ? @"PASS" : @"FAIL", groupStatus]);
 
+        expectTool(@"P-pen", @"pen", 35, 0);
+        NSDictionary *penBefore = latestState();
+        NSString *frameBefore = penBefore[@"frame"] ?: @"";
+        NSString *penPan = penBefore[@"pan"] ?: @"";
+        NSString *penZoom = penBefore[@"zoom"] ?: @"";
+        int itemsBeforePen = [penBefore[@"items"] intValue];
+        drag(parsePoint(penBefore[@"down"]), parsePoint(penBefore[@"pen"]));
+        NSDictionary *pulled = waitUntil(^BOOL(NSDictionary *state) {
+            return [state[@"nodes"] intValue] >= 1;
+        }, 2.5);
+        BOOL pulledStill = frameBefore.length > 0
+            && [pulled[@"frame"] isEqualToString:frameBefore]
+            && [pulled[@"pan"] isEqualToString:penPan]
+            && [pulled[@"zoom"] isEqualToString:penZoom];
+        BOOL pulledNode = [pulled[@"nodes"] intValue] >= 1;
+        note([NSString stringWithFormat:@"%@ pen-drag frame=%@ nodes=%@", (pulledStill && pulledNode) ? @"PASS" : @"FAIL", pulled[@"frame"] ?: @"?", pulled[@"nodes"] ?: @"?"]);
+        if (!(pulledStill && pulledNode)) note([NSString stringWithFormat:@"  raw=%@", pulled[@"__raw"] ?: @""]);
+
+        click(parsePoint(penBefore[@"drag"]));
+        NSDictionary *anchored = waitUntil(^BOOL(NSDictionary *state) {
+            return [state[@"nodes"] intValue] >= 2 && [state[@"frame"] isEqualToString:frameBefore];
+        }, 2.5);
+        BOOL anchorOK = [anchored[@"nodes"] intValue] >= 2 && [anchored[@"frame"] isEqualToString:frameBefore];
+        note([NSString stringWithFormat:@"%@ pen-anchor nodes=%@ frame=%@", anchorOK ? @"PASS" : @"FAIL", anchored[@"nodes"] ?: @"?", anchored[@"frame"] ?: @"?"]);
+        if (!anchorOK) note([NSString stringWithFormat:@"  raw=%@", anchored[@"__raw"] ?: @""]);
+
+        postKey(36, 0, YES, YES);
+        NSDictionary *penned = waitUntil(^BOOL(NSDictionary *state) {
+            return [state[@"items"] intValue] > itemsBeforePen && [state[@"frame"] isEqualToString:frameBefore];
+        }, 2.5);
+        BOOL pathOK = [penned[@"items"] intValue] > itemsBeforePen;
+        BOOL viewOK = frameBefore.length > 0
+            && [penned[@"frame"] isEqualToString:frameBefore]
+            && [penned[@"pan"] isEqualToString:penPan]
+            && [penned[@"zoom"] isEqualToString:penZoom];
+        note([NSString stringWithFormat:@"%@ pen-path items=%@ frame=%@", (pathOK && viewOK) ? @"PASS" : @"FAIL", penned[@"items"] ?: @"?", penned[@"frame"] ?: @"?"]);
+        if (!(pathOK && viewOK)) note([NSString stringWithFormat:@"  raw=%@", penned[@"__raw"] ?: @""]);
+
         note(failed ? @"FAIL" : @"OK");
         return failed ? 1 : 0;
     }

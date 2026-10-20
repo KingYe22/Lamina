@@ -36,7 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.minSize = NSSize(width: 1100, height: 720)
         window.setFrameAutosaveName("LaminaMain")
         window.center()
-        window.isMovableByWindowBackground = true
+        // Only the title-bar strip calls performWindowDrag. A pen (or any tool)
+        // drag on the canvas must not move the window.
+        window.isMovableByWindowBackground = false
         window.acceptsMouseMovedEvents = true
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -174,11 +176,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "responder=\(responder)",
             "status=\(status)",
             "pan=\(Self.plain(model.pan.x, digits: 2)),\(Self.plain(model.pan.y, digits: 2))",
+            "frame=\(Self.frameToken(window.frame))",
+            "nodes=\(model.penNodes.count)",
             "new=\(Self.cg(root.home, root.home.newButtonCenter()))",
             "create=\(Self.cg(root.dialog, root.dialog.createButtonCenter()))",
             "field=\(Self.cg(root.editor.dock, root.editor.dock.nudgeFieldCenter()))",
             "down=\(Self.cg(canvas, NSPoint(x: mid.x - 40, y: mid.y - 30)))",
-            "drag=\(Self.cg(canvas, NSPoint(x: mid.x + 40, y: mid.y + 30)))"
+            "pen=\(Self.cg(canvas, NSPoint(x: mid.x + 36, y: mid.y + 48)))",
+            "drag=\(Self.cg(canvas, NSPoint(x: mid.x + 90, y: mid.y - 8)))"
         ].joined(separator: " ")
         let data = Data((line + "\n").utf8)
         try? keyLog.seekToEnd()
@@ -189,6 +194,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private static func currentInputSourceID() -> String {
         let raw = String(cString: laminaCurrentInputSource())
         return raw.isEmpty ? "none" : raw
+    }
+
+    private static func frameToken(_ frame: NSRect) -> String {
+        [
+            plain(Double(frame.origin.x), digits: 2),
+            plain(Double(frame.origin.y), digits: 2),
+            plain(Double(frame.size.width), digits: 2),
+            plain(Double(frame.size.height), digits: 2)
+        ].joined(separator: ",")
     }
 
     private static func plain(_ value: Double, digits: Int) -> String {
@@ -234,6 +248,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         root.displayIfNeeded()
         writePNG(root, to: dir.appendingPathComponent("drag-preview.png"))
         model.pointerUp(at: end, shift: false, option: false, command: false)
+        let anchor = Vec2(board.midX - 150, board.midY - 30)
+        let handle = Vec2(board.midX - 30, board.midY + 150)
+        let next = Vec2(board.midX + 160, board.midY + 20)
+        let nextHandle = Vec2(board.midX + 230, board.midY - 120)
+        model.tool = .pen
+        model.pointerDown(at: anchor, shift: false, option: false, command: false)
+        model.pointerDrag(to: handle, shift: false, option: false, command: false)
+        model.pointerUp(at: handle, shift: false, option: false, command: false)
+        model.pointerDown(at: next, shift: false, option: false, command: false)
+        model.pointerDrag(to: nextHandle, shift: false, option: false, command: false)
+        root.editor.canvas.drawing.needsDisplay = true
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+        writePNG(root, to: dir.appendingPathComponent("pen-drawing.png"))
+        model.pointerUp(at: nextHandle, shift: false, option: false, command: false)
         root.editor.toolbar.revealTooltipForShot()
         root.layoutSubtreeIfNeeded()
         root.displayIfNeeded()

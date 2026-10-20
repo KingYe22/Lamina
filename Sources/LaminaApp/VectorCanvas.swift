@@ -18,6 +18,8 @@ final class PasteboardMetalView: MTKView, MTKViewDelegate {
 
     required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override var mouseDownCanMoveWindow: Bool { false }
+
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
     func draw(in view: MTKView) {
@@ -50,6 +52,8 @@ final class CanvasHost: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override var mouseDownCanMoveWindow: Bool { false }
+
     override func layout() {
         super.layout()
         metal.frame = bounds
@@ -81,6 +85,10 @@ final class VectorCanvas: NSView {
 
     override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { true }
+
+    /// Non-opaque views otherwise tell AppKit that a drag may move the window.
+    /// Every tool (pen, pencil, brush, marquee, hand, zoom) starts on this view.
+    override var mouseDownCanMoveWindow: Bool { false }
 
     /// The canvas is not a text client. Returning nil keeps the Pinyin input method
     /// from claiming letter keys before keyDown.

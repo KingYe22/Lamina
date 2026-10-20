@@ -2,6 +2,7 @@ import AppKit
 import LaminaCore
 
 final class IllustratorToolbar: NSView {
+    override var mouseDownCanMoveWindow: Bool { false }
     weak var workspace: Workspace?
     private var slots: [ToolSlotButton] = []
     private let fillControl = FillStrokeWell()

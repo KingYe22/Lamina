@@ -28,6 +28,8 @@ final class EditorShell: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    override var mouseDownCanMoveWindow: Bool { false }
+
     override func layout() {
         super.layout()
         let titleBand: CGFloat = 28

@@ -1437,6 +1437,7 @@ public final class EditorModel {
         let path = PathItem(nodes: penNodes, closed: penClosed, shape: .free)
         insertNew(.path(styled(PathObject(name: "路径", path: path))))
         penNodes = []
+        status = "路径"
     }
 
     private func curvatureDown(_ p: Vec2, clickCount: Int) {

@@ -496,6 +496,17 @@ enum CanvasDrawing {
                 if let handle = node.outHandle { strokeHandle(from: node.anchor, to: handle, zoom: options.zoom, in: context) }
             }
         }
+        if options.showAnchors {
+            let anchorSide = 5 / options.zoom
+            context.setLineWidth(1 / options.zoom)
+            for node in options.penNodes {
+                let box = CGRect(x: node.anchor.x - anchorSide / 2, y: node.anchor.y - anchorSide / 2, width: anchorSide, height: anchorSide)
+                context.setFillColor(NSColor.white.cgColor)
+                context.fill(box)
+                context.setStrokeColor(Theme.accent.cgColor)
+                context.stroke(box)
+            }
+        }
     }
 
     private static func drawLive(_ document: LaminaDocument, _ options: DrawOptions, in context: CGContext) {

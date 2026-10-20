@@ -250,6 +250,11 @@ enum KeyRouter {
             return consume("绘制中", model.status)
         }
         if event.keyCode == VirtualKey.returnKey, model.editingText == nil {
+            if (model.tool == .pen || model.tool == .curvature), model.penNodes.count >= 2 {
+                model.finishPen()
+                workspace.touch()
+                return consume("keyCode", "完成路径")
+            }
             model.requestToolOptions()
             workspace.touch()
             return consume("keyCode", "工具选项")
