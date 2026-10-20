@@ -157,7 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         workspace.active.model.spaceHeld = false
         focus()
         inject(45, flags: .maskCommand)
-        report.line("\(root.dialog.isHidden ? "FAIL" : "PASS") Cmd+N dialog hidden=\(root.dialog.isHidden) status=\(workspace.active.model.status)")
+        report.line("\(root.dialog.isHidden ? "FAIL" : "PASS") Cmd+N dialog")
         focus()
         workspace.panelRequest = ""
         inject(31, flags: .maskCommand)

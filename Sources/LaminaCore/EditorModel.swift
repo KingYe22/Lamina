@@ -533,13 +533,13 @@ public final class EditorModel {
 
     @discardableResult
     public func perform(_ action: String) -> Bool {
+        defer { dialogValues = [:] }
+        if let actionHandler, actionHandler(action) { return true }
         if dialogsEnabled, dialogValues.isEmpty, let request = DialogCatalog.request(for: action) {
             pendingDialog = request
             status = request.title
             return true
         }
-        defer { dialogValues = [:] }
-        if let actionHandler, actionHandler(action) { return true }
         switch action {
         case "工具选项": applyToolOptions()
         case "还原": undo()
