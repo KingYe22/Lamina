@@ -115,8 +115,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         writeKeyState()
         Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            NSApp.activate(ignoringOtherApps: true)
-            self.window.makeKey()
+            if !PanelField.anyArmed(in: self.window) {
+                NSApp.activate(ignoringOtherApps: true)
+                self.window.makeKey()
+            }
             self.writeKeyState()
         }
     }
