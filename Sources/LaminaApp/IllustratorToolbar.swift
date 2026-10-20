@@ -476,11 +476,15 @@ final class ToolbarFooter: NSView {
         Theme.icon.setStroke()
         let left = NSRect(x: rect.minX, y: rect.minY + 2, width: 18, height: 16)
         let right = NSRect(x: rect.minX + 10, y: rect.minY, width: 18, height: 16)
-        NSBezierPath(rect: right).stroke(1.1)
+        let rightPath = NSBezierPath(rect: right)
+        rightPath.lineWidth = 1.1
+        rightPath.stroke()
         Theme.panel.setFill()
         NSBezierPath(rect: left).fill()
         Theme.icon.setStroke()
-        NSBezierPath(rect: left).stroke(1.1)
+        let leftPath = NSBezierPath(rect: left)
+        leftPath.lineWidth = 1.1
+        leftPath.stroke()
     }
 
     private func gripDots(y: CGFloat) {
