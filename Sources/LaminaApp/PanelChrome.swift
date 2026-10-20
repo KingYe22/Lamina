@@ -136,8 +136,18 @@ final class FloatPanel: NSView {
     }
 
     private var enabled: Bool { !(workspace?.active.model.selection.isEmpty ?? true) }
-    private var titleHeight: CGFloat { 26 }
-    private var tabHeight: CGFloat { tabs.count > 1 && !collapsed ? 24 : 0 }
+    /// Appearance is one tall title. Align keeps a title row plus tabs. Stroke is tabs only.
+    private var titleHeight: CGFloat {
+        if collapsed { return 26 }
+        if tabs == [.appearance] { return 51 }
+        if tabs.contains(.stroke) { return 11 }
+        return 26
+    }
+    private var tabHeight: CGFloat {
+        guard tabs.count > 1, !collapsed else { return 0 }
+        return tabs.contains(.stroke) ? 26 : 24
+    }
+    private var tabLabelY: CGFloat { titleHeight + (tabs.contains(.stroke) ? 1 : 0) }
 
     override func layout() {
         super.layout()
@@ -145,11 +155,12 @@ final class FloatPanel: NSView {
         weightField.isHidden = !showStroke
         limitField.isHidden = !showStroke
         if showStroke {
-            let top = titleHeight + tabHeight + 8
-            weightField.frame = NSRect(x: 44, y: top - 1, width: bounds.width - 104, height: 20)
-            limitField.frame = NSRect(x: 44, y: top + 74, width: 48, height: 20)
-            weightField.textColor = enabled ? Theme.text : Theme.color(0x707070)
-            limitField.textColor = weightField.textColor
+            let top = titleHeight + tabHeight + 6
+            weightField.frame = NSRect(x: 78, y: top, width: bounds.width - 168, height: 20)
+            limitField.frame = NSRect(x: bounds.width - 58, y: top + 78, width: 44, height: 18)
+            let ink = enabled ? Theme.text : Theme.color(0x878787)
+            weightField.textColor = ink
+            limitField.textColor = ink
         }
     }
 
@@ -166,7 +177,9 @@ final class FloatPanel: NSView {
         NSRect(x: 0, y: headerH - 1, width: bounds.width, height: 1).fill()
         if tabs.count < 2 || collapsed {
             let title = (collapsed ? tabs.map(\.rawValue).joined(separator: " / ") : active.rawValue) as NSString
-            title.draw(at: NSPoint(x: 10, y: 8), withAttributes: [
+            let titleY: CGFloat = tabs == [.appearance] ? 16 : 5
+            let titleX: CGFloat = tabs == [.appearance] ? 14 : 10
+            title.draw(at: NSPoint(x: titleX, y: titleY), withAttributes: [
                 .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xF3F3F3)
             ])
         }
@@ -185,13 +198,14 @@ final class FloatPanel: NSView {
                 let font = Theme.ui(13, weight: on ? .semibold : .regular)
                 let color: NSColor = on ? Theme.color(0xF3F3F3) : Theme.color(0xB0B0B0)
                 if measured, spots.indices.contains(index) { x = spots[index] }
-                (tab.rawValue as NSString).draw(at: NSPoint(x: x, y: 6), withAttributes: [
+                let labelY = tabLabelY
+                (tab.rawValue as NSString).draw(at: NSPoint(x: x, y: labelY), withAttributes: [
                     .font: font, .foregroundColor: color
                 ])
                 if on {
                     Theme.text.setFill()
                     let w = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width
-                    NSRect(x: x, y: 24, width: w, height: 2).fill()
+                    NSRect(x: x, y: labelY + 18, width: w, height: 2).fill()
                 }
                 if !measured {
                     x += (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
@@ -230,35 +244,77 @@ final class FloatPanel: NSView {
     }
 
     private func drawAppearance(_ rect: NSRect) {
-        let heading = (workspace?.active.model.selection.isEmpty == false) ? "外观" : "未选择对象"
-        (heading as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY), withAttributes: [
-            .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xD1D1D1)
+        let ink = Theme.color(0xF3F3F3)
+        let dim = Theme.color(0xD1D1D1)
+        appearanceRow(y: rect.minY + 6, title: "描边", swatch: .none, detail: strokeDetail(), ink: ink, dim: dim)
+        ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 46, y: rect.minY + 32), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: dim
         ])
-        PanelIcons.eye(in: NSRect(x: rect.minX, y: rect.minY + 24, width: 16, height: 12), open: true)
-        let twist = NSBezierPath()
-        Theme.icon.setStroke()
-        twist.lineWidth = 1.2
-        twist.move(to: NSPoint(x: rect.minX + 22, y: rect.minY + 26))
-        twist.line(to: NSPoint(x: rect.minX + 26, y: rect.minY + 30))
-        twist.line(to: NSPoint(x: rect.minX + 30, y: rect.minY + 26))
-        twist.stroke()
-        PanelIcons.swatch(in: NSRect(x: rect.minX + 8, y: rect.minY + 32, width: 18, height: 18), color: .black)
-        ("描边：" as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.minY + 32), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: Theme.color(0xDDDDDD)
+        appearanceRow(y: rect.minY + 62, title: "填色", swatch: .black, detail: "", ink: ink, dim: dim)
+        ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 46, y: rect.minY + 88), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: dim
         ])
-        (strokeDetail() as NSString).draw(at: NSPoint(x: rect.minX + 78, y: rect.minY + 33), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
-        ])
-        ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.minY + 62), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
-        ])
-        let y = rect.maxY - 28
-        for index in 0..<4 {
-            let box = NSRect(x: rect.minX + CGFloat(index) * 28, y: y, width: 24, height: 22)
-            Theme.field.setFill()
-            NSBezierPath(roundedRect: box, xRadius: 2, yRadius: 2).fill()
-            appearanceIcon(index, in: box.insetBy(dx: 4, dy: 4))
+        let iconY = rect.maxY - 36
+        let slots: [CGFloat] = [0, 32, 64, 148]
+        for (index, origin) in slots.enumerated() {
+            let box = NSRect(x: rect.minX + origin, y: iconY, width: 22, height: 20)
+            appearanceIcon(index, in: box)
         }
+    }
+
+    private enum SwatchKind { case none, black }
+
+    private func appearanceRow(y: CGFloat, title: String, swatch: SwatchKind, detail: String, ink: NSColor, dim: NSColor) {
+        let x = 8 as CGFloat
+        PanelIcons.eye(in: NSRect(x: x, y: y + 2, width: 16, height: 12), open: true)
+        disclosure(at: NSPoint(x: x + 22, y: y + 4), open: true, color: dim)
+        (title as NSString).draw(at: NSPoint(x: x + 36, y: y), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: ink
+        ])
+        let chip = NSRect(x: x + 78, y: y - 2, width: 18, height: 18)
+        if swatch == .black {
+            PanelIcons.swatch(in: chip, color: .black)
+        } else {
+            noneSwatch(chip)
+        }
+        if !detail.isEmpty {
+            (detail as NSString).draw(at: NSPoint(x: chip.maxX + 8, y: y), withAttributes: [
+                .font: Theme.ui(12), .foregroundColor: dim
+            ])
+        }
+    }
+
+    private func noneSwatch(_ rect: NSRect) {
+        NSColor.white.setFill()
+        NSBezierPath(rect: rect).fill()
+        NSColor.black.setStroke()
+        let border = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+        border.lineWidth = 1
+        border.stroke()
+        NSColor(calibratedRed: 0.80, green: 0.00, blue: 0.13, alpha: 1).setStroke()
+        let slash = NSBezierPath()
+        slash.lineWidth = 1.6
+        slash.move(to: NSPoint(x: rect.minX + 2, y: rect.minY + 2))
+        slash.line(to: NSPoint(x: rect.maxX - 2, y: rect.maxY - 2))
+        slash.stroke()
+    }
+
+    private func disclosure(at origin: NSPoint, open: Bool, color: NSColor) {
+        color.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        if open {
+            path.move(to: NSPoint(x: origin.x, y: origin.y))
+            path.line(to: NSPoint(x: origin.x + 4, y: origin.y + 5))
+            path.line(to: NSPoint(x: origin.x + 8, y: origin.y))
+        } else {
+            path.move(to: NSPoint(x: origin.x, y: origin.y + 6))
+            path.line(to: NSPoint(x: origin.x + 5, y: origin.y + 3))
+            path.line(to: NSPoint(x: origin.x, y: origin.y))
+        }
+        path.stroke()
     }
 
     private func strokeDetail() -> String {
@@ -328,11 +384,16 @@ final class FloatPanel: NSView {
         cropText("分布对象", x: 330, top: 250, size: 14, color: label)
         cropText("分布间距", x: 330, top: 327.5, size: 14, color: label)
         let icon = Theme.color(0xC2C2C2)
-        for name in ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "b0", "b1", "b2", "c0", "c1"] {
+        for name in ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "b0", "b1", "b2"] {
             TracedMarks.draw(name, origin: origin, color: icon)
         }
-        cropText(alignTargets[alignTarget], x: 330, top: 372, size: 13, color: Theme.color(0xB0B0B0))
-        _ = rect
+        // The reference keeps "对齐" on the 分布间距 row, with three icons under it.
+        cropText("对齐", x: 516, top: 327, size: 13, color: label)
+        let rowY = rect.minY + 168
+        for index in 0..<3 {
+            let box = NSRect(x: rect.maxX - 118 + CGFloat(index) * 28, y: rowY, width: 22, height: 18)
+            PanelIcons.align(index, in: box)
+        }
         _ = ink
     }
 
@@ -358,40 +419,61 @@ final class FloatPanel: NSView {
 
     private func drawStroke(_ rect: NSRect, ink: NSColor) {
         let stroke = workspace?.active.model.currentStroke
-        let muted = Theme.color(0xD1D1D1)
-        caption("粗细", y: rect.minY, ink: muted)
-        PanelIcons.popup(NSRect(x: rect.maxX - 48, y: rect.minY - 2, width: 48, height: 20), title: "pt")
-        caption("端点", y: rect.minY + 26, ink: muted)
-        iconRow(3, x: rect.minX + 36, y: rect.minY + 24, selected: capIndex(stroke?.cap), muted: !enabled) { PanelIcons.cap($0, in: $1) }
-        caption("边角", y: rect.minY + 52, ink: muted)
-        iconRow(3, x: rect.minX + 36, y: rect.minY + 50, selected: joinIndex(stroke?.join), muted: !enabled) { PanelIcons.corner($0, in: $1) }
-        caption("限制", y: rect.minY + 76, ink: muted)
-        caption("对齐描边", y: rect.minY + 100, ink: muted)
-        iconRow(3, x: rect.minX + 64, y: rect.minY + 98, selected: strokeAlign, muted: !enabled) { PanelIcons.strokeAlign($0, in: $1) }
-        let dashY = rect.minY + 126
-        PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: dashY + 2), on: !(stroke?.dash.isEmpty ?? true), title: "")
-        ("虚线" as NSString).draw(at: NSPoint(x: rect.minX + 18, y: dashY + 2), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: muted
+        let label = enabled ? Theme.color(0xD1D1D1) : Theme.color(0x878787)
+        let bright = Theme.color(0xD1D1D1)
+        var y = rect.minY
+        caption("粗细", y: y, ink: bright)
+        PanelIcons.popup(NSRect(x: rect.maxX - 52, y: y - 2, width: 46, height: 20), title: "pt")
+        y += 28
+        caption("端点", y: y, ink: label)
+        iconRow(3, x: rect.minX + 48, y: y - 2, selected: enabled ? capIndex(stroke?.cap) : -1, muted: !enabled) { PanelIcons.cap($0, in: $1) }
+        y += 28
+        caption("边角", y: y, ink: label)
+        iconRow(3, x: rect.minX + 48, y: y - 2, selected: enabled ? joinIndex(stroke?.join) : -1, muted: !enabled) { PanelIcons.corner($0, in: $1) }
+        caption("限制", y: y, ink: label)
+        y += 28
+        caption("对齐描边", y: y, ink: label)
+        iconRow(3, x: rect.minX + 72, y: y - 2, selected: enabled ? strokeAlign : -1, muted: !enabled) { PanelIcons.strokeAlign($0, in: $1) }
+        y += 30
+        PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: y + 2), on: enabled && !(stroke?.dash.isEmpty ?? true), title: "")
+        ("虚线" as NSString).draw(at: NSPoint(x: rect.minX + 20, y: y), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: label
         ])
-        var dashX = rect.minX + 52
-        let pattern = stroke?.dash ?? []
-        for index in 0..<4 {
-            let text = pattern.indices.contains(index) ? String(format: "%g", pattern[index]) : ""
-            PanelIcons.field(NSRect(x: dashX, y: dashY, width: 28, height: 18), text: text, align: .center)
-            dashX += 30
-        }
-        let arrowY = rect.minY + 150
-        PanelIcons.popup(NSRect(x: rect.minX, y: arrowY, width: (rect.width - 8) / 2, height: 20), title: arrowTitle)
-        PanelIcons.popup(NSRect(x: rect.midX + 4, y: arrowY, width: (rect.width - 8) / 2, height: 20), title: "箭头")
-        caption("缩放", y: rect.minY + 176, ink: muted)
-        PanelIcons.checkbox(at: NSPoint(x: rect.minX + 32, y: rect.minY + 176), on: scaleStrokes, title: "")
-        ("对齐" as NSString).draw(at: NSPoint(x: rect.minX + 54, y: rect.minY + 176), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: muted
+        PanelIcons.cap(0, in: NSRect(x: rect.minX + 58, y: y, width: 18, height: 16))
+        PanelIcons.corner(0, in: NSRect(x: rect.minX + 80, y: y, width: 18, height: 16))
+        y += 26
+        dashFields(y: y, title: "虚线", values: Array((stroke?.dash ?? []).prefix(3)), ink: label, width: rect.width)
+        y += 26
+        let gaps = (stroke?.dash ?? []).dropFirst(3)
+        dashFields(y: y, title: "间隙", values: Array(gaps.prefix(3)), ink: label, width: rect.width)
+        y += 30
+        let half = (rect.width - 8) / 2
+        PanelIcons.popup(NSRect(x: rect.minX, y: y, width: half, height: 22), title: arrowTitle)
+        PanelIcons.popup(NSRect(x: rect.minX + half + 8, y: y, width: half, height: 22), title: "无")
+        y += 28
+        caption("缩放", y: y, ink: label)
+        PanelIcons.field(NSRect(x: rect.minX + 40, y: y - 2, width: 64, height: 20), text: "100%", align: .center)
+        ("对齐" as NSString).draw(at: NSPoint(x: rect.minX + 116, y: y), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: label
         ])
-        PanelIcons.popup(NSRect(x: rect.minX + 88, y: rect.minY + 174, width: rect.width - 88, height: 20), title: dashAlign ? "边角" : "无")
-        caption("配置文件", y: rect.minY + 202, ink: muted)
-        PanelIcons.popup(NSRect(x: rect.minX + 64, y: rect.minY + 200, width: rect.width - 64, height: 20), title: profileTitle(stroke?.profile))
+        PanelIcons.popup(NSRect(x: rect.minX + 150, y: y - 2, width: rect.width - 150, height: 20), title: dashAlign ? "边角" : "无")
+        y += 28
+        caption("配置文件", y: y, ink: label)
+        PanelIcons.popup(NSRect(x: rect.minX + 64, y: y - 2, width: rect.width - 64, height: 22), title: profileTitle(stroke?.profile))
         _ = ink
+    }
+
+    private func dashFields(y: CGFloat, title: String, values: [Double], ink: NSColor, width: CGFloat) {
+        (title as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: ink
+        ])
+        var x: CGFloat = 48
+        let box = min(52, (width - 56) / 3)
+        for index in 0..<3 {
+            let text = values.indices.contains(index) ? String(format: "%g", values[index]) : ""
+            PanelIcons.field(NSRect(x: x, y: y - 2, width: box, height: 18), text: text, align: .center)
+            x += box + 6
+        }
     }
 
     private func capIndex(_ cap: LineCap?) -> Int {
@@ -471,7 +553,7 @@ final class FloatPanel: NSView {
             showMenu()
             return
         }
-        if !collapsed, tabs.count > 1, point.y < 28 {
+        if !collapsed, tabs.count > 1, point.y >= titleHeight - 4, point.y < titleHeight + tabHeight {
             let measured = tabs == [.transform, .align, .pathfinder]
             let spots: [CGFloat] = measured ? [12, 69.5, 118.5, bounds.width] : []
             var x: CGFloat = 8

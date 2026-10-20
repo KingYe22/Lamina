@@ -361,11 +361,17 @@ final class PropertiesDock: NSView {
 
     private func applyNudge() {
         guard let model = workspace?.active.model else { return }
-        let cleaned = nudgeField.stringValue.replacingOccurrences(of: "pt", with: "").trimmingCharacters(in: .whitespaces)
+        let raw = nudgeField.stringValue.lowercased()
+        let cleaned = raw.replacingOccurrences(of: "mm", with: "")
+            .replacingOccurrences(of: "pt", with: "")
+            .replacingOccurrences(of: "px", with: "")
+            .replacingOccurrences(of: "in", with: "")
+            .trimmingCharacters(in: .whitespaces)
         if let number = Double(cleaned) {
-            model.nudge = min(64, max(0.1, number))
+            let points = raw.contains("mm") ? number * 72 / 25.4 : number
+            model.nudge = min(64, max(0.1, points))
         }
-        nudgeField.stringValue = "\(Int(model.nudge)) pt"
+        nudgeField.stringValue = Self.nudgeLabel(model)
     }
 
     /// Map a comparison-crop point (y grows downward from the body top) into this flipped dock.
@@ -381,9 +387,9 @@ final class PropertiesDock: NSView {
     }
 
     private func placeControls() {
-        unitRect = cropRect(747.5, 176.5, 141, 24)
-        boardRect = cropRect(747.5, 213, 141, 24)
-        editRect = cropRect(760, 248, 110, 26)
+        unitRect = cropRect(700, 176, 176, 24)
+        boardRect = cropRect(700, 213, 176, 24)
+        editRect = cropRect(786, 248, 126, 26)
         rulerRects = [
             cropRect(763.5, 305, 22, 22),
             cropRect(801, 305, 22, 22),
@@ -400,11 +406,11 @@ final class PropertiesDock: NSView {
             cropRect(840, 405, 18, 18)
         ]
         prefRects = []
-        nudgeField.frame = cropRect(720, 608, 140, 22)
+        nudgeField.frame = cropRect(738, 514, 120, 22)
         quickRects = [
-            cropRect(656, 700, 120, 28),
-            cropRect(784, 700, 110, 28),
-            cropRect(656, 742, 140, 28)
+            cropRect(652, 700, 140, 28),
+            cropRect(804, 700, 132, 28),
+            cropRect(652, 742, 284, 28)
         ]
     }
 
@@ -471,10 +477,13 @@ final class PropertiesDock: NSView {
             .font: Theme.ui(13), .foregroundColor: NSColor.white
         ])
         inkText("首选项", x: 653, top: 486, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
-        PanelIcons.checkbox(at: crop(656, 519), on: usePreviewBounds, title: "使用预览边界")
-        PanelIcons.checkbox(at: crop(656, 555), on: scaleCorners, title: "缩放圆角")
-        PanelIcons.checkbox(at: crop(656, 585), on: scaleEffects, title: "缩放描边和效果")
-        inkText("键盘增量", x: 656, top: 612, size: 13, weight: .regular, color: Theme.color(0xD1D1D1))
+        inkText("键盘增量", x: 656, top: 512, size: 13, weight: .regular, color: Theme.color(0xD1D1D1))
+        if !nudgeField.fieldIsEditing {
+            nudgeField.stringValue = Self.nudgeLabel(model)
+        }
+        PanelIcons.checkbox(at: crop(656, 555), on: usePreviewBounds, title: "使用预览边界")
+        PanelIcons.checkbox(at: crop(656, 585), on: scaleCorners, title: "缩放圆角")
+        PanelIcons.checkbox(at: crop(656, 615), on: scaleEffects, title: "缩放描边和效果")
         inkText("快速操作", x: 653, top: 673, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
         if quickRects.count >= 2 {
             quickButton(quickRects[0], draw: { PanelIcons.gear(in: $0) }, title: "文档设置")
@@ -642,6 +651,19 @@ final class PropertiesDock: NSView {
         ])
     }
 
+    private static func nudgeLabel(_ model: EditorModel) -> String {
+        switch model.document.units {
+        case .mm:
+            return String(format: "%.4f mm", locale: Locale(identifier: "en_US_POSIX"), model.nudge * 25.4 / 72)
+        case .inch:
+            return String(format: "%.4f in", locale: Locale(identifier: "en_US_POSIX"), model.nudge / 72)
+        case .px:
+            return String(format: "%g px", model.nudge * Double(model.document.rasterPPI) / 72)
+        case .pt:
+            return String(format: "%g pt", model.nudge)
+        }
+    }
+
     private static func unitName(_ unit: UnitKind) -> String {
         switch unit {
         case .mm: return "毫米"
@@ -704,13 +726,13 @@ final class PropertiesDock: NSView {
         } else if cropRect(640, 440, 312, 30).contains(point) {
             model.smartGuides = true
             model.status = "智能参考线偏好设置"
-        } else if cropRect(640, 515, 312, 24).contains(point) {
+        } else if cropRect(640, 555, 312, 24).contains(point) {
             usePreviewBounds.toggle()
             model.status = usePreviewBounds ? "使用预览边界" : "使用几何边界"
-        } else if cropRect(640, 551, 312, 24).contains(point) {
+        } else if cropRect(640, 585, 312, 24).contains(point) {
             scaleCorners.toggle()
             model.status = scaleCorners ? "缩放圆角" : "不缩放圆角"
-        } else if cropRect(640, 581, 312, 24).contains(point) {
+        } else if cropRect(640, 615, 312, 24).contains(point) {
             scaleEffects.toggle()
             model.status = scaleEffects ? "缩放描边和效果" : "不缩放描边和效果"
         } else if quickRects.indices.contains(0), quickRects[0].contains(point) {
@@ -899,6 +921,12 @@ final class DialogField: PanelField {
         backgroundColor = Theme.field
         textColor = Theme.text
     }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        Theme.color(0x545454).setFill()
+        NSRect(x: 2, y: bounds.maxY - 2, width: max(0, bounds.width - 4), height: 1).fill()
+    }
 }
 
 final class DialogPushButton: NSButton {
@@ -1010,10 +1038,11 @@ final class DialogPopup: NSPopUpButton {
         chevron.lineWidth = 1.2
         chevron.lineCapStyle = .round
         chevron.lineJoinStyle = .round
-        let tip = NSPoint(x: bounds.maxX - 12, y: bounds.midY - 2)
-        chevron.move(to: NSPoint(x: tip.x - 4, y: tip.y + 3))
+        // Smaller y is the top of the captured window, so the vertex uses the larger y.
+        let tip = NSPoint(x: bounds.maxX - 12, y: bounds.midY + 3)
+        chevron.move(to: NSPoint(x: tip.x - 4, y: tip.y - 4))
         chevron.line(to: tip)
-        chevron.line(to: NSPoint(x: tip.x + 4, y: tip.y + 3))
+        chevron.line(to: NSPoint(x: tip.x + 4, y: tip.y - 4))
         chevron.stroke()
     }
 }
@@ -1412,8 +1441,8 @@ final class NewDocSheet: NSView {
         bleedRight.frame = NSRect(x: columnLeft + 108.5, y: bleedLeft.frame.minY, width: box, height: 24)
 
         advancedLabel.isHidden = false
-        advancedRect = NSRect(x: labelX, y: originY(imageY: 704, height: 14), width: width, height: 14)
-        advancedLabel.frame = NSRect(x: labelX + 14, y: advancedRect.minY, width: width - 14, height: 14)
+        advancedRect = NSRect(x: columnLeft + 12, y: originY(imageY: 704, height: 14), width: width, height: 14)
+        advancedLabel.frame = NSRect(x: columnLeft + 32, y: advancedRect.minY, width: width - 20, height: 14)
 
         modePopup.isHidden = !advancedOpen
         rasterPopup.isHidden = !advancedOpen
@@ -1434,7 +1463,7 @@ final class NewDocSheet: NSView {
             previewLabel.isHidden = true
         }
 
-        moreSettingsRect = NSRect(x: labelX, y: originY(imageY: 1027, height: 14), width: width, height: 14)
+        moreSettingsRect = NSRect(x: columnLeft + 12, y: originY(imageY: 1027, height: 14), width: width, height: 14)
         createButton.frame = NSRect(x: columnLeft + 217, y: originY(imageY: 1164, height: 32), width: 75, height: 32)
         closeButton.frame = NSRect(x: columnLeft + 128.5, y: originY(imageY: 1163, height: 32), width: 76, height: 32)
     }
@@ -1554,7 +1583,7 @@ final class NewDocSheet: NSView {
         NSRect(x: columnLeft + 12, y: detailTop - 1014 / 2 - 1, width: Self.detailWidth - 28, height: 1).fill()
         let moreFont = Theme.ui(11)
         let moreTop = detailTop - 1027 / 2
-        ("更多设置" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX + 14, y: moreTop - moreFont.ascender), withAttributes: [
+        ("更多设置" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX + 20, y: moreTop - moreFont.ascender), withAttributes: [
             .font: moreFont, .foregroundColor: Theme.color(0xE8E8E8)
         ])
         drawDisclosure(moreSettingsRect, open: moreOpen)
@@ -1570,7 +1599,11 @@ final class NewDocSheet: NSView {
         let path = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
         Theme.color(0x1D1D1D).setFill()
         path.fill()
-        _ = selected
+        if selected {
+            Theme.color(0x52A3F6).setStroke()
+            path.lineWidth = 2
+            path.stroke()
+        }
     }
 
     private func drawSave(_ rect: NSRect) {

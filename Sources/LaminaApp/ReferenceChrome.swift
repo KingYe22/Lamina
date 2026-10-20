@@ -11,11 +11,10 @@ enum WorkspaceMetrics {
     static let controlHeight: CGFloat = 37.5
     /// Control bar plus the flat shadow drawn under it. Canvas and the dock start here.
     static let chromeInset: CGFloat = 89
-    static let appearance = PanelFrame(x: 20, top: 37, width: 298, height: 212)
-    /// Align header starts 16pt higher than the appearance title so the dark bar covers the reference.
-    static let align = PanelFrame(x: 323, top: 21, width: 308, height: 282)
-    /// Stroke title ink sits 36pt above the previous frame.
-    static let stroke = PanelFrame(x: 323, top: 304, width: 308, height: 439)
+    /// Measured from the reference crop: appearance beside align, stroke under align.
+    static let appearance = PanelFrame(x: 19, top: 20, width: 302, height: 243)
+    static let align = PanelFrame(x: 322, top: 20, width: 313, height: 283)
+    static let stroke = PanelFrame(x: 322, top: 303, width: 313, height: 442)
 
     struct PanelFrame {
         var x: CGFloat
@@ -48,7 +47,7 @@ final class ControlBar: NSView {
     private let buttons: [ChromeIconButton]
 
     override init(frame frameRect: NSRect) {
-        let kinds: [ChromeIcon] = [.bell, .search, .workspace, .panels]
+        let kinds: [ChromeIcon] = [.bell, .search, .workspace, .panels, .avatar]
         buttons = kinds.map { ChromeIconButton(kind: $0) }
         super.init(frame: frameRect)
         for button in buttons {
@@ -64,12 +63,12 @@ final class ControlBar: NSView {
 
     override func layout() {
         super.layout()
-        let side: CGFloat = 28
-        let gap: CGFloat = 8
-        var x = bounds.width - 12 - side
-        for button in buttons.reversed() {
+        // Centers measured in the reference crop, which shares this bar's origin.
+        let centers: [CGFloat] = [739.5, 779.5, 830, 874.5, 927]
+        let side: CGFloat = 22
+        for (index, button) in buttons.enumerated() where index < centers.count {
+            let x = centers[index] - side / 2
             button.frame = NSRect(x: x, y: (bounds.height - side) / 2, width: side, height: side)
-            x -= side + gap
         }
     }
 
@@ -87,13 +86,14 @@ final class ControlBar: NSView {
         case .search: name = "搜索"
         case .workspace: name = "工作区"
         case .panels: name = "面板"
+        case .avatar: name = "帐户"
         }
         workspace?.active.model.status = name
         workspace?.touch()
     }
 }
 
-enum ChromeIcon { case bell, search, workspace, panels }
+enum ChromeIcon { case bell, search, workspace, panels, avatar }
 
 final class ChromeIconButton: NSButton {
     let kind: ChromeIcon
@@ -142,6 +142,7 @@ final class ChromeIconButton: NSButton {
         case .search: search(box)
         case .workspace: workspaceMark(box)
         case .panels: panels(box)
+        case .avatar: avatar(box)
         }
     }
 
@@ -191,6 +192,23 @@ final class ChromeIconButton: NSButton {
         split.move(to: NSPoint(x: box.minX + box.width * 0.38, y: box.minY + 1))
         split.line(to: NSPoint(x: box.minX + box.width * 0.38, y: box.maxY - 1))
         split.stroke()
+    }
+
+    private func avatar(_ box: NSRect) {
+        let circle = NSBezierPath(ovalIn: box.insetBy(dx: 0.5, dy: 0.5))
+        circle.lineWidth = 1.2
+        circle.stroke()
+        let head = NSRect(x: box.midX - 2.2, y: box.midY + 0.5, width: 4.4, height: 4.4)
+        NSBezierPath(ovalIn: head).stroke()
+        let shoulders = NSBezierPath()
+        shoulders.lineWidth = 1.2
+        shoulders.move(to: NSPoint(x: box.minX + 2, y: box.minY + 2))
+        shoulders.curve(
+            to: NSPoint(x: box.maxX - 2, y: box.minY + 2),
+            controlPoint1: NSPoint(x: box.minX + 3, y: box.midY),
+            controlPoint2: NSPoint(x: box.maxX - 3, y: box.midY)
+        )
+        shoulders.stroke()
     }
 
     private func panels(_ box: NSRect) {

@@ -232,7 +232,7 @@ jobs:
       - name: Compare screenshots with the reference
         run: |
           set -euo pipefail
-          python3 -m pip install --user pillow || python3 -m pip install --break-system-packages pillow
+          python3 -m pip install --user pillow numpy || python3 -m pip install --break-system-packages pillow numpy
           python3 packaging/compare_refs.py dist/shots packaging/ai-ref dist/compare
           ls -l dist/compare
 
