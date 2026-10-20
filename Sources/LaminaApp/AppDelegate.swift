@@ -100,7 +100,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let path = ProcessInfo.processInfo.environment["LAMINA_KEYTEST_FILE"]
             ?? (NSTemporaryDirectory() as NSString).appendingPathComponent("lamina-keys.txt")
         let report = KeyReport(path: path)
-        report.line("phase start")
         workspace.suppressPanels = true
         root.layoutSubtreeIfNeeded()
         root.showEditor()
@@ -152,16 +151,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let panned = hypot(workspace.active.model.pan.x - panBefore.x, workspace.active.model.pan.y - panBefore.y) > 1
         report.line("\(held && panned ? "PASS" : "FAIL") space-drag pan=\(workspace.active.model.pan.x),\(workspace.active.model.pan.y)")
-        report.line("phase space-up")
         inject(49, flags: [], keyDown: false)
         let released = !workspace.active.model.spaceHeld
         report.line("\(released ? "PASS" : "FAIL") space-up spaceHeld=\(workspace.active.model.spaceHeld)")
         workspace.active.model.spaceHeld = false
         focus()
-        report.line("phase cmd-n")
         inject(45, flags: .maskCommand)
-        pumpMain()
-        report.line("\(root.dialog.isHidden ? "FAIL" : "PASS") Cmd+N dialog")
+        report.line("\(root.dialog.isHidden ? "FAIL" : "PASS") Cmd+N dialog hidden=\(root.dialog.isHidden) status=\(workspace.active.model.status)")
         focus()
         workspace.panelRequest = ""
         inject(31, flags: .maskCommand)
@@ -244,15 +240,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             clickCount: 1,
             pressure: 1
         )
-    }
-
-    private func pumpMain() {
-        var done = false
-        DispatchQueue.main.async { done = true }
-        let deadline = Date().addingTimeInterval(1)
-        while !done, Date() < deadline {
-            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
-        }
     }
 
     private func itemCount() -> Int {

@@ -81,6 +81,7 @@ final class AppRoot: NSView {
     func showDialog() {
         dialog.isHidden = false
         dialog.syncPresets()
+        window?.makeFirstResponder(showingEditor ? editor.canvas.drawing : nil)
     }
 
     func create(_ spec: NewDocSpec) {
