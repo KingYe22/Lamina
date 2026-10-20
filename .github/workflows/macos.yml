@@ -1,0 +1,93 @@
+name: macOS
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or update. Empty uses dispatch-<run number>.
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build unsigned app
+        run: >
+          xcodebuild
+          -project Lamina.xcodeproj
+          -scheme Lamina
+          -configuration Release
+          -destination 'platform=macOS'
+          -derivedDataPath build
+          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGNING_REQUIRED=NO
+          CODE_SIGN_IDENTITY=
+          ENABLE_HARDENED_RUNTIME=NO
+          build
+
+      - name: Package app and disk image
+        run: |
+          set -euo pipefail
+          APP="build/Build/Products/Release/Lamina.app"
+          test -d "$APP"
+          mkdir -p dist
+          cp -R "$APP" dist/Lamina.app
+          ditto -c -k --keepParent dist/Lamina.app dist/Lamina.app.zip
+          hdiutil create -volname Lamina -srcfolder dist/Lamina.app -ov -format UDZO dist/Lamina.dmg
+          du -sh dist/Lamina.app dist/Lamina.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lamina-macOS
+          if-no-files-found: error
+          path: |
+            dist/Lamina.dmg
+            dist/Lamina.app.zip
+
+      - name: Resolve release tag
+        id: release
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+            if [ -z "$TAG" ]; then
+              TAG="dispatch-${GITHUB_RUN_NUMBER}"
+            fi
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Attach app and disk image to the GitHub Release
+        if: steps.release.outputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ steps.release.outputs.tag }}
+          files: |
+            dist/Lamina.app.zip
+            dist/Lamina.dmg
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

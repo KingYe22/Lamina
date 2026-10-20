@@ -1,0 +1,132 @@
+name: Lamina
+options:
+  bundleIdPrefix: app.moxian
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGN_IDENTITY: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  LaminaCore:
+    type: library.static
+    platform: macOS
+    sources:
+      - path: Sources/LaminaCore
+        excludes:
+          - "Resources/**"
+    settings:
+      base:
+        PRODUCT_NAME: LaminaCore
+        PRODUCT_MODULE_NAME: LaminaCore
+        DEFINES_MODULE: YES
+        GENERATE_INFOPLIST_FILE: YES
+        MACH_O_TYPE: staticlib
+      configs:
+        Debug:
+          ENABLE_TESTABILITY: YES
+  Lamina:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/LaminaApp
+        excludes:
+          - "Resources/**"
+    resources:
+      - path: Sources/LaminaCore/Resources/adobe_shortcuts_cn.txt
+      - path: Sources/LaminaApp/Resources/Brands
+    dependencies:
+      - target: LaminaCore
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: PDFKit.framework
+      - sdk: Security.framework
+    settings:
+      base:
+        PRODUCT_NAME: Lamina
+        PRODUCT_BUNDLE_IDENTIFIER: app.moxian.lamina
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Sources/LaminaApp/Info.plist
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+    info:
+      path: Sources/LaminaApp/Info.plist
+      properties:
+        CFBundleDisplayName: 墨线
+        CFBundleName: 墨线
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundlePackageType: APPL
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        LSMinimumSystemVersion: "14.0"
+        NSHighResolutionCapable: true
+        NSPrincipalClass: NSApplication
+        LSApplicationCategoryType: public.app-category.graphics-design
+        NSHumanReadableCopyright: ""
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: 墨线文档
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - app.moxian.lamina.document
+          - CFBundleTypeName: PDF
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
+          - CFBundleTypeName: SVG
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            CFBundleTypeExtensions:
+              - svg
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: app.moxian.lamina.document
+            UTTypeDescription: 墨线文档
+            UTTypeConformsTo:
+              - public.data
+              - public.composite-content
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - ai
+                - lamina
+              public.mime-type: application/pdf
+  LaminaCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/LaminaCoreTests
+    dependencies:
+      - target: LaminaCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: app.moxian.lamina.tests
+        TEST_HOST: ""
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  Lamina:
+    build:
+      targets:
+        Lamina: all
+        LaminaCore: all
+        LaminaCoreTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - LaminaCoreTests
+    archive:
+      config: Release
