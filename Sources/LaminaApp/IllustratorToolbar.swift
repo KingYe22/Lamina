@@ -84,7 +84,7 @@ final class IllustratorToolbar: NSView {
 
     override func layout() {
         super.layout()
-        // Positions are the reference toolbar.png bands divided by 2, in this flipped view.
+        // Section bands in this flipped view, measured from the reference toolbar.
         let footerTop: CGFloat = 627
         footer.frame = NSRect(x: 0, y: min(footerTop, bounds.height), width: bounds.width, height: max(0, bounds.height - footerTop))
         let frames: [(CGFloat, CGFloat)] = [
@@ -136,38 +136,12 @@ final class IllustratorToolbar: NSView {
     override func draw(_ dirtyRect: NSRect) {
         Theme.panel.setFill()
         bounds.fill()
-        if ReferenceChrome.draw(source: .toolbar, pixelRect: CGRect(x: 0, y: 0, width: 162, height: 1858), in: NSRect(x: 0, y: 0, width: 81, height: 929)) {
-            // The reference has a dot grid under the ellipsis and a labeled AI button. Neither belongs.
-            Theme.panel.setFill()
-            NSRect(x: 24, y: 810, width: 28, height: 14).fill()
-            drawAIStar()
-            return
-        }
         drawHeader()
         for (title, y) in sectionTitles {
             (title as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
                 .font: Theme.ui(11), .foregroundColor: Theme.dim
             ])
         }
-    }
-
-    private func drawAIStar() {
-        let button = NSRect(x: 0.5, y: 834.5, width: 80, height: 35)
-        NSColor(srgbRed: 21.0 / 255, green: 115.0 / 255, blue: 230.0 / 255, alpha: 1).setFill()
-        NSBezierPath(roundedRect: button, xRadius: 4, yRadius: 4).fill()
-        NSColor.white.setFill()
-        let center = NSPoint(x: button.midX, y: button.midY)
-        let star = NSBezierPath()
-        let outer: CGFloat = 8
-        let inner: CGFloat = 2.4
-        for index in 0..<8 {
-            let angle = CGFloat(index) * .pi / 4 - .pi / 2
-            let radius = index % 2 == 0 ? outer : inner
-            let point = NSPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
-            if index == 0 { star.move(to: point) } else { star.line(to: point) }
-        }
-        star.close()
-        star.fill()
     }
 
     private func drawHeader() {
@@ -336,9 +310,6 @@ final class ToolSlotButton: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if ReferenceChrome.available(.toolbar) {
-            return
-        }
         if isCurrent {
             Theme.color(0x303030).setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()
@@ -452,9 +423,6 @@ final class ToolbarFooter: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if ReferenceChrome.available(.toolbar) {
-            return
-        }
         let square: CGFloat = 41
         let behind = NSRect(x: 22, y: 22, width: square, height: square)
         let front = NSRect(x: 2, y: 2, width: square, height: square)

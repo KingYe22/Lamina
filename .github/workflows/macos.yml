@@ -63,7 +63,12 @@ jobs:
           mkdir -p /tmp/icon.iconset dist/dmg/Lamina.app/Contents/Resources
           /tmp/render-icon packaging/lamina-icon.jpg /tmp/AppIcon-1024.png /tmp/icon.iconset
           iconutil -c icns /tmp/icon.iconset -o dist/dmg/Lamina.app/Contents/Resources/AppIcon.icns
-          cp packaging/ai-ref/toolbar.png packaging/ai-ref/panels.png packaging/ai-ref/newdoc-details.png dist/dmg/Lamina.app/Contents/Resources/
+          echo "---- Contents/Resources ----"
+          find dist/dmg/Lamina.app/Contents/Resources -type f | sed 's|.*/Contents/Resources/||' | sort
+          if find dist/dmg/Lamina.app/Contents/Resources -type f \( -name 'toolbar.png' -o -name 'panels.png' -o -name 'newdoc-details.png' \) | grep -q .; then
+            echo "screenshot bitmaps must not ship inside the app"
+            exit 1
+          fi
           # Drop quarantine before ad-hoc signing so the signature is what ships.
           xattr -cr dist/dmg/Lamina.app || true
           codesign --force --deep --sign - dist/dmg/Lamina.app
@@ -284,7 +289,7 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
-            Dock 和窗口标题显示为 Lamina。0.3.4 按真机截图对齐：工具栏图标是粗线实心，约 22pt，直接选择是实心白箭头，椭圆是实心灰，矩形和六边形是灰底白边，画笔、橡皮擦、钢笔、抓手是实心白，第四个形状工具是圆环加色块。生成式 AI 只有一枚星标。省略号旁不再多出点阵。外观约 290pt，对齐和描边约 300pt，属性约 300pt，行高约 30pt，字号 13。右侧是属性，左边对齐/描边上下堆叠，再左边是外观（描边色块和不透明度子行）。顶栏右侧有铃铛、搜索、工作区和面板。截图按 2 倍像素对照参考图。钢笔拖拽只添加锚点和方向手柄，不再带动窗口。应用图标使用提供的原稿，只套 macOS 圆角蒙版。快捷键表仍编译在程序里。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
+            Dock 和窗口标题显示为 Lamina。0.3.5 不再把参考截图贴进界面，app 包里也没有 toolbar.png、panels.png、newdoc-details.png。工具栏、面板、顶栏图标都用 NSBezierPath 绘制。新建文档的名称、宽高、画板和出血是 NSTextField，单位、颜色模式、栅格效果和预览模式是 NSPopUpButton，关闭和创建是 NSButton。描边粗细、斜接限制和键盘增量也是可编辑的文本框。外观约 290pt，对齐和描边约 309pt，属性约 312pt。右侧是属性，左边对齐和描边上下堆叠，再左边是外观。顶栏右侧是铃铛、搜索、工作区和面板四个按钮。对比图仍按 2 倍像素和参考图并排，数值是矢量界面和截图的差，不是贴图结果。钢笔拖拽只添加锚点和方向手柄，不再带动窗口。应用图标使用提供的原稿，只套 macOS 圆角蒙版。快捷键表仍编译在程序里。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
           files: |
             dist/Lamina.app.zip
             dist/Lamina.dmg

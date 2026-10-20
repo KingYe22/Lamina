@@ -10,8 +10,7 @@ final class EditorShell: NSView {
     let dock = PropertiesDock()
     let floaters = FloatingPanels()
     let contextBar = ContextBar()
-    private let controlStrip = ReferenceStrip()
-    private let shadowStrip = ReferenceStrip()
+    private let controlBar = ControlBar()
 
     init(workspace: Workspace) {
         self.workspace = workspace
@@ -23,9 +22,8 @@ final class EditorShell: NSView {
         dock.workspace = workspace
         floaters.workspace = workspace
         contextBar.workspace = workspace
-        controlStrip.pixelRect = CGRect(x: 0, y: 0, width: 1904, height: 75)
-        shadowStrip.pixelRect = CGRect(x: 0, y: 75, width: 1904, height: 103)
-        for view in [tabs, toolbar, canvas, status, dock, floaters, shadowStrip, controlStrip, contextBar] as [NSView] {
+        controlBar.workspace = workspace
+        for view in [tabs, toolbar, canvas, status, dock, floaters, controlBar, contextBar] as [NSView] {
             addSubview(view)
         }
     }
@@ -49,9 +47,7 @@ final class EditorShell: NSView {
         toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: bodyH)
         let stripX = toolWidth
         let stripW = max(0, bounds.width - toolWidth)
-        controlStrip.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.controlHeight, width: stripW, height: WorkspaceMetrics.controlHeight)
-        let shadowH = WorkspaceMetrics.chromeInset - WorkspaceMetrics.controlHeight
-        shadowStrip.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.chromeInset, width: stripW, height: shadowH)
+        controlBar.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.controlHeight, width: stripW, height: WorkspaceMetrics.controlHeight)
         let columnH = max(0, bodyH - WorkspaceMetrics.chromeInset)
         dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: columnH)
         canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: columnH)
