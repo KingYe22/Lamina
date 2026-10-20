@@ -60,6 +60,7 @@ targets:
         ENABLE_HARDENED_RUNTIME: NO
         ENABLE_APP_SANDBOX: NO
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
+        OTHER_LDFLAGS: "$(inherited) -ObjC"
     info:
       path: Sources/LaminaApp/Info.plist
       properties:

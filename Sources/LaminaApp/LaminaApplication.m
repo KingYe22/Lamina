@@ -3,6 +3,9 @@
 /// Returns 1 when the event was handled and must not reach the text system.
 extern int LaminaConsumeEvent(void *event);
 
+/// Referenced from main so the linker keeps this class. Nothing else mentions it.
+void LaminaApplicationAnchor(void) {}
+
 @interface LaminaApplication : NSApplication
 @end
 

@@ -1,5 +1,9 @@
 import AppKit
 
+@_silgen_name("LaminaApplicationAnchor")
+func laminaApplicationAnchor()
+
+laminaApplicationAnchor()
 let app = NSApplication.shared
 let name = NSStringFromClass(type(of: app as AnyObject))
 if name != "LaminaApplication" {
