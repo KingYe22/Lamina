@@ -75,7 +75,7 @@ final class IllustratorToolbar: NSView {
             y += 26
         }
         let bottom = bounds.height
-        modes.frame = NSRect(x: 6, y: bottom - 22, width: bounds.width - 12, height: 18)
+        modes.frame = NSRect(x: 4, y: bottom - 26, width: bounds.width - 8, height: 22)
         swatches.frame = NSRect(x: 6, y: bottom - 44, width: bounds.width - 12, height: 18)
         fillControl.frame = NSRect(x: 8, y: bottom - 92, width: bounds.width - 16, height: 44)
     }
@@ -230,20 +230,29 @@ final class SwatchTrio: NSView {
 }
 
 final class ModeTrio: NSView {
+    private var drawMode = 0
+    private var screenMode = 0
+
     override func draw(_ dirtyRect: NSRect) {
-        let titles = ["绘", "屏", "•••"]
         let w = bounds.width / 3
-        for (index, title) in titles.enumerated() {
-            let rect = NSRect(x: CGFloat(index) * w, y: 0, width: w - 2, height: bounds.height)
-            Theme.raised.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
-            let string = title as NSString
-            let font = NSFont.systemFont(ofSize: 9, weight: .semibold)
-            let size = string.size(withAttributes: [.font: font])
-            string.draw(at: NSPoint(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2), withAttributes: [
-                .font: font, .foregroundColor: Theme.text
-            ])
+        for index in 0..<3 {
+            let rect = NSRect(x: CGFloat(index) * w, y: 1, width: w - 2, height: bounds.height - 2)
+            PanelIcons.well(rect, selected: false)
+            let icon = rect.insetBy(dx: 2, dy: 2)
+            switch index {
+            case 0: PanelIcons.drawMode(drawMode, in: icon)
+            case 1: PanelIcons.screenMode(screenMode, in: icon)
+            default: PanelIcons.ellipsis(in: NSRect(x: icon.midX - 7, y: icon.midY - 2, width: 14, height: 6))
+            }
         }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let x = convert(event.locationInWindow, from: nil).x
+        let third = bounds.width / 3
+        if x < third { drawMode = (drawMode + 1) % 3 }
+        else if x < third * 2 { screenMode = (screenMode + 1) % 3 }
+        needsDisplay = true
     }
 }
 

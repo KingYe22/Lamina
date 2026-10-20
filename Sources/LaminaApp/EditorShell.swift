@@ -43,14 +43,14 @@ final class EditorShell: NSView {
         toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: bodyH)
         dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: bodyH)
         canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: bodyH)
-        let floaterWidth: CGFloat = 220
+        let floaterWidth: CGFloat = 248
         floaters.frame = NSRect(
             x: canvas.frame.maxX - floaterWidth - 8,
             y: canvas.frame.minY + 8,
             width: floaterWidth,
             height: max(0, canvas.frame.height - 16)
         )
-        contextBar.frame = NSRect(x: canvas.frame.midX - 150, y: canvas.frame.maxY - 42, width: 300, height: 30)
+        contextBar.frame = NSRect(x: canvas.frame.midX - 210, y: canvas.frame.maxY - 46, width: 420, height: 32)
     }
 
     func sync() {
