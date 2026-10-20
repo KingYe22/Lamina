@@ -63,6 +63,7 @@ jobs:
           mkdir -p /tmp/icon.iconset dist/dmg/Lamina.app/Contents/Resources
           /tmp/render-icon packaging/lamina-icon.jpg /tmp/AppIcon-1024.png /tmp/icon.iconset
           iconutil -c icns /tmp/icon.iconset -o dist/dmg/Lamina.app/Contents/Resources/AppIcon.icns
+          cp packaging/ai-ref/toolbar.png packaging/ai-ref/panels.png packaging/ai-ref/newdoc-details.png dist/dmg/Lamina.app/Contents/Resources/
           # Drop quarantine before ad-hoc signing so the signature is what ships.
           xattr -cr dist/dmg/Lamina.app || true
           codesign --force --deep --sign - dist/dmg/Lamina.app
