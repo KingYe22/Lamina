@@ -34,11 +34,9 @@ struct NewDocSpec {
 /// The only content that may drag the window. Tool surfaces return false
 /// from mouseDownCanMoveWindow, and the window itself is not movable by its background.
 final class TitleDragStrip: NSView {
+    /// Sits in the title-bar band. AppKit drags the window from here because
+    /// this view allows it; the canvas and the tools do not.
     override var mouseDownCanMoveWindow: Bool { true }
-
-    override func mouseDown(with event: NSEvent) {
-        window?.performWindowDrag(with: event)
-    }
 }
 
 final class AppRoot: NSView {
