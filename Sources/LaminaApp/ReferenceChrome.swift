@@ -6,12 +6,12 @@ enum WorkspaceMetrics {
     static let windowHeight: CGFloat = 970
     static let toolWidth: CGFloat = 81
     static let dockWidth: CGFloat = 312
-    static let controlHeight: CGFloat = 38
-    /// Canvas and the properties dock start under the control bar.
-    static let chromeInset: CGFloat = controlHeight
-    static let appearance = PanelFrame(x: 20, top: 19, width: 290, height: 246)
-    static let align = PanelFrame(x: 323, top: 19, width: 309, height: 284)
-    static let stroke = PanelFrame(x: 323, top: 340, width: 309, height: 407)
+    static let controlHeight: CGFloat = 37.5
+    /// Control bar plus the flat shadow drawn under it. Canvas and the dock start here.
+    static let chromeInset: CGFloat = 89
+    static let appearance = PanelFrame(x: 20, top: 37, width: 298, height: 212)
+    static let align = PanelFrame(x: 323, top: 37, width: 308, height: 266)
+    static let stroke = PanelFrame(x: 323, top: 340, width: 308, height: 403)
 
     struct PanelFrame {
         var x: CGFloat
@@ -22,6 +22,19 @@ enum WorkspaceMetrics {
         func rect(in host: CGFloat) -> NSRect {
             NSRect(x: x, y: host - top - height, width: width, height: height)
         }
+    }
+}
+
+/// Flat shadow under the control bar. A filled rectangle, not a screenshot.
+final class ShadowBand: NSView {
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        Theme.color(0x424242).setFill()
+        bounds.fill()
+        Theme.color(0x383838).setFill()
+        NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: 1).fill()
     }
 }
 

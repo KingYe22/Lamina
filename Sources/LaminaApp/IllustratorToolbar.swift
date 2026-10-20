@@ -512,9 +512,9 @@ final class ToolbarFooter: NSView {
     }
 
     private func chip(_ rect: NSRect, kind: Int) {
-        Theme.field.setFill()
+        Theme.color(0x5C5C5C).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
-        Theme.fieldBorder.setStroke()
+        Theme.color(0x6A6A6A).setStroke()
         NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).stroke()
         let inner = rect.insetBy(dx: 4, dy: 4)
         switch kind {
@@ -542,7 +542,7 @@ final class ToolbarFooter: NSView {
     }
 
     private func iconWell(_ rect: NSRect, draw: (NSRect) -> Void) {
-        Theme.field.setFill()
+        Theme.color(0x5C5C5C).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
         draw(rect.insetBy(dx: 1, dy: 1))
     }

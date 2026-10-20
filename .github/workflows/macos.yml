@@ -25,6 +25,14 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.2.app
           swift --version
 
+      - name: Reject screenshot paths in app source
+        run: |
+          set -euo pipefail
+          if grep -R -n -E 'ai-ref' Sources project.yml Package.swift; then
+            echo "app source must not reference ai-ref"
+            exit 1
+          fi
+
       - name: Unit tests
         run: swift test
 

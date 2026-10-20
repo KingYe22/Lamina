@@ -1309,62 +1309,57 @@ final class NewDocSheet: NSView {
         let pad: CGFloat = 14
         let x = bounds.width - Self.detailWidth + pad
         let width = Self.detailWidth - pad - 18
-        var top = bounds.height - Self.tabHeight - 14
+        let detailTop = bounds.height - Self.tabHeight
 
-        func place(_ label: NSTextField) {
+        // imageY is the reference crop, in pixels. This view is not flipped.
+        func originY(imageY: CGFloat, height: CGFloat) -> CGFloat {
+            detailTop - imageY / 2 - height
+        }
+        func place(_ label: NSTextField, imageY: CGFloat, labelWidth: CGFloat = -1) {
             label.isHidden = false
-            label.frame = NSRect(x: x, y: top - 14, width: width, height: 14)
-            top -= 18
+            let height: CGFloat = 16
+            label.frame = NSRect(x: x, y: originY(imageY: imageY, height: height), width: labelWidth > 0 ? labelWidth : width, height: height)
         }
 
-        place(sectionLabel)
-        place(nameLabel)
+        place(sectionLabel, imageY: 28)
+        place(nameLabel, imageY: 62)
         let save: CGFloat = 28
-        nameField.frame = NSRect(x: x, y: top - 22, width: width - save - 6, height: 22)
-        saveRect = NSRect(x: x + width - 22, y: top - 22, width: 22, height: 22)
-        top -= 34
+        nameField.frame = NSRect(x: x, y: originY(imageY: 85, height: 22), width: width - save - 6, height: 22)
+        saveRect = NSRect(x: x + width - 22, y: nameField.frame.minY, width: 22, height: 22)
 
         let column = (width - 8) / 2
         widthLabel.isHidden = false
         heightLabel.isHidden = false
-        widthLabel.frame = NSRect(x: x, y: top - 14, width: column, height: 14)
-        heightLabel.frame = NSRect(x: x + column + 8, y: top - 14, width: column, height: 14)
-        top -= 18
-        widthField.frame = NSRect(x: x, y: top - 22, width: column, height: 22)
-        heightField.frame = NSRect(x: x + column + 8, y: top - 22, width: column, height: 22)
-        top -= 34
+        widthLabel.frame = NSRect(x: x, y: originY(imageY: 158, height: 16), width: column, height: 16)
+        heightLabel.frame = NSRect(x: x + column + 8, y: widthLabel.frame.minY, width: column, height: 16)
+        widthField.frame = NSRect(x: x, y: originY(imageY: 181, height: 22), width: column, height: 22)
+        heightField.frame = NSRect(x: x + column + 8, y: widthField.frame.minY, width: column, height: 22)
 
-        place(unitLabel)
-        unitPopup.frame = NSRect(x: x, y: top - 22, width: width, height: 22)
-        top -= 34
+        place(unitLabel, imageY: 254)
+        unitPopup.frame = NSRect(x: x, y: originY(imageY: 277, height: 22), width: width, height: 22)
 
-        place(orientLabel)
-        portraitRect = NSRect(x: x, y: top - 30, width: 32, height: 30)
-        landscapeRect = NSRect(x: x + 38, y: top - 30, width: 32, height: 30)
-        top -= 42
+        place(orientLabel, imageY: 350)
+        portraitRect = NSRect(x: x, y: originY(imageY: 373, height: 30), width: 32, height: 30)
+        landscapeRect = NSRect(x: x + 38, y: portraitRect.minY, width: 32, height: 30)
 
-        place(countLabel)
-        countField.frame = NSRect(x: x, y: top - 22, width: width, height: 22)
-        top -= 34
+        place(countLabel, imageY: 462)
+        countField.frame = NSRect(x: x, y: originY(imageY: 485, height: 22), width: width, height: 22)
 
-        place(bleedLabel)
+        place(bleedLabel, imageY: 552)
         let box: CGFloat = 54
-        topLabel.frame = NSRect(x: x, y: top - 18, width: 16, height: 16)
-        bleedTop.frame = NSRect(x: x + 18, y: top - 22, width: box, height: 22)
-        bottomLabel.frame = NSRect(x: x + 80, y: top - 18, width: 16, height: 16)
-        bleedBottom.frame = NSRect(x: x + 98, y: top - 22, width: box, height: 22)
-        linkRect = NSRect(x: x + width - 22, y: top - 22, width: 22, height: 22)
-        top -= 26
-        leftLabel.frame = NSRect(x: x, y: top - 18, width: 16, height: 16)
-        bleedLeft.frame = NSRect(x: x + 18, y: top - 22, width: box, height: 22)
-        rightLabel.frame = NSRect(x: x + 80, y: top - 18, width: 16, height: 16)
-        bleedRight.frame = NSRect(x: x + 98, y: top - 22, width: box, height: 22)
-        top -= 34
+        topLabel.frame = NSRect(x: x, y: originY(imageY: 590, height: 16), width: 16, height: 16)
+        bleedTop.frame = NSRect(x: x + 18, y: originY(imageY: 581, height: 22), width: box, height: 22)
+        bottomLabel.frame = NSRect(x: x + 80, y: topLabel.frame.minY, width: 16, height: 16)
+        bleedBottom.frame = NSRect(x: x + 98, y: bleedTop.frame.minY, width: box, height: 22)
+        linkRect = NSRect(x: x + width - 22, y: bleedTop.frame.minY, width: 22, height: 22)
+        leftLabel.frame = NSRect(x: x, y: originY(imageY: 646, height: 16), width: 16, height: 16)
+        bleedLeft.frame = NSRect(x: x + 18, y: originY(imageY: 637, height: 22), width: box, height: 22)
+        rightLabel.frame = NSRect(x: x + 80, y: leftLabel.frame.minY, width: 16, height: 16)
+        bleedRight.frame = NSRect(x: x + 98, y: bleedLeft.frame.minY, width: box, height: 22)
 
         advancedLabel.isHidden = false
-        advancedRect = NSRect(x: x, y: top - 16, width: width, height: 16)
-        advancedLabel.frame = NSRect(x: x + 16, y: top - 16, width: width - 16, height: 16)
-        top -= 22
+        advancedRect = NSRect(x: x, y: originY(imageY: 720, height: 16), width: width, height: 16)
+        advancedLabel.frame = NSRect(x: x + 16, y: advancedRect.minY, width: width - 16, height: 16)
 
         modePopup.isHidden = !advancedOpen
         rasterPopup.isHidden = !advancedOpen
@@ -1373,22 +1368,19 @@ final class NewDocSheet: NSView {
             modeLabel.isHidden = false
             rasterLabel.isHidden = false
             previewLabel.isHidden = false
-            place(modeLabel)
-            modePopup.frame = NSRect(x: x, y: top - 22, width: width, height: 22)
-            top -= 32
-            place(rasterLabel)
-            rasterPopup.frame = NSRect(x: x, y: top - 22, width: width, height: 22)
-            top -= 32
-            place(previewLabel)
-            previewPopup.frame = NSRect(x: x, y: top - 22, width: width, height: 22)
-            top -= 28
+            place(modeLabel, imageY: 754)
+            modePopup.frame = NSRect(x: x, y: originY(imageY: 777, height: 22), width: width, height: 22)
+            place(rasterLabel, imageY: 850)
+            rasterPopup.frame = NSRect(x: x, y: originY(imageY: 873, height: 22), width: width, height: 22)
+            place(previewLabel, imageY: 946)
+            previewPopup.frame = NSRect(x: x, y: originY(imageY: 969, height: 22), width: width, height: 22)
         } else {
             modeLabel.isHidden = true
             rasterLabel.isHidden = true
             previewLabel.isHidden = true
         }
 
-        moreSettingsRect = NSRect(x: x, y: max(56, top - 16), width: width, height: 16)
+        moreSettingsRect = NSRect(x: x, y: originY(imageY: 1040, height: 16), width: width, height: 16)
         let buttonWidth: CGFloat = 76
         createButton.frame = NSRect(x: bounds.width - 20 - buttonWidth, y: 16, width: buttonWidth, height: 32)
         closeButton.frame = NSRect(x: createButton.frame.minX - 12 - buttonWidth, y: 16, width: buttonWidth, height: 32)
