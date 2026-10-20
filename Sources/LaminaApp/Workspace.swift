@@ -18,6 +18,11 @@ final class Workspace: ObservableObject {
     @Published var activeIndex = 0
     @Published var revision = 0
     var onChange: (() -> Void)?
+    var onNewDocument: (() -> Void)?
+    var onRevealEditor: (() -> Void)?
+    /// When set, open/save panels record the request instead of running a modal dialog.
+    var suppressPanels = false
+    var panelRequest = ""
 
     var active: EditorSession {
         if sessions.isEmpty { addDocument(fit: false) }
@@ -99,12 +104,14 @@ final class Workspace: ObservableObject {
             addDocument(size: Vec2(595, 842), title: "模板-A4")
             return true
         case "打开文档":
+            if suppressPanels { panelRequest = "open"; return true }
             openPanel()
             return true
         case "关闭文档窗口":
             closeActive()
             return true
         case "存储对文档所做的更改":
+            if suppressPanels { panelRequest = "save"; return true }
             _ = save(session, copy: false, forceDialog: false)
             return true
         case "打开“存储为”对话框":
@@ -174,6 +181,7 @@ final class Workspace: ObservableObject {
                 try placeFile(url: url, data: data, into: active)
             }
             remember(url)
+            onRevealEditor?()
         } catch {
             inform("无法打开", error.localizedDescription)
         }
@@ -386,6 +394,10 @@ final class Workspace: ObservableObject {
     }
 
     func perform(_ action: String) {
+        if action == "创建文档" {
+            onNewDocument?()
+            return
+        }
         _ = active.model.perform(action)
         if let request = active.model.pendingDialog {
             presentDialog(request)

@@ -132,8 +132,12 @@ enum ChordAppKit {
 
 enum KeyRouter {
     static func handle(_ event: NSEvent, workspace: Workspace) -> NSEvent? {
-        if isTextInput(NSApp.keyWindow?.firstResponder) { return event }
         let model = workspace.active.model
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let commandish = flags.contains(.command) || flags.contains(.control)
+        if shouldYieldToField(event, commandish: commandish, editingDocument: model.editingText != nil) {
+            return event
+        }
         if event.keyCode == 49 { model.spaceHeld = true }
         if event.keyCode == 36, model.editingText == nil {
             model.requestToolOptions()
@@ -161,12 +165,47 @@ enum KeyRouter {
         guard let chord = ChordAppKit.chord(from: event) else { return event }
         if model.keyDown(chord: chord) {
             workspace.touch()
+            focusCanvas()
             return nil
         }
         return event
     }
 
+    /// Plain typing belongs to a focused field. Command shortcuts still reach the app,
+    /// except the editing chords a text field is expected to handle itself.
+    private static func shouldYieldToField(_ event: NSEvent, commandish: Bool, editingDocument: Bool) -> Bool {
+        if editingDocument, !commandish { return false }
+        guard isTextInput(NSApp.keyWindow?.firstResponder) else { return false }
+        if !commandish { return true }
+        let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags.contains(.command), !flags.contains(.option), !flags.contains(.control),
+           ["a", "c", "v", "x", "z"].contains(chars) {
+            return true
+        }
+        return false
+    }
+
     private static func isTextInput(_ responder: NSResponder?) -> Bool {
-        responder is NSTextView || responder is NSTextField
+        guard let view = responder as? NSView else { return false }
+        if view.isHiddenOrHasHiddenAncestor { return false }
+        if view is NSTextView || view is NSTextField { return true }
+        return false
+    }
+
+    private static func focusCanvas() {
+        guard let window = NSApp.keyWindow ?? NSApp.mainWindow else { return }
+        if let canvas = findCanvas(window.contentView) {
+            window.makeFirstResponder(canvas)
+        }
+    }
+
+    private static func findCanvas(_ view: NSView?) -> NSView? {
+        guard let view else { return nil }
+        if view is VectorCanvas { return view }
+        for child in view.subviews {
+            if let found = findCanvas(child) { return found }
+        }
+        return nil
     }
 }

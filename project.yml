@@ -13,8 +13,8 @@ settings:
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGN_IDENTITY: ""
     ENABLE_HARDENED_RUNTIME: NO
-    MARKETING_VERSION: "0.1.1"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: "3"
 targets:
   LaminaCore:
     type: library.static
@@ -73,6 +73,7 @@ targets:
         LSMinimumSystemVersion: "14.0"
         NSHighResolutionCapable: true
         NSPrincipalClass: NSApplication
+        CFBundleIconFile: AppIcon
         LSApplicationCategoryType: public.app-category.graphics-design
         NSHumanReadableCopyright: ""
         CFBundleDocumentTypes:

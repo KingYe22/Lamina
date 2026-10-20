@@ -1,100 +1,27 @@
 import AppKit
 import LaminaCore
-import SwiftUI
-
-final class DocumentTabBar: NSView {
-    weak var workspace: Workspace?
-    override func draw(_ dirtyRect: NSRect) {
-        Theme.chrome.setFill()
-        bounds.fill()
-        guard let workspace else { return }
-        var x: CGFloat = 8
-        for (index, session) in workspace.sessions.enumerated() {
-            let title = session.title as NSString
-            let width = min(180, title.size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width + 28)
-            let rect = NSRect(x: x, y: 4, width: width, height: bounds.height - 8)
-            let active = index == workspace.activeIndex
-            (active ? Theme.raised : Theme.panel).setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
-            title.draw(at: NSPoint(x: rect.minX + 10, y: rect.midY - 7), withAttributes: [
-                .font: NSFont.systemFont(ofSize: 12, weight: active ? .semibold : .regular),
-                .foregroundColor: Theme.text
-            ])
-            x += width + 6
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let workspace else { return }
-        let point = convert(event.locationInWindow, from: nil)
-        var x: CGFloat = 8
-        for (index, session) in workspace.sessions.enumerated() {
-            let title = session.title as NSString
-            let width = min(180, title.size(withAttributes: [.font: NSFont.systemFont(ofSize: 12)]).width + 28)
-            let rect = NSRect(x: x, y: 4, width: width, height: bounds.height - 8)
-            if rect.contains(point) {
-                workspace.select(index: index)
-                return
-            }
-            x += width + 6
-        }
-    }
-}
-
-final class StatusBar: NSView {
-    weak var workspace: Workspace?
-    override func draw(_ dirtyRect: NSRect) {
-        Theme.chrome.setFill()
-        bounds.fill()
-        Theme.line.setFill()
-        NSBezierPath(rect: NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)).fill()
-        guard let model = workspace?.active.model else { return }
-        let board = model.document.artboards.indices.contains(model.document.activeArtboard)
-            ? model.document.artboards[model.document.activeArtboard].name
-            : "画板"
-        let zoom = "\(Int((model.zoom * 100).rounded()))%"
-        let left = "\(model.tool.title)    \(model.status)" as NSString
-        let right = "‹    \(board)    ›      −    \(zoom)    +" as NSString
-        left.draw(at: NSPoint(x: 10, y: 6), withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.dim])
-        let size = right.size(withAttributes: [.font: NSFont.systemFont(ofSize: 11)])
-        right.draw(at: NSPoint(x: bounds.width - size.width - 12, y: 6), withAttributes: [.font: NSFont.systemFont(ofSize: 11), .foregroundColor: Theme.text])
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let workspace else { return }
-        let point = convert(event.locationInWindow, from: nil)
-        let width = bounds.width
-        if point.x > width - 36 {
-            workspace.perform("放大")
-        } else if point.x > width - 92 {
-            workspace.perform("画板适合窗口大小")
-        } else if point.x > width - 128 {
-            workspace.perform("缩小")
-        } else if point.x > width - 220 {
-            workspace.stepArtboard(1)
-        } else if point.x > width - 280 {
-            workspace.stepArtboard(-1)
-        }
-    }
-}
 
 final class EditorShell: NSView {
     let workspace: Workspace
     let tabs = DocumentTabBar()
-    let palette = ToolPalette()
+    let toolbar = IllustratorToolbar()
     let canvas = CanvasHost()
-    let status = StatusBar()
-    let dock: NSHostingView<DockRoot>
+    let status = IllustratorStatusBar()
+    let dock = PropertiesDock()
+    let floaters = FloatingPanels()
+    let contextBar = ContextBar()
 
     init(workspace: Workspace) {
         self.workspace = workspace
-        dock = NSHostingView(rootView: DockRoot(workspace: workspace))
         super.init(frame: .zero)
-        palette.workspace = workspace
+        toolbar.workspace = workspace
         canvas.workspace = workspace
         tabs.workspace = workspace
         status.workspace = workspace
-        for view in [tabs, palette, canvas, status, dock] as [NSView] {
+        dock.workspace = workspace
+        floaters.workspace = workspace
+        contextBar.workspace = workspace
+        for view in [tabs, toolbar, canvas, status, dock, floaters, contextBar] as [NSView] {
             addSubview(view)
         }
     }
@@ -103,28 +30,49 @@ final class EditorShell: NSView {
 
     override func layout() {
         super.layout()
-        let tabHeight: CGFloat = 32
+        let titleBand: CGFloat = 28
+        let tabHeight: CGFloat = 28
         let statusHeight: CGFloat = 26
-        let paletteWidth: CGFloat = 52
-        let dockWidth: CGFloat = workspace.active.model.openPanels.isEmpty ? 0 : 300
-        tabs.frame = NSRect(x: 0, y: bounds.height - tabHeight, width: bounds.width, height: tabHeight)
+        let toolWidth: CGFloat = 52
+        let dockWidth: CGFloat = 280
+        let top = bounds.height - titleBand
+        tabs.frame = NSRect(x: 0, y: top - tabHeight, width: bounds.width, height: tabHeight)
         status.frame = NSRect(x: 0, y: 0, width: bounds.width, height: statusHeight)
-        palette.frame = NSRect(x: 0, y: statusHeight, width: paletteWidth, height: bounds.height - tabHeight - statusHeight)
-        dock.frame = NSRect(x: bounds.width - dockWidth, y: statusHeight, width: dockWidth, height: bounds.height - tabHeight - statusHeight)
-        canvas.frame = NSRect(
-            x: paletteWidth,
-            y: statusHeight,
-            width: max(0, bounds.width - paletteWidth - dockWidth),
-            height: bounds.height - tabHeight - statusHeight
+        let bodyY = statusHeight
+        let bodyH = max(0, top - tabHeight - statusHeight)
+        toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: bodyH)
+        dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: bodyH)
+        canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: bodyH)
+        let floaterWidth: CGFloat = 220
+        floaters.frame = NSRect(
+            x: canvas.frame.maxX - floaterWidth - 8,
+            y: canvas.frame.minY + 8,
+            width: floaterWidth,
+            height: max(0, canvas.frame.height - 16)
         )
+        contextBar.frame = NSRect(x: canvas.frame.midX - 150, y: canvas.frame.maxY - 42, width: 300, height: 30)
     }
 
     func sync() {
-        palette.sync()
+        toolbar.sync()
         canvas.sync()
         tabs.needsDisplay = true
         status.needsDisplay = true
+        dock.sync()
+        floaters.sync()
+        contextBar.needsDisplay = true
         needsLayout = true
         layoutSubtreeIfNeeded()
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        Theme.window.setFill()
+        dirtyRect.intersection(bounds).fill()
+        let title = "Lamina" as NSString
+        let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
+        let size = title.size(withAttributes: [.font: font])
+        title.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: bounds.height - 20), withAttributes: [
+            .font: font, .foregroundColor: Theme.text
+        ])
     }
 }

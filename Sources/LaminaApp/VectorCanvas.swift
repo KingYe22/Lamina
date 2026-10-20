@@ -57,8 +57,7 @@ final class CanvasHost: NSView {
     }
 
     func sync() {
-        let gpu = workspace?.active.model.gpuPreview ?? true
-        metal.isHidden = !gpu || metal.device == nil
+        metal.isHidden = true
         drawing.needsDisplay = true
         if !metal.isHidden { metal.setNeedsDisplay(metal.bounds) }
         window?.invalidateCursorRects(for: drawing)
@@ -92,11 +91,8 @@ final class VectorCanvas: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let model = workspace?.active.model else { return }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        let metalDevice = (superview as? CanvasHost)?.metal.device
-        if !model.gpuPreview || metalDevice == nil {
-            context.setFillColor(Theme.pasteboard.cgColor)
-            context.fill(bounds)
-        }
+        context.setFillColor(Theme.pasteboard.cgColor)
+        context.fill(bounds)
         var options = DrawOptions()
         options.outline = model.outline
         options.showArtboards = model.showArtboards
@@ -125,7 +121,21 @@ final class VectorCanvas: NSView {
         context.saveGState()
         CanvasDrawing.draw(model.document, options: options, in: context, size: bounds.size)
         context.restoreGState()
+        drawArtboardLabel(model)
         if model.showRulers { drawRulers(model, in: context) }
+    }
+
+    private func drawArtboardLabel(_ model: EditorModel) {
+        guard model.document.artboards.indices.contains(model.document.activeArtboard) else { return }
+        let board = model.document.artboards[model.document.activeArtboard]
+        let index = model.document.activeArtboard + 1
+        let label = String(format: "%02d - %@", index, board.name) as NSString
+        let viewX = (board.rect.x - model.pan.x) * model.zoom
+        let top = bounds.height - (board.rect.y - model.pan.y) * model.zoom
+        label.draw(at: NSPoint(x: viewX, y: top + 4), withAttributes: [
+            .font: NSFont.systemFont(ofSize: 11),
+            .foregroundColor: Theme.dim
+        ])
     }
 
     private func drawRulers(_ model: EditorModel, in context: CGContext) {

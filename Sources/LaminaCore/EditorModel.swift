@@ -138,6 +138,7 @@ public final class EditorModel {
         case puppet
         case width(UUID)
         case convert(item: UUID, node: UUID, handle: Bool)
+        case pan
     }
 
     public enum Handle: String { case nw, n, ne, e, se, s, sw, w, rotate }
@@ -190,6 +191,13 @@ public final class EditorModel {
         hover = snapped(p)
         let p = hover
         gestureOrigin = p
+        if space || spaceHeld {
+            moveOrigin = p
+            createOrigin = pan
+            drag = .pan
+            status = "抓手"
+            return
+        }
         switch tool {
         case .selection:
             if showBoundingBox, let handle = hitHandle(at: p) {
@@ -375,6 +383,10 @@ public final class EditorModel {
         hover = p
         guard let drag else { return }
         switch drag {
+        case .pan:
+            pan = createOrigin - (p - moveOrigin)
+            status = "抓手"
+            return
         case .move:
             if tool == .hand {
                 pan = createOrigin - (p - moveOrigin)
@@ -479,6 +491,8 @@ public final class EditorModel {
         case .convert(let item, let node, let handle):
             if !handle, gestureOrigin.distance(to: p) < 3 { toggleConvert(item: item, node: node) }
             status = "锚点"
+        case .pan:
+            status = "抓手"
         case .move, .scale, .anchor, .rotate, .gradient, .artboard, .pen, .distort, .warp, .reshape, .puppet, .width:
             status = tool == .pen ? "钢笔 \(penNodes.count) 点" : "已变换"
         case .none:
@@ -823,8 +837,19 @@ public final class EditorModel {
         status = name
     }
 
-    public func newDocument(size: Vec2, title: String = "未标题-1") {
-        document = .blank(title: title, size: size)
+    public func newDocument(size: Vec2, title: String = "未标题-1", colorMode: ColorMode = .rgb, units: UnitKind = .pt, artboardCount: Int = 1, rasterPPI: Double = 72, zoomTo: Double? = nil) {
+        var doc = LaminaDocument.blank(title: title, size: size)
+        doc.colorMode = colorMode
+        doc.units = units
+        doc.rasterPPI = rasterPPI
+        if artboardCount > 1 {
+            let gap = 40.0
+            doc.artboards = (0..<artboardCount).map { index in
+                Artboard(name: "画板 \(index + 1)", rect: Rect2(x: Double(index) * (size.x + gap), y: 0, width: size.x, height: size.y))
+            }
+            doc.activeArtboard = 0
+        }
+        document = doc
         selection = []
         undoStack = []
         redoStack = []
@@ -832,6 +857,11 @@ public final class EditorModel {
         canRedo = false
         fileURL = nil
         savedSnapshot = try? JSONEncoder.lamina.encode(document)
+        if let zoomTo {
+            zoom = zoomTo
+            let board = document.currentArtboard.rect
+            pan = Vec2(board.midX - viewportSize.x / zoom / 2, board.midY - viewportSize.y / zoom / 2)
+        }
         status = "新建文档"
     }
 
