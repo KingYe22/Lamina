@@ -45,6 +45,7 @@ targets:
       - path: Sources/LaminaApp/Resources/Brands
     dependencies:
       - target: LaminaCore
+      - sdk: Carbon.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
       - sdk: PDFKit.framework

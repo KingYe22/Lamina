@@ -237,6 +237,10 @@ enum KeyRouter {
             ShortcutLog.record(event, route: route, action: action)
             return nil
         }
+        if event.keyCode == VirtualKey.escape, model.editingText == nil, !isActivelyEditing(event),
+           workspace.onDismissDialog?() == true {
+            return consume("Esc", "关闭对话框")
+        }
         if event.keyCode == VirtualKey.space {
             model.spaceHeld = true
             return consume("空格", "临时抓手")

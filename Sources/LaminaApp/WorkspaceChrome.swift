@@ -49,7 +49,12 @@ final class AppRoot: NSView {
         editor = EditorShell(workspace: workspace)
         super.init(frame: .zero)
         home.workspace = workspace
-        dialog.onClose = { [weak self] in self?.dialog.isHidden = true }
+        dialog.onClose = { [weak self] in self?.dismissDialog() }
+        workspace.onDismissDialog = { [weak self] in
+            guard let self, !self.dialog.isHidden else { return false }
+            self.dismissDialog()
+            return true
+        }
         dialog.onCreate = { [weak self] spec in
             self?.create(spec)
         }
@@ -92,6 +97,12 @@ final class AppRoot: NSView {
         PanelField.disarmAll(in: window)
         focusCanvas()
         DispatchQueue.main.async { [weak self] in self?.focusCanvas() }
+    }
+
+    private func dismissDialog() {
+        dialog.isHidden = true
+        if showingEditor { CanvasFocus.restore(in: window) }
+        KeyProbe.bump(workspace)
     }
 
     func showDialog() {

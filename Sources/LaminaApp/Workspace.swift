@@ -19,6 +19,7 @@ final class Workspace: ObservableObject {
     @Published var revision = 0
     var onChange: (() -> Void)?
     var onNewDocument: (() -> Void)?
+    var onDismissDialog: (() -> Bool)?
     var onRevealEditor: (() -> Void)?
     var onShortcutDiagnostics: (() -> Void)?
     var editorIsKey = false

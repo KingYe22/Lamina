@@ -1,6 +1,9 @@
 import AppKit
 import LaminaCore
 
+@_silgen_name("LaminaCurrentInputSource")
+func laminaCurrentInputSource() -> UnsafePointer<CChar>
+
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: LaminaWindow!
     private let workspace = Workspace()
@@ -165,6 +168,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             "zoom=\(Self.plain(model.zoom, digits: 4))",
             "space=\(model.spaceHeld ? 1 : 0)",
             "dialog=\(root.dialog.isHidden ? 0 : 1)",
+            "ime=\(Self.currentInputSourceID())",
             "panel=\(workspace.panelRequest)",
             "items=\(items)",
             "responder=\(responder)",
@@ -180,6 +184,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         try? keyLog.seekToEnd()
         try? keyLog.write(contentsOf: data)
         try? keyLog.synchronize()
+    }
+
+    private static func currentInputSourceID() -> String {
+        let raw = String(cString: laminaCurrentInputSource())
+        return raw.isEmpty ? "none" : raw
     }
 
     private static func plain(_ value: Double, digits: Int) -> String {

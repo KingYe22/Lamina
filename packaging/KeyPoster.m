@@ -1,12 +1,15 @@
 #import <Carbon/Carbon.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
+#import <notify.h>
 #import <unistd.h>
 
 static NSFileHandle *reportHandle;
 static BOOL failed = NO;
 static NSString *statePath;
 static pid_t appPid = 0;
+
+static NSDictionary *waitUntil(BOOL (^predicate)(NSDictionary *snap), NSTimeInterval timeout);
 
 static void note(NSString *text) {
     if ([text hasPrefix:@"FAIL"]) failed = YES;
@@ -23,11 +26,11 @@ static NSString *SourceID(TISInputSourceRef source) {
     return (__bridge NSString *)value;
 }
 
-static BOOL selectSource(NSString *wanted, NSMutableString *available) {
+static TISInputSourceRef CopySource(NSString *wanted, NSMutableString *available, BOOL listMatches) {
     CFArrayRef list = TISCreateInputSourceList(NULL, true);
     if (!list) {
         [available appendString:@"TISCreateInputSourceList returned NULL\n"];
-        return NO;
+        return NULL;
     }
     TISInputSourceRef match = NULL;
     CFIndex count = CFArrayGetCount(list);
@@ -35,37 +38,95 @@ static BOOL selectSource(NSString *wanted, NSMutableString *available) {
         TISInputSourceRef source = (TISInputSourceRef)CFArrayGetValueAtIndex(list, index);
         NSString *identifier = SourceID(source);
         if (!identifier) continue;
-        if ([identifier containsString:@"SCIM"] || [identifier containsString:@"ITABC"]
+        if (listMatches && ([identifier containsString:@"SCIM"] || [identifier containsString:@"ITABC"]
             || [identifier containsString:@"Pinyin"] || [identifier containsString:@"ABC"]
             || [identifier containsString:@"keylayout"] || [identifier containsString:@"inputmethod"]
-            || [identifier containsString:@"US"] || [identifier containsString:@"Roman"]) {
+            || [identifier containsString:@"US"] || [identifier containsString:@"Roman"])) {
             [available appendFormat:@"%@\n", identifier];
         }
         if ([identifier isEqualToString:wanted]) match = source;
     }
-    if (!match) {
-        CFRelease(list);
-        return NO;
+    if (match) CFRetain(match);
+    CFRelease(list);
+    return match;
+}
+
+static NSString *PosterSourceID(void) {
+    TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();
+    NSString *value = current ? (SourceID(current) ?: @"") : @"";
+    if (current) CFRelease(current);
+    return value;
+}
+
+static void enablePinyinInMenu(void) {
+    NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Preferences/com.apple.HIToolbox.plist"];
+    NSMutableDictionary *plist = [[NSDictionary dictionaryWithContentsOfFile:path] mutableCopy] ?: [NSMutableDictionary dictionary];
+    NSMutableArray *enabled = [plist[@"AppleEnabledInputSources"] mutableCopy] ?: [NSMutableArray array];
+    NSArray *entries = @[
+        @{@"InputSourceKind": @"Keyboard Input Method", @"Bundle ID": @"com.apple.inputmethod.SCIM"},
+        @{@"InputSourceKind": @"Input Mode", @"Bundle ID": @"com.apple.inputmethod.SCIM", @"Input Mode": @"com.apple.inputmethod.SCIM.ITABC"}
+    ];
+    for (NSDictionary *entry in entries) {
+        BOOL found = NO;
+        for (NSDictionary *existing in enabled) {
+            if (![existing isKindOfClass:[NSDictionary class]]) continue;
+            if ([existing[@"Bundle ID"] isEqual:entry[@"Bundle ID"]]
+                && [existing[@"InputSourceKind"] isEqual:entry[@"InputSourceKind"]]
+                && [(existing[@"Input Mode"] ?: @"") isEqual:(entry[@"Input Mode"] ?: @"")]) {
+                found = YES;
+                break;
+            }
+        }
+        if (!found) [enabled addObject:entry];
     }
-    BOOL selected = NO;
-    NSString *currentID = @"";
-    for (int attempt = 0; attempt < 5; attempt++) {
-        TISEnableInputSource(match);
-        OSStatus status = TISSelectInputSource(match);
-        usleep(200000);
-        TISInputSourceRef current = TISCopyCurrentKeyboardInputSource();
-        currentID = current ? (SourceID(current) ?: @"") : @"";
-        if (current) CFRelease(current);
-        if (status == noErr && [currentID isEqualToString:wanted]) {
-            selected = YES;
-            break;
+    plist[@"AppleEnabledInputSources"] = enabled;
+    plist[@"AppleSelectedInputSources"] = @[entries[1]];
+    [plist writeToFile:path atomically:YES];
+    CFPreferencesAppSynchronize(CFSTR("com.apple.HIToolbox"));
+    notify_post("com.apple.Carbon.TISNotifyEnabledKeyboardInputSourcesChanged");
+    notify_post("com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged");
+}
+
+static BOOL appUsesSource(NSString *wanted) {
+    NSDictionary *snap = waitUntil(^BOOL(NSDictionary *state) {
+        return [state[@"ime"] isEqualToString:wanted];
+    }, 1.5);
+    return [snap[@"ime"] isEqualToString:wanted];
+}
+
+static BOOL selectOnce(NSString *wanted, NSMutableString *available, int attempt) {
+    if ([wanted hasPrefix:@"com.apple.inputmethod.SCIM."]) {
+        TISInputSourceRef parent = CopySource(@"com.apple.inputmethod.SCIM", available, NO);
+        if (parent) {
+            OSStatus enable = TISEnableInputSource(parent);
+            [available appendFormat:@"parent enable=%d\n", (int)enable];
+            CFRelease(parent);
         }
     }
-    CFRelease(list);
-    if (!selected) {
-        [available appendFormat:@"current=%@\n", currentID];
+    TISInputSourceRef match = CopySource(wanted, available, NO);
+    if (!match) return NO;
+    OSStatus enable = TISEnableInputSource(match);
+    OSStatus select = TISSelectInputSource(match);
+    CFRelease(match);
+    BOOL appOK = appUsesSource(wanted);
+    NSString *poster = PosterSourceID();
+    [available appendFormat:@"attempt=%d enable=%d select=%d poster=%@ appOK=%d\n", attempt, (int)enable, (int)select, poster, appOK];
+    return appOK || [poster isEqualToString:wanted];
+}
+
+static BOOL selectSource(NSString *wanted, NSMutableString *available) {
+    TISInputSourceRef existing = CopySource(wanted, available, YES);
+    if (!existing) return NO;
+    CFRelease(existing);
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (selectOnce(wanted, available, attempt)) return YES;
     }
-    return selected;
+    if ([wanted isEqualToString:@"com.apple.inputmethod.SCIM.ITABC"]) {
+        enablePinyinInMenu();
+        usleep(300000);
+        if (selectOnce(wanted, available, 3)) return YES;
+    }
+    return NO;
 }
 
 static NSDictionary *latestState(void) {
@@ -337,6 +398,12 @@ int main(int argc, char **argv) {
         }, 2.5);
         BOOL dialogShown = [created[@"dialog"] isEqualToString:@"1"];
         note([NSString stringWithFormat:@"%@ Cmd+N dialog=%@", dialogShown ? @"PASS" : @"FAIL", created[@"dialog"] ?: @"?"]);
+        postKey(53, 0, YES, YES);
+        NSDictionary *closed = waitUntil(^BOOL(NSDictionary *state) {
+            return [state[@"dialog"] isEqualToString:@"0"];
+        }, 2.5);
+        BOOL dialogClosed = [closed[@"dialog"] isEqualToString:@"0"];
+        note([NSString stringWithFormat:@"%@ Esc-close-dialog dialog=%@", dialogClosed ? @"PASS" : @"FAIL", closed[@"dialog"] ?: @"?"]);
 
         postKey(31, kCGEventFlagMaskCommand, YES, YES);
         NSDictionary *opened = waitUntil(^BOOL(NSDictionary *state) {
