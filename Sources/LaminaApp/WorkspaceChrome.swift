@@ -316,287 +316,6 @@ final class ContextBar: NSView {
     override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }
 }
 
-final class FloatingPanels: NSView {
-    override var mouseDownCanMoveWindow: Bool { false }
-    weak var workspace: Workspace?
-    private let weightField = PanelField(text: "1 pt")
-    private let limitField = PanelField(text: "4")
-    private let spacingField = PanelField(text: "0")
-    private var groupTab = 1
-    private var strokeTab = 0
-    private var cap = 0
-    private var corner = 0
-    private var strokePlace = 0
-    private var dashed = false
-    private var strokeVisible = true
-    private var fillVisible = true
-    private var alignTarget = 0
-    private let alignTargets = ["对齐所选对象", "对齐画板", "关键对象"]
-    private let appearanceHeight: CGFloat = 124
-    private let alignHeight: CGFloat = 198
-    private let strokeHeight: CGFloat = 236
-    private let gap: CGFloat = 8
-
-    override var isFlipped: Bool { true }
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        for field in [weightField, limitField, spacingField] {
-            addSubview(field)
-        }
-    }
-
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-
-    func sync() { needsDisplay = true }
-
-    override func layout() {
-        super.layout()
-        let strokeRectMinY = strokeY + 26
-        weightField.frame = NSRect(x: 44, y: strokeRectMinY - 2, width: 76, height: 20)
-        limitField.frame = NSRect(x: 112, y: strokeRectMinY + 86, width: 36, height: 22)
-        let alignRectMinY = alignY + 26
-        spacingField.frame = NSRect(x: 78, y: alignRectMinY + 108, width: 54, height: 22)
-        weightField.isHidden = strokeTab != 0
-        limitField.isHidden = strokeTab != 0
-        spacingField.isHidden = groupTab != 1
-    }
-
-    private var alignY: CGFloat { appearanceHeight + gap }
-    private var strokeY: CGFloat { alignY + alignHeight + gap }
-
-    override func draw(_ dirtyRect: NSRect) {
-        card(y: 0, height: appearanceHeight, tabs: ["外观"], active: 0)
-        drawAppearance(NSRect(x: 8, y: 26, width: bounds.width - 16, height: appearanceHeight - 32))
-        card(y: alignY, height: alignHeight, tabs: ["变换", "对齐", "路径查找器"], active: groupTab)
-        drawGroup(NSRect(x: 8, y: alignY + 26, width: bounds.width - 16, height: alignHeight - 32))
-        card(y: strokeY, height: strokeHeight, tabs: ["描边", "透明度"], active: strokeTab)
-        drawStroke(NSRect(x: 8, y: strokeY + 26, width: bounds.width - 16, height: strokeHeight - 32))
-    }
-
-    private func card(y: CGFloat, height: CGFloat, tabs: [String], active: Int) {
-        let rect = NSRect(x: 0, y: y, width: bounds.width, height: height)
-        Theme.panel.setFill()
-        NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
-        var x: CGFloat = 8
-        for (index, tab) in tabs.enumerated() {
-            let font = Theme.ui(11, weight: index == active ? .semibold : .regular)
-            let color = index == active ? Theme.text : Theme.dim
-            (tab as NSString).draw(at: NSPoint(x: x, y: y + 6), withAttributes: [.font: font, .foregroundColor: color])
-            x += (tab as NSString).size(withAttributes: [.font: font]).width + 10
-        }
-        PanelIcons.menu(in: NSRect(x: bounds.width - 20, y: y + 6, width: 12, height: 12))
-    }
-
-    private func drawAppearance(_ rect: NSRect) {
-        ("未选择对象" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY), withAttributes: [
-            .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
-        ])
-        rowEye(rect.minX, rect.minY + 22, open: strokeVisible, color: .black, title: "描边", detail: "1 pt")
-        rowEye(rect.minX, rect.minY + 44, open: fillVisible, color: .white, title: "填色", detail: "")
-        ("不透明度" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 70), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: Theme.dim
-        ])
-        PanelIcons.popup(NSRect(x: rect.minX + 64, y: rect.minY + 66, width: rect.width - 64, height: 20), title: "默认")
-    }
-
-    private func rowEye(_ x: CGFloat, _ y: CGFloat, open: Bool, color: NSColor, title: String, detail: String) {
-        PanelIcons.eye(in: NSRect(x: x, y: y, width: 16, height: 12), open: open)
-        PanelIcons.swatch(in: NSRect(x: x + 22, y: y - 1, width: 14, height: 14), color: color)
-        (title as NSString).draw(at: NSPoint(x: x + 42, y: y), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
-        ])
-        if !detail.isEmpty {
-            (detail as NSString).draw(at: NSPoint(x: x + 78, y: y), withAttributes: [
-                .font: Theme.ui(11), .foregroundColor: Theme.dim
-            ])
-        }
-    }
-
-    private func drawGroup(_ rect: NSRect) {
-        switch groupTab {
-        case 0:
-            let labels = ["X", "Y", "W", "H"]
-            let values = ["0", "0", "210", "297"]
-            for index in 0..<4 {
-                let y = rect.minY + CGFloat(index) * 28
-                (labels[index] as NSString).draw(at: NSPoint(x: rect.minX, y: y + 2), withAttributes: [
-                    .font: Theme.ui(11), .foregroundColor: Theme.dim
-                ])
-                PanelIcons.stepper(NSRect(x: rect.minX + 22, y: y, width: 120, height: 20), title: values[index])
-            }
-        case 2:
-            caption("形状模式", y: rect.minY)
-            iconRow(4, y: rect.minY + 16) { PanelIcons.pathfinder($0, in: $1) }
-            caption("路径查找器", y: rect.minY + 48)
-            iconRow(4, y: rect.minY + 64) { PanelIcons.pathfinder(($0 + 1) % 4, in: $1) }
-        default:
-            caption("对齐对象", y: rect.minY)
-            iconRow(6, y: rect.minY + 16) { PanelIcons.align($0, in: $1) }
-            caption("分布对象", y: rect.minY + 46)
-            iconRow(6, y: rect.minY + 62) { PanelIcons.distribute($0, in: $1) }
-            caption("分布间距", y: rect.minY + 92)
-            let spacing = iconRow(2, y: rect.minY + 108) { PanelIcons.spacing(horizontal: $0 == 1, in: $1) }
-            PanelIcons.field(NSRect(x: spacing + 6, y: rect.minY + 108, width: 54, height: 22), text: "0", align: .center)
-            PanelIcons.popup(NSRect(x: rect.minX, y: rect.minY + 140, width: rect.width, height: 22), title: alignTargets[alignTarget])
-        }
-    }
-
-    private func drawStroke(_ rect: NSRect) {
-        if strokeTab == 1 {
-            ("不透明度" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 4), withAttributes: [
-                .font: Theme.ui(11), .foregroundColor: Theme.dim
-            ])
-            PanelIcons.stepper(NSRect(x: rect.minX + 64, y: rect.minY, width: 110, height: 22), title: "100%")
-            ("混合模式" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 36), withAttributes: [
-                .font: Theme.ui(11), .foregroundColor: Theme.dim
-            ])
-            PanelIcons.popup(NSRect(x: rect.minX, y: rect.minY + 56, width: rect.width, height: 22), title: "正常")
-            return
-        }
-        caption("粗细", y: rect.minY)
-        PanelIcons.stepper(NSRect(x: rect.minX + 36, y: rect.minY - 2, width: 92, height: 20), title: "1 pt")
-        PanelIcons.popup(NSRect(x: rect.minX + 134, y: rect.minY - 2, width: max(40, rect.width - 134), height: 20), title: "")
-        caption("端点", y: rect.minY + 26)
-        iconRow(3, y: rect.minY + 42, selected: cap) { PanelIcons.cap($0, in: $1) }
-        caption("边角", y: rect.minY + 70)
-        let afterCorner = iconRow(3, y: rect.minY + 86, selected: corner) { PanelIcons.corner($0, in: $1) }
-        PanelIcons.field(NSRect(x: afterCorner + 8, y: rect.minY + 86, width: 36, height: 22), text: "4", align: .center)
-        caption("对齐描边", y: rect.minY + 114)
-        iconRow(3, y: rect.minY + 130, selected: strokePlace) { PanelIcons.strokeAlign($0, in: $1) }
-        PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: rect.minY + 160), on: dashed, title: "")
-        var dashX = rect.minX + 22
-        for _ in 0..<6 {
-            PanelIcons.field(NSRect(x: dashX, y: rect.minY + 156, width: 26, height: 20), text: "", align: .center)
-            dashX += 29
-        }
-        PanelIcons.popup(NSRect(x: rect.minX, y: rect.minY + 182, width: rect.width * 0.48, height: 20), title: "箭头")
-        PanelIcons.popup(NSRect(x: rect.minX + rect.width * 0.52, y: rect.minY + 182, width: rect.width * 0.48, height: 20), title: "配置文件")
-    }
-
-    @discardableResult
-    private func iconRow(_ count: Int, y: CGFloat, selected: Int = -1, draw: (Int, NSRect) -> Void) -> CGFloat {
-        var x: CGFloat = 8
-        let width: CGFloat = count >= 6 ? 26 : 28
-        for index in 0..<count {
-            let rect = NSRect(x: x, y: y, width: width, height: 22)
-            PanelIcons.well(rect, selected: index == selected)
-            draw(index, rect.insetBy(dx: 1, dy: 1))
-            x += width + 4
-        }
-        return x
-    }
-
-    private func caption(_ text: String, y: CGFloat) {
-        (text as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: Theme.dim
-        ])
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        CanvasFocus.restore(in: window)
-        let point = convert(event.locationInWindow, from: nil)
-        if point.y < appearanceHeight {
-            if NSRect(x: 8, y: 48, width: 18, height: 16).contains(point) { strokeVisible.toggle() }
-            if NSRect(x: 8, y: 70, width: 18, height: 16).contains(point) { fillVisible.toggle() }
-        } else if point.y < alignY + alignHeight {
-            let localX = point.x
-            let tab = tabIndex(["变换", "对齐", "路径查找器"], x: localX)
-            if point.y < alignY + 22, let tab { groupTab = tab }
-            else if groupTab == 1, let index = iconIndex(count: 6, y: alignY + 26 + 16, point: point) {
-                let names = ["水平左对齐", "水平居中对齐", "水平右对齐", "垂直顶对齐", "垂直居中对齐", "垂直底对齐"]
-                workspace?.perform(names[index])
-            } else if groupTab == 1, point.y > alignY + 160 {
-                alignTarget = (alignTarget + 1) % alignTargets.count
-            }
-        } else {
-            if point.y < strokeY + 22 {
-                let tab = tabIndex(["描边", "透明度"], x: point.x)
-                if let tab { strokeTab = tab }
-            } else if strokeTab == 0 {
-                if let index = iconIndex(count: 3, y: strokeY + 26 + 42, point: point, width: 28) { cap = index }
-                if let index = iconIndex(count: 3, y: strokeY + 26 + 86, point: point, width: 28) { corner = index }
-                if let index = iconIndex(count: 3, y: strokeY + 26 + 130, point: point, width: 28) { strokePlace = index }
-                if point.x < 28, abs(point.y - (strokeY + 186)) < 14 { dashed.toggle() }
-            }
-        }
-        needsDisplay = true
-        needsLayout = true
-        workspace?.touch()
-    }
-
-    private func tabIndex(_ titles: [String], x: CGFloat) -> Int? {
-        var cursor: CGFloat = 8
-        let font = Theme.ui(11, weight: .semibold)
-        for (index, title) in titles.enumerated() {
-            let width = (title as NSString).size(withAttributes: [.font: font]).width + 10
-            if x >= cursor && x < cursor + width { return index }
-            cursor += width
-        }
-        return nil
-    }
-
-    private func iconIndex(count: Int, y: CGFloat, point: NSPoint, width: CGFloat = 26) -> Int? {
-        guard abs(point.y - (y + 11)) < 14 else { return nil }
-        let index = Int((point.x - 8) / (width + 4))
-        return (0..<count).contains(index) ? index : nil
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        Hover.install(on: self)
-    }
-
-    override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }
-
-    override func mouseMoved(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        guard let tip = panelTip(at: point) else { RichTooltip.shared.hide(); return }
-        RichTooltip.shared.show(from: self, localPoint: point, title: tip.0, body: tip.1)
-    }
-
-    private func panelTip(at point: NSPoint) -> (String, String)? {
-        if point.y < appearanceHeight {
-            if point.y < 48 { return ("外观", "当前对象的填色、描边和不透明度。") }
-            if point.y < 66 { return ("描边", "显示或隐藏描边，单击色块更改描边色。") }
-            if point.y < 88 { return ("填色", "显示或隐藏填色，单击色块更改填色。") }
-            return ("不透明度", "选择对象的不透明度混合。")
-        }
-        if point.y < alignY + alignHeight {
-            if point.y < alignY + 22 { return ("面板菜单", "切换变换、对齐和路径查找器。") }
-            if groupTab == 1 {
-                let names = ["水平左对齐", "水平居中对齐", "水平右对齐", "垂直顶对齐", "垂直居中对齐", "垂直底对齐"]
-                if let index = iconIndex(count: 6, y: alignY + 42, point: point) {
-                    return (names[index], "按所选对象或画板对齐。")
-                }
-                if iconIndex(count: 6, y: alignY + 88, point: point) != nil {
-                    return ("分布对象", "使所选对象的间距或边缘均匀分布。")
-                }
-                if iconIndex(count: 2, y: alignY + 134, point: point, width: 28) != nil {
-                    return ("分布间距", "按输入的间距分布对象。")
-                }
-                return ("对齐", "选择对齐目标：所选对象、画板或关键对象。")
-            }
-            return ("变换", "查看和更改位置与大小。")
-        }
-        if point.y < strokeY + 22 { return ("描边", "打开描边或透明度设置。右上角是面板菜单。") }
-        if strokeTab != 0 { return ("透明度", "设置不透明度和混合模式。") }
-        if iconIndex(count: 3, y: strokeY + 68, point: point, width: 28) != nil {
-            return ("端点", "平头、圆头或方头端点。")
-        }
-        if iconIndex(count: 3, y: strokeY + 112, point: point, width: 28) != nil {
-            return ("边角", "尖角、圆角或斜角。")
-        }
-        if iconIndex(count: 3, y: strokeY + 156, point: point, width: 28) != nil {
-            return ("对齐描边", "描边居中、内侧或外侧。")
-        }
-        if point.y > strokeY + 170 && point.y < strokeY + 200 {
-            return ("虚线", "勾选后用六个数值设置线段和间隙。")
-        }
-        return ("描边", "设置粗细、箭头和宽度配置文件。")
-    }
-}
-
 final class PropertiesDock: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
     weak var workspace: Workspace?
@@ -621,9 +340,21 @@ final class PropertiesDock: NSView {
         nudgeField.convert(NSPoint(x: nudgeField.bounds.midX, y: nudgeField.bounds.midY), to: self)
     }
 
+    private var usePreviewBounds = true
+    private var scaleCorners = false
+    private var scaleEffects = false
+    private var unitRect = NSRect.zero
+    private var boardRect = NSRect.zero
+    private var editRect = NSRect.zero
+    private var rulerRects: [NSRect] = []
+    private var guideRects: [NSRect] = []
+    private var alignRects: [NSRect] = []
+    private var prefRects: [NSRect] = []
+    private var quickRects: [NSRect] = []
+
     override func layout() {
         super.layout()
-        nudgeField.frame = NSRect(x: max(0, bounds.width - 108), y: 442, width: 80, height: 22)
+        placeControls()
         nudgeField.isHidden = tab != "属性"
     }
 
@@ -636,11 +367,33 @@ final class PropertiesDock: NSView {
         nudgeField.stringValue = "\(Int(model.nudge)) pt"
     }
 
-    private var usePreviewBounds = true
-    private var scaleCorners = false
-    private var scaleEffects = false
+    private func placeControls() {
+        let left: CGFloat = 12
+        unitRect = NSRect(x: 72, y: 88, width: max(80, bounds.width - 84), height: 22)
+        boardRect = NSRect(x: 72, y: 114, width: max(80, bounds.width - 84), height: 22)
+        editRect = NSRect(x: left, y: 140, width: min(148, bounds.width - 24), height: 26)
+        rulerRects = iconSlots(6, x: left, y: 200)
+        guideRects = iconSlots(5, x: left, y: 256)
+        alignRects = iconSlots(3, x: left, y: 312)
+        prefRects = iconSlots(3, x: left, y: 368)
+        nudgeField.frame = NSRect(x: max(left, bounds.width - 100), y: 404, width: 84, height: 22)
+        let quickW = min(124, (bounds.width - 36) / 2)
+        quickRects = [
+            NSRect(x: left, y: 460, width: quickW, height: 28),
+            NSRect(x: left + quickW + 8, y: 460, width: quickW, height: 28)
+        ]
+    }
+
+    private func iconSlots(_ count: Int, x: CGFloat, y: CGFloat) -> [NSRect] {
+        let side: CGFloat = 28
+        let gap: CGFloat = 6
+        return (0..<count).map { index in
+            NSRect(x: x + CGFloat(index) * (side + gap), y: y, width: side, height: 26)
+        }
+    }
 
     override func draw(_ dirtyRect: NSRect) {
+        if rulerRects.isEmpty { placeControls() }
         Theme.panel.setFill()
         bounds.fill()
         var x: CGFloat = 8
@@ -672,32 +425,159 @@ final class PropertiesDock: NSView {
         section("文档", y: 66)
         labeledPopup("单位", unit, y: 88)
         labeledPopup("画板", board, y: 114)
-        PanelIcons.well(NSRect(x: 12, y: 140, width: 28, height: 24), selected: false)
-        PanelIcons.artboard(in: NSRect(x: 16, y: 143, width: 20, height: 18))
-        ("编辑画板" as NSString).draw(at: NSPoint(x: 46, y: 144), withAttributes: [
+        PanelIcons.well(editRect, selected: model.tool == .artboard)
+        PanelIcons.artboard(in: NSRect(x: editRect.minX + 6, y: editRect.minY + 4, width: 18, height: 16))
+        ("编辑画板" as NSString).draw(at: NSPoint(x: editRect.minX + 30, y: editRect.minY + 5), withAttributes: [
             .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
-        section("标尺与网格", y: 176)
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 198), on: model.showRulers, title: "显示标尺")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 220), on: model.showGrid, title: "显示网格")
-        section("参考线", y: 250)
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 272), on: model.showGuides, title: "显示参考线")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 294), on: model.lockGuides, title: "锁定参考线")
-        section("对齐选项", y: 324)
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 346), on: model.snapGrid, title: "对齐网格")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 368), on: model.snapPoint, title: "对齐点")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 390), on: model.smartGuides, title: "智能参考线")
-        section("首选项", y: 420)
-        ("键盘增量" as NSString).draw(at: NSPoint(x: 12, y: 446), withAttributes: [
+        section("标尺与网格", y: 178)
+        let rulerOn = [model.showRulers, model.artboardRulers, model.showGrid, model.transparencyGrid, model.showArtboards, model.showBoundingBox]
+        drawIconRow(rulerRects, on: rulerOn) { index, rect in self.rulerGlyph(index, in: rect) }
+        section("参考线", y: 234)
+        let guideOn = [model.showGuides, model.lockGuides, false, false, model.showPerspective]
+        drawIconRow(guideRects, on: guideOn) { index, rect in self.guideGlyph(index, in: rect) }
+        section("对齐选项", y: 290)
+        let alignOn = [model.snapGrid, model.snapPoint, model.smartGuides]
+        drawIconRow(alignRects, on: alignOn) { index, rect in self.alignGlyph(index, in: rect) }
+        section("首选项", y: 346)
+        drawIconRow(prefRects, on: [usePreviewBounds, scaleCorners, scaleEffects]) { index, rect in self.prefGlyph(index, in: rect) }
+        ("键盘增量" as NSString).draw(at: NSPoint(x: 12, y: 408), withAttributes: [
             .font: Theme.ui(12), .foregroundColor: Theme.text
         ])
-        PanelIcons.stepper(NSRect(x: bounds.width - 108, y: 442, width: 96, height: 22), title: "\(Int(model.nudge)) pt")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 472), on: usePreviewBounds, title: "使用预览边界")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 494), on: scaleCorners, title: "缩放圆角")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 516), on: scaleEffects, title: "缩放描边和效果")
-        section("快速操作", y: 546)
-        quickButton(NSRect(x: 12, y: 570, width: 120, height: 26), draw: { PanelIcons.gear(in: $0) }, title: "文档设置")
-        quickButton(NSRect(x: 140, y: 570, width: 110, height: 26), draw: { PanelIcons.sliders(in: $0) }, title: "首选项")
+        section("快速操作", y: 438)
+        if quickRects.count == 2 {
+            quickButton(quickRects[0], draw: { PanelIcons.gear(in: $0) }, title: "文档设置")
+            quickButton(quickRects[1], draw: { PanelIcons.sliders(in: $0) }, title: "首选项")
+        }
+    }
+
+    private func drawIconRow(_ rects: [NSRect], on: [Bool], draw: (Int, NSRect) -> Void) {
+        for (index, rect) in rects.enumerated() {
+            let selected = on.indices.contains(index) && on[index]
+            Theme.field.setFill()
+            let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+            path.fill()
+            (selected ? Theme.accent : Theme.fieldBorder).setStroke()
+            path.lineWidth = selected ? 1.4 : 1
+            path.stroke()
+            draw(index, rect.insetBy(dx: 5, dy: 4))
+        }
+    }
+
+    private func rulerGlyph(_ index: Int, in rect: NSRect) {
+        Theme.icon.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        switch index {
+        case 0:
+            path.move(to: NSPoint(x: rect.minX, y: rect.midY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
+            for step in 0..<4 {
+                let x = rect.minX + CGFloat(step) * rect.width / 3
+                path.move(to: NSPoint(x: x, y: rect.midY))
+                path.line(to: NSPoint(x: x, y: rect.minY + 1))
+            }
+        case 1:
+            path.appendRect(rect.insetBy(dx: 1, dy: 2))
+            path.move(to: NSPoint(x: rect.minX + 1, y: rect.maxY - 3))
+            path.line(to: NSPoint(x: rect.maxX - 1, y: rect.maxY - 3))
+        case 2:
+            path.appendRect(rect.insetBy(dx: 1, dy: 1))
+            path.move(to: NSPoint(x: rect.midX, y: rect.minY + 1))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY - 1))
+            path.move(to: NSPoint(x: rect.minX + 1, y: rect.midY))
+            path.line(to: NSPoint(x: rect.maxX - 1, y: rect.midY))
+        case 3:
+            path.appendRect(rect.insetBy(dx: 1, dy: 1))
+            Theme.icon.setFill()
+            NSBezierPath(rect: NSRect(x: rect.minX + 1, y: rect.minY + 1, width: rect.width / 2, height: rect.height / 2)).fill()
+            NSBezierPath(rect: NSRect(x: rect.midX, y: rect.midY, width: rect.width / 2 - 1, height: rect.height / 2 - 1)).fill()
+        case 4:
+            path.appendRect(rect.insetBy(dx: 1, dy: 2))
+        default:
+            let pattern: [CGFloat] = [2, 1.5]
+            path.appendRect(rect.insetBy(dx: 1, dy: 2))
+            pattern.withUnsafeBufferPointer { path.setLineDash($0.baseAddress, count: 2, phase: 0) }
+        }
+        path.stroke()
+    }
+
+    private func guideGlyph(_ index: Int, in rect: NSRect) {
+        Theme.icon.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        path.lineCapStyle = .round
+        switch index {
+        case 0:
+            path.move(to: NSPoint(x: rect.midX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY))
+            path.move(to: NSPoint(x: rect.minX, y: rect.midY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
+        case 1:
+            path.appendRoundedRect(NSRect(x: rect.minX + 2, y: rect.minY, width: rect.width - 4, height: rect.height * 0.55), xRadius: 1, yRadius: 1)
+            path.appendOval(in: NSRect(x: rect.midX - 3, y: rect.midY, width: 6, height: 6))
+        case 2:
+            path.move(to: NSPoint(x: rect.midX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY))
+            path.move(to: NSPoint(x: rect.minX, y: rect.midY))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY - 1))
+        case 3:
+            path.move(to: NSPoint(x: rect.midX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY))
+            path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.maxY))
+        default:
+            path.appendRect(rect.insetBy(dx: 1, dy: 2))
+            path.move(to: NSPoint(x: rect.minX + 3, y: rect.minY + 3))
+            path.line(to: NSPoint(x: rect.maxX - 3, y: rect.maxY - 3))
+        }
+        path.stroke()
+    }
+
+    private func alignGlyph(_ index: Int, in rect: NSRect) {
+        Theme.icon.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        switch index {
+        case 0:
+            path.appendRect(rect.insetBy(dx: 1, dy: 1))
+            path.move(to: NSPoint(x: rect.midX, y: rect.minY + 1))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY - 1))
+            path.move(to: NSPoint(x: rect.minX + 1, y: rect.midY))
+            path.line(to: NSPoint(x: rect.maxX - 1, y: rect.midY))
+        case 1:
+            path.move(to: NSPoint(x: rect.minX, y: rect.maxY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
+            Theme.icon.setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.midX - 1.6, y: rect.midY - 1.6, width: 3.2, height: 3.2)).fill()
+        default:
+            path.move(to: NSPoint(x: rect.minX, y: rect.minY + 2))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.minY + 2))
+            path.move(to: NSPoint(x: rect.minX, y: rect.maxY - 2))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - 2))
+            path.move(to: NSPoint(x: rect.midX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY))
+        }
+        path.stroke()
+    }
+
+    private func prefGlyph(_ index: Int, in rect: NSRect) {
+        Theme.icon.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        switch index {
+        case 0:
+            let pattern: [CGFloat] = [2, 1.4]
+            path.appendRect(rect.insetBy(dx: 1, dy: 2))
+            pattern.withUnsafeBufferPointer { path.setLineDash($0.baseAddress, count: 2, phase: 0) }
+        case 1:
+            path.appendRoundedRect(rect.insetBy(dx: 1, dy: 2), xRadius: 3, yRadius: 3)
+        default:
+            path.move(to: NSPoint(x: rect.minX, y: rect.midY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
+            path.lineWidth = 2.4
+        }
+        path.stroke()
     }
 
     private func section(_ title: String, y: CGFloat) {
@@ -745,35 +625,47 @@ final class PropertiesDock: NSView {
         }
         CanvasFocus.restore(in: window)
         guard tab == "属性", let workspace else { return }
+        placeControls()
         let model = workspace.active.model
-        if NSRect(x: 72, y: 88, width: bounds.width - 84, height: 22).contains(point) {
+        if unitRect.contains(point) {
             let order: [UnitKind] = [.mm, .pt, .px, .inch]
             let index = order.firstIndex(of: model.document.units) ?? 0
             model.document.units = order[(index + 1) % order.count]
-        } else if NSRect(x: 12, y: 140, width: 120, height: 24).contains(point) {
+            model.status = "单位 \(Self.unitName(model.document.units))"
+        } else if boardRect.contains(point) {
+            let count = model.document.artboards.count
+            if count > 0 {
+                model.document.activeArtboard = (model.document.activeArtboard + 1) % count
+                model.status = model.document.artboards[model.document.activeArtboard].name
+            }
+        } else if editRect.contains(point) {
             model.tool = .artboard
-        } else if hit(point, y: 198) { workspace.perform("显示标尺") }
-        else if hit(point, y: 220) { workspace.perform("显示网格") }
-        else if hit(point, y: 272) { workspace.perform("隐藏参考线") }
-        else if hit(point, y: 294) { workspace.perform("锁定参考线") }
-        else if hit(point, y: 346) { workspace.perform("对齐网格") }
-        else if hit(point, y: 368) { workspace.perform("对齐点") }
-        else if hit(point, y: 390) { workspace.perform("显示/隐藏智能参考线") }
-        else if NSRect(x: bounds.width - 108, y: 442, width: 96, height: 22).contains(point) {
-            model.nudge = min(64, model.nudge + (point.x > bounds.width - 20 ? 1 : -1))
-        } else if hit(point, y: 472) { usePreviewBounds.toggle() }
-        else if hit(point, y: 494) { scaleCorners.toggle() }
-        else if hit(point, y: 516) { scaleEffects.toggle() }
-        else if NSRect(x: 12, y: 570, width: 120, height: 26).contains(point) {
-            workspace.perform("打开“文档设置”对话框")
-        } else if NSRect(x: 140, y: 570, width: 110, height: 26).contains(point) {
-            workspace.perform("打开“偏好设置”对话框")
+            model.status = "编辑画板"
+        } else if let index = rulerRects.firstIndex(where: { $0.contains(point) }) {
+            let names = ["显示标尺", "显示/隐藏画板标尺", "显示网格", "显示透明网格", "显示/隐藏画板", "隐藏定界框"]
+            _ = workspace.perform(names[index])
+        } else if let index = guideRects.firstIndex(where: { $0.contains(point) }) {
+            let names = ["隐藏参考线", "锁定参考线", "建立参考线", "释放参考线", "显示/隐藏透视网格"]
+            _ = workspace.perform(names[index])
+        } else if let index = alignRects.firstIndex(where: { $0.contains(point) }) {
+            let names = ["对齐网格", "对齐点", "显示/隐藏智能参考线"]
+            _ = workspace.perform(names[index])
+        } else if prefRects.indices.contains(0), prefRects[0].contains(point) {
+            usePreviewBounds.toggle()
+            model.status = usePreviewBounds ? "使用预览边界" : "使用几何边界"
+        } else if prefRects.indices.contains(1), prefRects[1].contains(point) {
+            scaleCorners.toggle()
+            model.status = scaleCorners ? "缩放圆角" : "不缩放圆角"
+        } else if prefRects.indices.contains(2), prefRects[2].contains(point) {
+            scaleEffects.toggle()
+            model.status = scaleEffects ? "缩放描边和效果" : "不缩放描边和效果"
+        } else if quickRects.indices.contains(0), quickRects[0].contains(point) {
+            _ = workspace.perform("打开“文档设置”对话框")
+        } else if quickRects.indices.contains(1), quickRects[1].contains(point) {
+            _ = workspace.perform("打开“偏好设置”对话框")
         }
         workspace.touch()
-    }
-
-    private func hit(_ point: NSPoint, y: CGFloat) -> Bool {
-        NSRect(x: 8, y: y - 2, width: bounds.width - 16, height: 18).contains(point)
+        needsDisplay = true
     }
 
     override func updateTrackingAreas() {
@@ -903,8 +795,12 @@ private struct DocPreset {
 /// Left padding for the new-document fields. The system bezel is not used.
 final class DialogFieldCell: NSTextFieldCell {
     override func drawingRect(forBounds rect: NSRect) -> NSRect {
-        let box = super.drawingRect(forBounds: rect)
-        return NSRect(x: box.minX + 6, y: box.minY, width: max(0, box.width - 10), height: box.height)
+        let font = self.font ?? Theme.ui(12)
+        let sample = (stringValue.isEmpty ? "0" : stringValue) as NSString
+        let size = sample.size(withAttributes: [.font: font])
+        let y = rect.minY + max(0, (rect.height - size.height) / 2)
+        let inset: CGFloat = alignment == .center ? 2 : 8
+        return NSRect(x: rect.minX + inset, y: y, width: max(0, rect.width - inset * 2), height: size.height)
     }
 
     override func titleRect(forBounds rect: NSRect) -> NSRect {
@@ -1202,6 +1098,10 @@ final class NewDocSheet: NSView {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
         appearance = NSAppearance(named: .darkAqua)
+        for field in [widthField, heightField, countField, bleedTop, bleedBottom, bleedLeft, bleedRight] {
+            field.alignment = .center
+            (field.cell as? NSTextFieldCell)?.alignment = .center
+        }
         for field in [nameField, widthField, heightField, countField, bleedTop, bleedBottom, bleedLeft, bleedRight] {
             addSubview(field)
         }
@@ -1328,60 +1228,60 @@ final class NewDocSheet: NSView {
     }
 
     private func layoutDetails() {
-        let pad: CGFloat = 20
+        let pad: CGFloat = 14
         let x = bounds.width - Self.detailWidth + pad
-        let width = Self.detailWidth - pad * 2
-        var top = bounds.height - Self.tabHeight - 16
+        let width = Self.detailWidth - pad - 18
+        var top = bounds.height - Self.tabHeight - 14
 
         func place(_ label: NSTextField) {
             label.isHidden = false
             label.frame = NSRect(x: x, y: top - 14, width: width, height: 14)
-            top -= 16
+            top -= 18
         }
 
         place(sectionLabel)
         place(nameLabel)
         let save: CGFloat = 28
-        nameField.frame = NSRect(x: x, y: top - 24, width: width - save - 8, height: 24)
-        saveRect = NSRect(x: x + width - save, y: top - 24, width: save, height: 24)
-        top -= 32
+        nameField.frame = NSRect(x: x, y: top - 22, width: width - save - 6, height: 22)
+        saveRect = NSRect(x: x + width - 22, y: top - 22, width: 22, height: 22)
+        top -= 34
 
         let column = (width - 8) / 2
         widthLabel.isHidden = false
         heightLabel.isHidden = false
         widthLabel.frame = NSRect(x: x, y: top - 14, width: column, height: 14)
         heightLabel.frame = NSRect(x: x + column + 8, y: top - 14, width: column, height: 14)
-        top -= 16
-        widthField.frame = NSRect(x: x, y: top - 24, width: column, height: 24)
-        heightField.frame = NSRect(x: x + column + 8, y: top - 24, width: column, height: 24)
-        top -= 32
+        top -= 18
+        widthField.frame = NSRect(x: x, y: top - 22, width: column, height: 22)
+        heightField.frame = NSRect(x: x + column + 8, y: top - 22, width: column, height: 22)
+        top -= 34
 
         place(unitLabel)
-        unitRect = NSRect(x: x, y: top - 24, width: width, height: 24)
-        top -= 32
+        unitRect = NSRect(x: x, y: top - 22, width: width, height: 22)
+        top -= 34
 
         place(orientLabel)
-        portraitRect = NSRect(x: x, y: top - 32, width: 88, height: 32)
-        landscapeRect = NSRect(x: x + 96, y: top - 32, width: 88, height: 32)
-        top -= 40
+        portraitRect = NSRect(x: x, y: top - 30, width: 32, height: 30)
+        landscapeRect = NSRect(x: x + 38, y: top - 30, width: 32, height: 30)
+        top -= 42
 
         place(countLabel)
-        countField.frame = NSRect(x: x, y: top - 24, width: width, height: 24)
-        top -= 32
+        countField.frame = NSRect(x: x, y: top - 22, width: width, height: 22)
+        top -= 34
 
         place(bleedLabel)
-        let box: CGFloat = 56
-        topLabel.frame = NSRect(x: x, y: top - 18, width: 14, height: 16)
-        bleedTop.frame = NSRect(x: x + 16, y: top - 24, width: box, height: 24)
-        bottomLabel.frame = NSRect(x: x + 80, y: top - 18, width: 14, height: 16)
-        bleedBottom.frame = NSRect(x: x + 96, y: top - 24, width: box, height: 24)
-        linkRect = NSRect(x: x + width - 24, y: top - 24, width: 24, height: 24)
-        top -= 28
-        leftLabel.frame = NSRect(x: x, y: top - 18, width: 14, height: 16)
-        bleedLeft.frame = NSRect(x: x + 16, y: top - 24, width: box, height: 24)
-        rightLabel.frame = NSRect(x: x + 80, y: top - 18, width: 14, height: 16)
-        bleedRight.frame = NSRect(x: x + 96, y: top - 24, width: box, height: 24)
-        top -= 32
+        let box: CGFloat = 54
+        topLabel.frame = NSRect(x: x, y: top - 18, width: 16, height: 16)
+        bleedTop.frame = NSRect(x: x + 18, y: top - 22, width: box, height: 22)
+        bottomLabel.frame = NSRect(x: x + 80, y: top - 18, width: 16, height: 16)
+        bleedBottom.frame = NSRect(x: x + 98, y: top - 22, width: box, height: 22)
+        linkRect = NSRect(x: x + width - 22, y: top - 22, width: 22, height: 22)
+        top -= 26
+        leftLabel.frame = NSRect(x: x, y: top - 18, width: 16, height: 16)
+        bleedLeft.frame = NSRect(x: x + 18, y: top - 22, width: box, height: 22)
+        rightLabel.frame = NSRect(x: x + 80, y: top - 18, width: 16, height: 16)
+        bleedRight.frame = NSRect(x: x + 98, y: top - 22, width: box, height: 22)
+        top -= 34
 
         advancedLabel.isHidden = false
         advancedRect = NSRect(x: x, y: top - 16, width: width, height: 16)
@@ -1393,13 +1293,13 @@ final class NewDocSheet: NSView {
             rasterLabel.isHidden = false
             previewLabel.isHidden = false
             place(modeLabel)
-            modeRect = NSRect(x: x, y: top - 24, width: width, height: 24)
+            modeRect = NSRect(x: x, y: top - 22, width: width, height: 22)
             top -= 32
             place(rasterLabel)
-            rasterRect = NSRect(x: x, y: top - 24, width: width, height: 24)
+            rasterRect = NSRect(x: x, y: top - 22, width: width, height: 22)
             top -= 32
             place(previewLabel)
-            previewRect = NSRect(x: x, y: top - 24, width: width, height: 24)
+            previewRect = NSRect(x: x, y: top - 22, width: width, height: 22)
             top -= 28
         } else {
             modeLabel.isHidden = true
@@ -1561,16 +1461,12 @@ final class NewDocSheet: NSView {
         path.lineWidth = 1
         path.stroke()
         let page = flag
-            ? NSRect(x: rect.minX + 10, y: rect.minY + 6, width: 12, height: 18)
-            : NSRect(x: rect.minX + 8, y: rect.minY + 8, width: 18, height: 12)
+            ? NSRect(x: rect.midX - 6, y: rect.midY - 9, width: 12, height: 18)
+            : NSRect(x: rect.midX - 9, y: rect.midY - 6, width: 18, height: 12)
         NSColor.white.setFill()
         NSBezierPath(rect: page).fill()
         Theme.dim.setStroke()
         NSBezierPath(rect: page).stroke()
-        let word = flag ? "纵向" : "横向"
-        (word as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.midY - 7), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
-        ])
     }
 
     private func drawSave(_ rect: NSRect) {
@@ -1594,7 +1490,7 @@ final class NewDocSheet: NSView {
 
     private func drawLink(_ rect: NSRect) {
         guard rect.width > 1 else { return }
-        let color: NSColor = bleedLinked ? Theme.focus : Theme.dim
+        let color: NSColor = bleedLinked ? Theme.accent : Theme.dim
         color.setStroke()
         let path = NSBezierPath()
         path.lineWidth = 1.3

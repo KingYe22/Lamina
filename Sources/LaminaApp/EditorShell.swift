@@ -35,7 +35,7 @@ final class EditorShell: NSView {
         let titleBand: CGFloat = 28
         let tabHeight: CGFloat = 28
         let statusHeight: CGFloat = 26
-        let toolWidth: CGFloat = 52
+        let toolWidth: CGFloat = 84
         let dockWidth: CGFloat = 280
         let top = bounds.height - titleBand
         tabs.frame = NSRect(x: 0, y: top - tabHeight, width: bounds.width, height: tabHeight)
@@ -45,13 +45,7 @@ final class EditorShell: NSView {
         toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: bodyH)
         dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: bodyH)
         canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: bodyH)
-        let floaterWidth: CGFloat = 248
-        floaters.frame = NSRect(
-            x: canvas.frame.maxX - floaterWidth - 8,
-            y: canvas.frame.minY + 8,
-            width: floaterWidth,
-            height: max(0, canvas.frame.height - 16)
-        )
+        floaters.frame = canvas.frame
         contextBar.frame = NSRect(x: canvas.frame.midX - 210, y: canvas.frame.maxY - 46, width: 420, height: 32)
     }
 

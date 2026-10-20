@@ -5,52 +5,44 @@ final class IllustratorToolbar: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
     weak var workspace: Workspace?
     private var slots: [ToolSlotButton] = []
-    private let fillControl = FillStrokeWell()
-    private let swatches = SwatchTrio()
-    private let modes = ModeTrio()
+    private var sectionTitles: [(String, CGFloat)] = []
+    private let footer = ToolbarFooter()
     private var shield: NSView?
     private var flyout: ToolFlyoutView?
 
     override var isFlipped: Bool { true }
 
-    static let groups: [[Tool]] = [
-        [.selection, .directSelection, .groupSelection, .magicWand, .lasso],
-        [.pen, .addAnchor, .deleteAnchor, .convertAnchor, .curvature],
-        [.text, .areaText, .pathText, .verticalText, .touchType],
-        [.line, .arc, .spiral, .rectGrid, .polarGrid],
-        [.rectangle, .roundedRectangle, .ellipse, .polygon, .star, .flare],
-        [.brush, .blobBrush],
-        [.pencil, .smooth, .pathEraser, .joinTool, .shaper],
-        [.eraser, .scissors, .knife],
-        [.rotate, .reflect],
-        [.scale, .shear, .reshape],
-        [.freeTransform],
-        [.width],
-        [.gradient, .mesh],
-        [.eyedropper, .measure],
-        [.hand],
-        [.zoom]
+    struct ToolSection {
+        var title: String
+        var left: [Tool]
+        var right: [Tool]
+    }
+
+    static let sections: [ToolSection] = [
+        ToolSection(title: "选择", left: [.selection, .groupSelection, .magicWand], right: [.directSelection, .lasso]),
+        ToolSection(title: "形状", left: [.rectangle, .roundedRectangle, .polygon, .star, .flare], right: [.ellipse, .line, .arc, .spiral]),
+        ToolSection(title: "绘图", left: [.pen, .addAnchor, .deleteAnchor, .convertAnchor, .curvature], right: [.pencil, .smooth, .pathEraser, .joinTool, .brush, .blobBrush]),
+        ToolSection(title: "修改", left: [.rotate, .reflect, .scale, .shear], right: [.freeTransform, .reshape, .width, .eraser]),
+        ToolSection(title: "文字", left: [.text, .areaText, .pathText, .touchType], right: [.verticalText]),
+        ToolSection(title: "导航", left: [.hand], right: [.zoom]),
+        ToolSection(title: "颜色", left: [.eyedropper, .measure], right: [.gradient, .mesh])
     ]
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = Theme.panel.cgColor
-        for tools in Self.groups {
-            let button = ToolSlotButton(tools: tools)
-            button.onSelect = { [weak self] tool in self?.choose(tool) }
-            button.onFlyout = { [weak self] button in self?.showFlyout(for: button) }
-            addSubview(button)
-            slots.append(button)
+        for section in Self.sections {
+            for tools in [section.left, section.right] where !tools.isEmpty {
+                let button = ToolSlotButton(tools: tools)
+                button.onSelect = { [weak self] tool in self?.choose(tool) }
+                button.onFlyout = { [weak self] button in self?.showFlyout(for: button) }
+                addSubview(button)
+                slots.append(button)
+            }
         }
-        addSubview(fillControl)
-        addSubview(swatches)
-        addSubview(modes)
-        fillControl.onFill = { [weak self] in self?.activateFill(true) }
-        fillControl.onStroke = { [weak self] in self?.activateFill(false) }
-        swatches.onColor = { [weak self] in self?.workspace?.perform("选择颜色填充模式") }
-        swatches.onGradient = { [weak self] in self?.workspace?.perform("选择渐变填色模式") }
-        swatches.onNone = { [weak self] in self?.workspace?.perform("选择无描边/填充模式") }
+        footer.onAction = { [weak self] name in self?.footerAction(name) }
+        addSubview(footer)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -62,26 +54,30 @@ final class IllustratorToolbar: NSView {
             slot.isCurrent = slot.tool == current
             slot.needsDisplay = true
         }
-        if let model = workspace?.active.model {
-            fillControl.fill = model.currentFill?.solidColor?.nsColor ?? .white
-            fillControl.stroke = model.currentStroke?.paint.solidColor?.nsColor ?? .black
-            fillControl.fillActive = model.activeAttrIsFill
-            fillControl.needsDisplay = true
-        }
+        footer.sync(workspace?.active.model)
     }
 
     override func layout() {
         super.layout()
-        var y: CGFloat = 4
-        let height: CGFloat = 26
-        for slot in slots {
-            slot.frame = NSRect(x: 2, y: y, width: bounds.width - 4, height: height)
-            y += height
+        let footerH: CGFloat = 196
+        footer.frame = NSRect(x: 0, y: max(0, bounds.height - footerH), width: bounds.width, height: min(footerH, bounds.height))
+        var y: CGFloat = 8
+        let slot: CGFloat = 28
+        sectionTitles = []
+        var index = 0
+        for section in Self.sections {
+            sectionTitles.append((section.title, y))
+            y += 16
+            let columns = [section.left, section.right]
+            for (column, tools) in columns.enumerated() where !tools.isEmpty {
+                guard index < slots.count else { break }
+                let x: CGFloat = column == 0 ? 8 : 44
+                slots[index].frame = NSRect(x: x, y: y, width: slot, height: slot)
+                index += 1
+            }
+            y += slot + 8
+            if y > footer.frame.minY - 6 { break }
         }
-        let bottom = bounds.height
-        modes.frame = NSRect(x: 4, y: bottom - 26, width: bounds.width - 8, height: 22)
-        swatches.frame = NSRect(x: 6, y: bottom - 46, width: bounds.width - 12, height: 16)
-        fillControl.frame = NSRect(x: 8, y: bottom - 96, width: bounds.width - 16, height: 44)
     }
 
     override func updateTrackingAreas() {
@@ -95,16 +91,8 @@ final class IllustratorToolbar: NSView {
             RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(slot.tool), body: ToolTips.body(slot.tool))
             return
         }
-        if fillControl.frame.contains(point) {
-            RichTooltip.shared.show(from: self, localPoint: point, title: "填色与描边", body: "单击前方色块编辑填色，单击后方色块编辑描边。")
-            return
-        }
-        if swatches.frame.contains(point) {
-            RichTooltip.shared.show(from: self, localPoint: point, title: "颜色", body: "颜色、渐变或无。")
-            return
-        }
-        if modes.frame.contains(point) {
-            RichTooltip.shared.show(from: self, localPoint: point, title: "绘图模式与屏幕模式", body: "切换正常绘图、背面绘图、内部绘图，以及屏幕模式。")
+        if footer.frame.contains(point) {
+            RichTooltip.shared.show(from: self, localPoint: point, title: "填色与描边", body: "互换填色和描边，或切回默认的白色填色与黑色描边。下方是颜色、渐变、无、绘图模式、屏幕模式和生成式 AI。")
             return
         }
         RichTooltip.shared.hide()
@@ -115,6 +103,50 @@ final class IllustratorToolbar: NSView {
     override func draw(_ dirtyRect: NSRect) {
         Theme.panel.setFill()
         bounds.fill()
+        for (title, y) in sectionTitles {
+            (title as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
+                .font: Theme.ui(11), .foregroundColor: Theme.dim
+            ])
+        }
+    }
+
+    private func footerAction(_ name: String) {
+        guard let workspace else { return }
+        let model = workspace.active.model
+        switch name {
+        case "填色": activateFill(true)
+        case "描边": activateFill(false)
+        case "绘图模式":
+            model.drawMode = (model.drawMode + 1) % 3
+            model.status = ["正常绘图", "背面绘图", "内部绘图"][model.drawMode]
+            workspace.touch()
+        case "屏幕模式":
+            model.screenMode = (model.screenMode + 1) % 3
+            switch model.screenMode {
+            case 1:
+                model.outline = true
+                model.pixelPreview = false
+                model.status = "轮廓"
+            case 2:
+                model.outline = false
+                model.pixelPreview = true
+                model.status = "像素预览"
+            default:
+                model.outline = false
+                model.pixelPreview = false
+                model.status = "预览"
+            }
+            workspace.touch()
+        case "编辑工具栏":
+            model.toolbarAdvanced.toggle()
+            model.status = model.toolbarAdvanced ? "高级工具栏" : "基本工具栏"
+            workspace.touch()
+        case "生成式 AI":
+            _ = workspace.perform("显示/隐藏 AI")
+        default:
+            _ = workspace.perform(name)
+        }
+        footer.sync(model)
     }
 
     func revealTooltipForShot() {
@@ -307,6 +339,155 @@ final class ToolFlyoutView: NSView {
 final class FlyoutShield: NSView {
     var onClose: (() -> Void)?
     override func mouseDown(with event: NSEvent) { onClose?() }
+}
+
+final class ToolbarFooter: NSView {
+    var onAction: ((String) -> Void)?
+    var fill: NSColor = .white
+    var strokeColor: NSColor = .black
+    var fillActive = true
+    var drawMode = 0
+    var screenMode = 0
+
+    override var isFlipped: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    func sync(_ model: EditorModel?) {
+        guard let model else { return }
+        fill = model.currentFill?.solidColor?.nsColor ?? .white
+        strokeColor = model.currentStroke?.paint.solidColor?.nsColor ?? .black
+        fillActive = model.activeAttrIsFill
+        drawMode = model.drawMode
+        screenMode = model.screenMode
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let back = NSRect(x: 18, y: 8, width: 16, height: 16)
+        let front = NSRect(x: 8, y: 16, width: 16, height: 16)
+        strokeColor.setFill()
+        NSBezierPath(rect: back).fill()
+        NSColor.black.setStroke()
+        NSBezierPath(rect: back).stroke()
+        fill.setFill()
+        NSBezierPath(rect: front).fill()
+        (fillActive ? Theme.accent : NSColor.black).setStroke()
+        let outline = NSBezierPath(rect: front)
+        outline.lineWidth = fillActive ? 1.6 : 1
+        outline.stroke()
+        swapArrows(NSRect(x: 40, y: 12, width: 14, height: 14))
+        defaultMark(NSRect(x: 58, y: 14, width: 14, height: 14))
+
+        chip(NSRect(x: 8, y: 42, width: 20, height: 18), kind: 0)
+        chip(NSRect(x: 32, y: 42, width: 20, height: 18), kind: 1)
+        chip(NSRect(x: 56, y: 42, width: 20, height: 18), kind: 2)
+        iconWell(NSRect(x: 8, y: 68, width: 22, height: 20)) { PanelIcons.drawMode(self.drawMode, in: $0.insetBy(dx: 2, dy: 2)) }
+        iconWell(NSRect(x: 32, y: 68, width: 22, height: 20)) { PanelIcons.screenMode(self.screenMode, in: $0.insetBy(dx: 2, dy: 2)) }
+        iconWell(NSRect(x: 56, y: 68, width: 22, height: 20)) {
+            PanelIcons.ellipsis(in: NSRect(x: $0.midX - 7, y: $0.midY - 2, width: 14, height: 4))
+        }
+        let ai = NSRect(x: (bounds.width - 28) / 2, y: bounds.height - 42, width: 28, height: 28)
+        Theme.accent.setFill()
+        NSBezierPath(ovalIn: ai).fill()
+        NSColor.white.setStroke()
+        let spark = NSBezierPath()
+        spark.lineWidth = 1.3
+        spark.lineCapStyle = .round
+        spark.move(to: NSPoint(x: ai.midX, y: ai.minY + 7))
+        spark.line(to: NSPoint(x: ai.midX, y: ai.maxY - 7))
+        spark.move(to: NSPoint(x: ai.minX + 7, y: ai.midY))
+        spark.line(to: NSPoint(x: ai.maxX - 7, y: ai.midY))
+        spark.move(to: NSPoint(x: ai.minX + 10, y: ai.minY + 10))
+        spark.line(to: NSPoint(x: ai.maxX - 10, y: ai.maxY - 10))
+        spark.stroke()
+    }
+
+    private func swapArrows(_ rect: NSRect) {
+        Theme.icon.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        path.lineCapStyle = .round
+        path.move(to: NSPoint(x: rect.minX, y: rect.midY + 3))
+        path.line(to: NSPoint(x: rect.maxX - 2, y: rect.midY + 3))
+        path.move(to: NSPoint(x: rect.maxX - 5, y: rect.midY + 6))
+        path.line(to: NSPoint(x: rect.maxX - 2, y: rect.midY + 3))
+        path.line(to: NSPoint(x: rect.maxX - 5, y: rect.midY))
+        path.move(to: NSPoint(x: rect.maxX, y: rect.midY - 3))
+        path.line(to: NSPoint(x: rect.minX + 2, y: rect.midY - 3))
+        path.move(to: NSPoint(x: rect.minX + 5, y: rect.midY - 6))
+        path.line(to: NSPoint(x: rect.minX + 2, y: rect.midY - 3))
+        path.line(to: NSPoint(x: rect.minX + 5, y: rect.midY))
+        path.stroke()
+    }
+
+    private func defaultMark(_ rect: NSRect) {
+        NSColor.white.setFill()
+        NSBezierPath(rect: NSRect(x: rect.minX + 3, y: rect.minY, width: 10, height: 10)).fill()
+        NSColor.black.setFill()
+        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.minY + 4, width: 10, height: 10)).fill()
+        NSColor.black.setStroke()
+        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.minY + 4, width: 10, height: 10)).stroke()
+    }
+
+    private func chip(_ rect: NSRect, kind: Int) {
+        Theme.field.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
+        Theme.fieldBorder.setStroke()
+        NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).stroke()
+        let inner = rect.insetBy(dx: 4, dy: 4)
+        switch kind {
+        case 0:
+            NSColor.white.setFill()
+            NSBezierPath(rect: inner).fill()
+            NSColor.black.setStroke()
+            NSBezierPath(rect: inner).stroke()
+        case 1:
+            NSColor.white.setFill()
+            NSBezierPath(rect: inner).fill()
+            Theme.accent.setFill()
+            NSBezierPath(rect: NSRect(x: inner.minX, y: inner.minY, width: inner.width * 0.45, height: inner.height)).fill()
+        default:
+            NSColor.white.setFill()
+            NSBezierPath(rect: inner).fill()
+            NSColor.systemRed.setStroke()
+            let slash = NSBezierPath()
+            slash.lineWidth = 1.3
+            slash.move(to: NSPoint(x: inner.minX, y: inner.maxY))
+            slash.line(to: NSPoint(x: inner.maxX, y: inner.minY))
+            slash.stroke()
+        }
+    }
+
+    private func iconWell(_ rect: NSRect, draw: (NSRect) -> Void) {
+        Theme.field.setFill()
+        NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
+        draw(rect.insetBy(dx: 1, dy: 1))
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if NSRect(x: 8, y: 8, width: 28, height: 26).contains(point) {
+            onAction?(point.x > 20 && point.y < 20 ? "描边" : "填色")
+        } else if NSRect(x: 38, y: 8, width: 18, height: 22).contains(point) {
+            onAction?("互换填色和描边")
+        } else if NSRect(x: 56, y: 10, width: 18, height: 20).contains(point) {
+            onAction?("把填色和描边设置为默认")
+        } else if NSRect(x: 8, y: 42, width: 20, height: 18).contains(point) {
+            onAction?("选择颜色填充模式")
+        } else if NSRect(x: 32, y: 42, width: 20, height: 18).contains(point) {
+            onAction?("选择渐变填色模式")
+        } else if NSRect(x: 56, y: 42, width: 20, height: 18).contains(point) {
+            onAction?("选择无描边/填充模式")
+        } else if NSRect(x: 8, y: 68, width: 22, height: 20).contains(point) {
+            onAction?("绘图模式")
+        } else if NSRect(x: 32, y: 68, width: 22, height: 20).contains(point) {
+            onAction?("屏幕模式")
+        } else if NSRect(x: 56, y: 68, width: 22, height: 20).contains(point) {
+            onAction?("编辑工具栏")
+        } else if NSRect(x: (bounds.width - 28) / 2, y: bounds.height - 42, width: 28, height: 28).contains(point) {
+            onAction?("生成式 AI")
+        }
+    }
 }
 
 final class FillStrokeWell: NSView {
