@@ -4,7 +4,9 @@
 extern int LaminaConsumeEvent(void *event);
 
 /// Referenced from main so the linker keeps this class. Nothing else mentions it.
-void LaminaApplicationAnchor(void) {}
+void LaminaApplicationAnchor(void) {
+    (void)[LaminaApplication class];
+}
 
 @interface LaminaApplication : NSApplication
 @end
