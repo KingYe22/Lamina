@@ -400,8 +400,8 @@ final class PropertiesDock: NSView {
         bounds.fill()
         var x: CGFloat = 8
         for name in tabs {
-            let font = Theme.ui(12, weight: name == tab ? .semibold : .regular)
-            let color = name == tab ? Theme.text : Theme.dim
+            let font = Theme.ui(13, weight: name == tab ? .semibold : .regular)
+            let color = name == tab ? Theme.color(0xD1D1D1) : Theme.color(0xC2C2C2)
             (name as NSString).draw(at: NSPoint(x: x, y: 8), withAttributes: [.font: font, .foregroundColor: color])
             if name == tab {
                 Theme.accent.setFill()
@@ -421,8 +421,8 @@ final class PropertiesDock: NSView {
         let board = model.document.artboards.indices.contains(model.document.activeArtboard)
             ? model.document.artboards[model.document.activeArtboard].name
             : "画板 1"
-        ("未选择对象" as NSString).draw(at: NSPoint(x: 12, y: 40), withAttributes: [
-            .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
+        ("未选择对象" as NSString).draw(at: NSPoint(x: 12, y: 36), withAttributes: [
+            .font: Theme.ui(14, weight: .semibold), .foregroundColor: Theme.color(0xD1D1D1)
         ])
         section("文档", y: 66)
         labeledPopup("单位", unit, y: 88)
@@ -596,16 +596,16 @@ final class PropertiesDock: NSView {
 
     private func section(_ title: String, y: CGFloat) {
         (title as NSString).draw(at: NSPoint(x: 12, y: y), withAttributes: [
-            .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
+            .font: Theme.ui(14, weight: .semibold), .foregroundColor: Theme.color(0xD1D1D1)
         ])
     }
 
     private func labeledPopup(_ label: String, _ value: String, y: CGFloat) {
-        let font = Theme.ui(12)
+        let font = Theme.ui(13)
         let size = (label as NSString).size(withAttributes: [.font: font])
         let labelRight: CGFloat = 56
-        (label as NSString).draw(at: NSPoint(x: labelRight - size.width, y: y + 3), withAttributes: [
-            .font: font, .foregroundColor: Theme.dim
+        (label as NSString).draw(at: NSPoint(x: labelRight - size.width, y: y + 2), withAttributes: [
+            .font: font, .foregroundColor: Theme.color(0xD1D1D1)
         ])
         PanelIcons.popup(NSRect(x: labelRight + 8, y: y, width: bounds.width - labelRight - 20, height: 22), title: value)
     }
@@ -613,8 +613,8 @@ final class PropertiesDock: NSView {
     private func quickButton(_ rect: NSRect, draw: (NSRect) -> Void, title: String) {
         PanelIcons.well(rect, selected: false)
         draw(NSRect(x: rect.minX + 4, y: rect.minY + 4, width: 16, height: 16))
-        (title as NSString).draw(at: NSPoint(x: rect.minX + 24, y: rect.minY + 5), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: Theme.text
+        (title as NSString).draw(at: NSPoint(x: rect.minX + 24, y: rect.minY + 4), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: Theme.color(0xD1D1D1)
         ])
     }
 

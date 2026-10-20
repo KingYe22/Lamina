@@ -159,8 +159,8 @@ final class FloatPanel: NSView {
         Theme.line.setFill()
         NSRect(x: 0, y: titleHeight - 1, width: bounds.width, height: 1).fill()
         let title = (collapsed ? tabs.map(\.rawValue).joined(separator: " / ") : active.rawValue) as NSString
-        title.draw(at: NSPoint(x: 10, y: 6), withAttributes: [
-            .font: Theme.ui(12, weight: .semibold), .foregroundColor: Theme.text
+        title.draw(at: NSPoint(x: 10, y: 8), withAttributes: [
+            .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xF3F3F3)
         ])
         drawGlyph("«", NSRect(x: bounds.width - 46, y: 4, width: 16, height: 16))
         drawGlyph("×", NSRect(x: bounds.width - 24, y: 3, width: 16, height: 16))
@@ -169,8 +169,8 @@ final class FloatPanel: NSView {
             var x: CGFloat = 8
             for tab in tabs {
                 let on = tab == active
-                let font = Theme.ui(11, weight: on ? .semibold : .regular)
-                let color: NSColor = on ? Theme.text : Theme.dim
+                let font = Theme.ui(12, weight: on ? .semibold : .regular)
+                let color: NSColor = on ? Theme.color(0xF3F3F3) : Theme.color(0xC2C2C2)
                 (tab.rawValue as NSString).draw(at: NSPoint(x: x, y: titleHeight + 4), withAttributes: [
                     .font: font, .foregroundColor: color
                 ])
@@ -215,7 +215,7 @@ final class FloatPanel: NSView {
     private func drawAppearance(_ rect: NSRect) {
         let heading = (workspace?.active.model.selection.isEmpty == false) ? "外观" : "未选择对象"
         (heading as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY), withAttributes: [
-            .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.heading
+            .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xD1D1D1)
         ])
         PanelIcons.eye(in: NSRect(x: rect.minX, y: rect.minY + 24, width: 16, height: 12), open: true)
         let twist = NSBezierPath()
@@ -227,13 +227,13 @@ final class FloatPanel: NSView {
         twist.stroke()
         PanelIcons.swatch(in: NSRect(x: rect.minX + 8, y: rect.minY + 32, width: 18, height: 18), color: .black)
         ("描边：" as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.minY + 32), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: Theme.text
+            .font: Theme.ui(13), .foregroundColor: Theme.color(0xDDDDDD)
         ])
         (strokeDetail() as NSString).draw(at: NSPoint(x: rect.minX + 78, y: rect.minY + 33), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: Theme.dim
+            .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
         ])
         ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 32, y: rect.minY + 62), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: Theme.dim
+            .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
         ])
         let y = rect.maxY - 28
         for index in 0..<4 {
@@ -286,7 +286,7 @@ final class FloatPanel: NSView {
         ])
         if !detail.isEmpty {
             (detail as NSString).draw(at: NSPoint(x: x + 78, y: y), withAttributes: [
-                .font: Theme.ui(11), .foregroundColor: Theme.dim
+                .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
             ])
         }
     }
@@ -297,7 +297,7 @@ final class FloatPanel: NSView {
         for index in 0..<4 {
             let y = rect.minY + CGFloat(index) * 28
             (labels[index] as NSString).draw(at: NSPoint(x: rect.minX, y: y + 2), withAttributes: [
-                .font: Theme.ui(11), .foregroundColor: Theme.dim
+                .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
             ])
             PanelIcons.stepper(NSRect(x: rect.minX + 22, y: y, width: min(140, rect.width - 22), height: 20), title: values[index])
             _ = ink
@@ -336,7 +336,7 @@ final class FloatPanel: NSView {
         let dashY = rect.minY + 126
         PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: dashY + 2), on: !(stroke?.dash.isEmpty ?? true), title: "")
         ("虚线" as NSString).draw(at: NSPoint(x: rect.minX + 18, y: dashY + 2), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: muted
+            .font: Theme.ui(13), .foregroundColor: muted
         ])
         var dashX = rect.minX + 52
         let pattern = stroke?.dash ?? []
@@ -351,7 +351,7 @@ final class FloatPanel: NSView {
         caption("缩放", y: rect.minY + 176, ink: muted)
         PanelIcons.checkbox(at: NSPoint(x: rect.minX + 32, y: rect.minY + 176), on: scaleStrokes, title: "")
         ("对齐" as NSString).draw(at: NSPoint(x: rect.minX + 54, y: rect.minY + 176), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: muted
+            .font: Theme.ui(13), .foregroundColor: muted
         ])
         PanelIcons.popup(NSRect(x: rect.minX + 88, y: rect.minY + 174, width: rect.width - 88, height: 20), title: dashAlign ? "边角" : "无")
         caption("配置文件", y: rect.minY + 202, ink: muted)
@@ -394,18 +394,18 @@ final class FloatPanel: NSView {
 
     private func drawOpacity(_ rect: NSRect, ink: NSColor) {
         ("不透明度" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: ink
+            .font: Theme.ui(13), .foregroundColor: ink
         ])
         PanelIcons.popup(NSRect(x: rect.minX, y: rect.minY + 18, width: rect.width, height: 22), title: "100%")
         ("混合模式" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 50), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: ink
+            .font: Theme.ui(13), .foregroundColor: ink
         ])
         PanelIcons.popup(NSRect(x: rect.minX, y: rect.minY + 68, width: rect.width, height: 22), title: "正常")
     }
 
     private func caption(_ text: String, y: CGFloat, ink: NSColor) {
         (text as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: ink == Theme.text ? Theme.dim : ink
+            .font: Theme.ui(13), .foregroundColor: ink == Theme.text ? Theme.dim : ink
         ])
     }
 
@@ -450,7 +450,7 @@ final class FloatPanel: NSView {
         if !collapsed, tabs.count > 1, point.y < titleHeight + tabHeight, point.y > titleHeight {
             var x: CGFloat = 8
             for tab in tabs {
-                let font = Theme.ui(11, weight: .semibold)
+                let font = Theme.ui(12, weight: .semibold)
                 let width = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
                 if point.x >= x && point.x < x + width {
                     active = tab

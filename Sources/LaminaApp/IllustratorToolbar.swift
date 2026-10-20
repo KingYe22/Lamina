@@ -77,6 +77,9 @@ final class IllustratorToolbar: NSView {
         for slot in slots {
             if let current, slot.tools.contains(current) { slot.tool = current }
             slot.isCurrent = slot.tool == current
+            if let rect = TracedIcons.bounds(for: slot.tool) {
+                slot.frame = rect.insetBy(dx: -0.5, dy: -0.5)
+            }
             slot.needsDisplay = true
         }
         footer.sync(workspace?.active.model)
@@ -84,33 +87,22 @@ final class IllustratorToolbar: NSView {
 
     override func layout() {
         super.layout()
-        // Section bands in this flipped view, measured from the reference toolbar.
         let footerTop: CGFloat = 627
         footer.frame = NSRect(x: 0, y: min(footerTop, bounds.height), width: bounds.width, height: max(0, bounds.height - footerTop))
-        let frames: [(CGFloat, CGFloat)] = [
-            (4, 80), (42, 80),
-            (4, 114),
-            (4, 170), (42, 170),
-            (4, 200), (42, 200),
-            (4, 252), (42, 252),
-            (4, 284), (42, 284),
-            (4, 315),
-            (4, 368), (42, 368),
-            (4, 400),
-            (4, 453), (42, 453),
-            (4, 508), (42, 508),
-            (4, 539),
-            (4, 593), (42, 593)
-        ]
-        for (index, slot) in slots.enumerated() {
-            let origin = index < frames.count ? frames[index] : (CGFloat(4), CGFloat(80))
-            slot.isHidden = origin.1 + 28 > footer.frame.minY
-            slot.frame = NSRect(x: origin.0, y: origin.1, width: 36, height: 28)
-        }
+        placeSlots()
         sectionTitles = [
-            ("选择", 65), ("形状", 149), ("绘图", 234), ("修改", 349),
+            ("选择", 65), ("形状", 149.5), ("绘图", 234), ("修改", 349),
             ("文字", 434), ("导航", 489), ("颜色", 574)
         ]
+    }
+
+    private func placeSlots() {
+        for slot in slots {
+            if let rect = TracedIcons.bounds(for: slot.tool) {
+                slot.frame = rect.insetBy(dx: -0.5, dy: -0.5)
+            }
+            slot.isHidden = slot.frame.maxY > footer.frame.minY + 4
+        }
     }
 
     override func updateTrackingAreas() {
@@ -137,36 +129,41 @@ final class IllustratorToolbar: NSView {
         Theme.panel.setFill()
         bounds.fill()
         drawHeader()
+        let current = workspace?.active.model.tool ?? .selection
+        if current == .selection {
+            Theme.color(0x303030).setFill()
+            NSBezierPath(roundedRect: NSRect(x: 0.5, y: 80, width: 35, height: 27), xRadius: 2, yRadius: 2).fill()
+        }
+        Theme.color(0x4B4B4B).setFill()
+        for y in [141, 226, 341, 426, 481, 566, 621] as [CGFloat] {
+            NSRect(x: 0, y: y, width: bounds.width, height: 0.5).fill()
+        }
+        let font = Theme.ui(10)
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: font, .foregroundColor: Theme.color(0xD1D1D1)
+        ]
         for (title, y) in sectionTitles {
-            (title as NSString).draw(at: NSPoint(x: 8, y: y), withAttributes: [
-                .font: Theme.ui(11), .foregroundColor: Theme.dim
-            ])
+            let text = title as NSString
+            let width = text.size(withAttributes: attrs).width
+            text.draw(at: NSPoint(x: 36.5 - width / 2, y: y), withAttributes: attrs)
         }
     }
 
     private func drawHeader() {
+        Theme.color(0x5E5E5E).setFill()
+        NSRect(x: 0, y: 16, width: bounds.width, height: 1).fill()
         Theme.color(0x383838).setFill()
         NSRect(x: 0, y: 17, width: bounds.width, height: 1).fill()
-        Theme.icon.setStroke()
-        let chevron = NSBezierPath()
-        chevron.lineWidth = 1.35
-        chevron.lineCapStyle = .round
-        chevron.lineJoinStyle = .round
-        chevron.move(to: NSPoint(x: 12, y: 22))
-        chevron.line(to: NSPoint(x: 7, y: 26))
-        chevron.line(to: NSPoint(x: 12, y: 30))
-        chevron.move(to: NSPoint(x: 18, y: 22))
-        chevron.line(to: NSPoint(x: 13, y: 26))
-        chevron.line(to: NSPoint(x: 18, y: 30))
-        chevron.stroke()
+        Theme.color(0x424242).setFill()
+        NSRect(x: 0, y: 18, width: bounds.width, height: 14).fill()
         Theme.color(0x383838).setFill()
         NSRect(x: 0, y: 32, width: bounds.width, height: 1).fill()
-        Theme.icon.setFill()
-        let count = 6
-        let span = CGFloat(count - 1) * 5
-        let start = (bounds.width - span) / 2
-        for index in 0..<count {
-            NSBezierPath(ovalIn: NSRect(x: start + CGFloat(index) * 5, y: 38, width: 2.4, height: 2.4)).fill()
+        Theme.color(0xC8C8C8).setFill()
+        TracedChrome.chevron().fill()
+        Theme.color(0x383838).setFill()
+        for index in 0..<10 {
+            let x = 24.25 + CGFloat(index) * 2.5
+            NSBezierPath(roundedRect: NSRect(x: x, y: 37, width: 1.5, height: 5), xRadius: 0.75, yRadius: 0.75).fill()
         }
     }
 
@@ -310,6 +307,14 @@ final class ToolSlotButton: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        if TracedIcons.contains(tool) {
+            if isCurrent, tool != .selection {
+                Theme.color(0x303030).setFill()
+                NSBezierPath(roundedRect: bounds.insetBy(dx: -1, dy: -1), xRadius: 3, yRadius: 3).fill()
+            }
+            TracedIcons.draw(tool, toolbarOrigin: frame.origin)
+            return
+        }
         if isCurrent {
             Theme.color(0x303030).setFill()
             NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4).fill()
@@ -405,9 +410,6 @@ final class ToolbarFooter: NSView {
     var onAction: ((String) -> Void)?
     var fill: NSColor = .white
     var strokeColor: NSColor = .black
-    var fillActive = true
-    var drawMode = 0
-    var screenMode = 0
 
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
@@ -416,159 +418,96 @@ final class ToolbarFooter: NSView {
         guard let model else { return }
         fill = model.currentFill?.solidColor?.nsColor ?? .white
         strokeColor = model.currentStroke?.paint.solidColor?.nsColor ?? .black
-        fillActive = model.activeAttrIsFill
-        drawMode = model.drawMode
-        screenMode = model.screenMode
         needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let square: CGFloat = 41
-        let behind = NSRect(x: 22, y: 22, width: square, height: square)
-        let front = NSRect(x: 2, y: 2, width: square, height: square)
+        let fillOuter = NSRect(x: 22, y: 23, width: 44.5, height: 44.5)
+        Theme.color(0x2E2E2E).setFill()
+        NSBezierPath(rect: fillOuter).fill()
         fill.setFill()
-        NSBezierPath(rect: behind).fill()
-        NSColor.black.setStroke()
-        NSBezierPath(rect: behind).stroke()
+        NSBezierPath(rect: fillOuter.insetBy(dx: 1, dy: 1)).fill()
+        NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1).setFill()
+        TracedChrome.fillSlash().fill()
+
+        Theme.color(0x2E2E2E).setFill()
+        NSBezierPath(rect: NSRect(x: 0, y: 1, width: 44, height: 44)).fill()
+        NSColor.white.setFill()
+        NSBezierPath(rect: NSRect(x: 0.5, y: 1.5, width: 43, height: 43)).fill()
         strokeColor.setFill()
-        NSBezierPath(rect: front).fill()
-        NSColor.white.setStroke()
-        let frontEdge = NSBezierPath(rect: front)
-        frontEdge.lineWidth = 1
-        frontEdge.stroke()
-        (fillActive ? Theme.accent : NSColor.white).setStroke()
-        let active = NSBezierPath(rect: fillActive ? behind.insetBy(dx: 1, dy: 1) : front.insetBy(dx: 1, dy: 1))
-        active.lineWidth = 1.4
-        active.stroke()
-        swapArrows(NSRect(x: 48, y: 8, width: 18, height: 16))
-        defaultMark(NSRect(x: 2, y: 52, width: 16, height: 16))
+        NSBezierPath(rect: NSRect(x: 1.5, y: 2.5, width: 41, height: 41)).fill()
 
-        let chipW: CGFloat = 22
-        chip(NSRect(x: 1, y: 76, width: chipW, height: 23), kind: 0)
-        chip(NSRect(x: 28, y: 76, width: chipW, height: 23), kind: 1)
-        chip(NSRect(x: 54, y: 76, width: chipW, height: 23), kind: 2)
-        iconWell(NSRect(x: 1, y: 108, width: chipW, height: 22)) { PanelIcons.drawMode(self.drawMode, in: $0.insetBy(dx: 3, dy: 3)) }
-        iconWell(NSRect(x: 28, y: 108, width: chipW, height: 22)) { PanelIcons.screenMode(self.screenMode, in: $0.insetBy(dx: 3, dy: 3)) }
-        iconWell(NSRect(x: 54, y: 108, width: chipW, height: 22)) {
-            PanelIcons.ellipsis(in: NSRect(x: $0.midX - 7, y: $0.midY - 2, width: 14, height: 4))
-        }
-        columnMark(NSRect(x: bounds.midX - 16, y: 140, width: 32, height: 20))
-        let ai = NSRect(x: 1, y: 207, width: max(20, bounds.width - 2), height: 35)
-        Theme.accent.setFill()
-        NSBezierPath(roundedRect: ai, xRadius: 5, yRadius: 5).fill()
-        NSColor.white.setFill()
-        let center = NSPoint(x: ai.midX, y: ai.midY)
-        let star = NSBezierPath()
-        for index in 0..<8 {
-            let angle = CGFloat(index) * .pi / 4 - .pi / 2
-            let radius: CGFloat = index % 2 == 0 ? 8 : 2.4
-            let point = NSPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
-            if index == 0 { star.move(to: point) } else { star.line(to: point) }
-        }
-        star.close()
-        star.fill()
-    }
+        Theme.color(0xC2C2C2).setFill()
+        TracedChrome.swapArrows().fill()
+        TracedChrome.defaultMark().fill()
 
-    private func columnMark(_ rect: NSRect) {
-        Theme.icon.setStroke()
-        let left = NSRect(x: rect.minX, y: rect.minY + 2, width: 18, height: 16)
-        let right = NSRect(x: rect.minX + 10, y: rect.minY, width: 18, height: 16)
-        let rightPath = NSBezierPath(rect: right)
-        rightPath.lineWidth = 1.1
-        rightPath.stroke()
-        Theme.panel.setFill()
-        NSBezierPath(rect: left).fill()
-        Theme.icon.setStroke()
-        let leftPath = NSBezierPath(rect: left)
-        leftPath.lineWidth = 1.1
-        leftPath.stroke()
-    }
-
-    private func swapArrows(_ rect: NSRect) {
-        Theme.icon.setStroke()
-        let path = NSBezierPath()
-        path.lineWidth = 1.2
-        path.lineCapStyle = .round
-        path.move(to: NSPoint(x: rect.minX, y: rect.midY + 3))
-        path.line(to: NSPoint(x: rect.maxX - 2, y: rect.midY + 3))
-        path.move(to: NSPoint(x: rect.maxX - 5, y: rect.midY + 6))
-        path.line(to: NSPoint(x: rect.maxX - 2, y: rect.midY + 3))
-        path.line(to: NSPoint(x: rect.maxX - 5, y: rect.midY))
-        path.move(to: NSPoint(x: rect.maxX, y: rect.midY - 3))
-        path.line(to: NSPoint(x: rect.minX + 2, y: rect.midY - 3))
-        path.move(to: NSPoint(x: rect.minX + 5, y: rect.midY - 6))
-        path.line(to: NSPoint(x: rect.minX + 2, y: rect.midY - 3))
-        path.line(to: NSPoint(x: rect.minX + 5, y: rect.midY))
-        path.stroke()
-    }
-
-    private func defaultMark(_ rect: NSRect) {
-        NSColor.white.setFill()
-        NSBezierPath(rect: NSRect(x: rect.minX + 3, y: rect.minY, width: 10, height: 10)).fill()
+        Theme.color(0x303030).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 0.5, y: 77, width: 21.5, height: 22.5), xRadius: 1.5, yRadius: 1.5).fill()
+        let colorChip = NSRect(x: 3, y: 81, width: 16, height: 15.5)
         NSColor.black.setFill()
-        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.minY + 4, width: 10, height: 10)).fill()
-        NSColor.black.setStroke()
-        NSBezierPath(rect: NSRect(x: rect.minX, y: rect.minY + 4, width: 10, height: 10)).stroke()
-    }
+        NSBezierPath(rect: colorChip).fill()
+        NSColor.white.setStroke()
+        let colorEdge = NSBezierPath(rect: colorChip)
+        colorEdge.lineWidth = 0.6
+        colorEdge.stroke()
 
-    private func chip(_ rect: NSRect, kind: Int) {
-        Theme.color(0x5C5C5C).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
-        Theme.color(0x6A6A6A).setStroke()
-        NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).stroke()
-        let inner = rect.insetBy(dx: 4, dy: 4)
-        switch kind {
-        case 0:
-            NSColor.black.setFill()
-            NSBezierPath(rect: inner).fill()
-            NSColor.white.setStroke()
-            NSBezierPath(rect: inner).stroke()
-        case 1:
-            if let gradient = NSGradient(colors: [NSColor.white, NSColor.black]) {
-                gradient.draw(in: inner, angle: 0)
-            }
-            NSColor.black.setStroke()
-            NSBezierPath(rect: inner).stroke()
-        default:
-            NSColor.white.setFill()
-            NSBezierPath(rect: inner).fill()
-            NSColor.systemRed.setStroke()
-            let slash = NSBezierPath()
-            slash.lineWidth = 1.3
-            slash.move(to: NSPoint(x: inner.minX, y: inner.maxY))
-            slash.line(to: NSPoint(x: inner.maxX, y: inner.minY))
-            slash.stroke()
-        }
-    }
+        let grad = NSRect(x: 28, y: 81, width: 16, height: 15.5)
+        NSColor.black.setFill()
+        NSBezierPath(rect: grad).fill()
+        let gradInner = grad.insetBy(dx: 1, dy: 1)
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect: gradInner).addClip()
+        NSGradient(colors: [NSColor.white, Theme.color(0x2D2D2D)])?.draw(in: gradInner, angle: 0)
+        NSGraphicsContext.restoreGraphicsState()
 
-    private func iconWell(_ rect: NSRect, draw: (NSRect) -> Void) {
-        Theme.color(0x5C5C5C).setFill()
-        NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
-        draw(rect.insetBy(dx: 1, dy: 1))
+        let none = NSRect(x: 53, y: 81, width: 16, height: 15.5)
+        NSColor.black.setFill()
+        NSBezierPath(rect: none).fill()
+        NSColor.white.setFill()
+        NSBezierPath(rect: none.insetBy(dx: 1, dy: 1)).fill()
+        NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1).setFill()
+        TracedChrome.noneSlash().fill()
+
+        Theme.color(0x303030).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 0.5, y: 107, width: 21.5, height: 22.5), xRadius: 1.5, yRadius: 1.5).fill()
+        Theme.color(0xC2C2C2).setFill()
+        TracedChrome.drawMode().fill()
+        TracedChrome.screenMode().fill()
+        Theme.color(0x6D6D6D).setFill()
+        TracedChrome.thirdMode().fill()
+        Theme.color(0xC2C2C2).setFill()
+        TracedChrome.columnMark().fill()
+        TracedChrome.editMark().fill()
+
+        let ai = NSRect(x: 0.5, y: 208, width: 72.5, height: 34.5)
+        Theme.color(0x1573E6).setFill()
+        NSBezierPath(roundedRect: ai, xRadius: 1.5, yRadius: 1.5).fill()
+        NSColor.white.setFill()
+        TracedChrome.aiStars().fill()
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if NSRect(x: 46, y: 6, width: 22, height: 20).contains(point) {
+        if NSRect(x: 50, y: 1, width: 24, height: 18).contains(point) {
             onAction?("互换填色和描边")
-        } else if NSRect(x: 2, y: 50, width: 18, height: 18).contains(point) {
+        } else if NSRect(x: 0, y: 50, width: 18, height: 18).contains(point) {
             onAction?("把填色和描边设置为默认")
-        } else if NSRect(x: 2, y: 2, width: 62, height: 62).contains(point) {
-            let onFront = NSRect(x: 2, y: 2, width: 41, height: 41).contains(point)
+        } else if NSRect(x: 0, y: 1, width: 67, height: 67).contains(point) {
+            let onFront = NSRect(x: 0, y: 1, width: 44, height: 44).contains(point)
             onAction?(onFront ? "描边" : "填色")
-        } else if NSRect(x: 1, y: 76, width: 22, height: 23).contains(point) {
+        } else if NSRect(x: 0.5, y: 77, width: 22, height: 23).contains(point) {
             onAction?("选择颜色填充模式")
-        } else if NSRect(x: 28, y: 76, width: 22, height: 23).contains(point) {
+        } else if NSRect(x: 28, y: 77, width: 18, height: 22).contains(point) {
             onAction?("选择渐变填色模式")
-        } else if NSRect(x: 54, y: 76, width: 22, height: 23).contains(point) {
+        } else if NSRect(x: 53, y: 77, width: 18, height: 22).contains(point) {
             onAction?("选择无描边/填充模式")
-        } else if NSRect(x: 1, y: 108, width: 22, height: 22).contains(point) {
+        } else if NSRect(x: 0.5, y: 107, width: 22, height: 23).contains(point) {
             onAction?("绘图模式")
-        } else if NSRect(x: 28, y: 108, width: 22, height: 22).contains(point) {
+        } else if NSRect(x: 28, y: 107, width: 22, height: 23).contains(point) {
             onAction?("屏幕模式")
-        } else if NSRect(x: 54, y: 108, width: 22, height: 22).contains(point) || NSRect(x: bounds.midX - 18, y: 138, width: 36, height: 24).contains(point) {
+        } else if NSRect(x: 52, y: 107, width: 22, height: 23).contains(point) || NSRect(x: 20, y: 138, width: 40, height: 52).contains(point) {
             onAction?("编辑工具栏")
-        } else if NSRect(x: 1, y: 207, width: max(20, bounds.width - 2), height: 35).contains(point) {
+        } else if NSRect(x: 0.5, y: 208, width: 72.5, height: 34.5).contains(point) {
             onAction?("生成式 AI")
         }
     }

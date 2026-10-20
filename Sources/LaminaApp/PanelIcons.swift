@@ -83,7 +83,7 @@ enum PanelIcons {
             mark.stroke()
         }
         (title as NSString).draw(at: NSPoint(x: box.maxX + 6, y: origin.y - 1), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
+            .font: Theme.ui(13), .foregroundColor: Theme.color(0xD1D1D1)
         ])
     }
 
