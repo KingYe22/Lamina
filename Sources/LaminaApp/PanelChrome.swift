@@ -177,7 +177,7 @@ final class FloatPanel: NSView {
         NSRect(x: 0, y: headerH - 1, width: bounds.width, height: 1).fill()
         if tabs.count < 2 || collapsed {
             let title = (collapsed ? tabs.map(\.rawValue).joined(separator: " / ") : active.rawValue) as NSString
-            let titleY: CGFloat = tabs == [.appearance] ? 16 : 5
+            let titleY: CGFloat = tabs == [.appearance] ? 25 : 5
             let titleX: CGFloat = tabs == [.appearance] ? 14 : 10
             title.draw(at: NSPoint(x: titleX, y: titleY), withAttributes: [
                 .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xF3F3F3)
@@ -254,7 +254,7 @@ final class FloatPanel: NSView {
         ("不透明度：默认值" as NSString).draw(at: NSPoint(x: rect.minX + 46, y: rect.minY + 88), withAttributes: [
             .font: Theme.ui(12), .foregroundColor: dim
         ])
-        let iconY = rect.maxY - 36
+        let iconY = rect.maxY - 52
         let slots: [CGFloat] = [0, 32, 64, 148]
         for (index, origin) in slots.enumerated() {
             let box = NSRect(x: rect.minX + origin, y: iconY, width: 22, height: 20)

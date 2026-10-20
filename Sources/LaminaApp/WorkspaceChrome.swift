@@ -1039,7 +1039,7 @@ final class DialogPopup: NSPopUpButton {
         chevron.lineCapStyle = .round
         chevron.lineJoinStyle = .round
         // Smaller y is the top of the captured window, so the vertex uses the larger y.
-        let tip = NSPoint(x: bounds.maxX - 12, y: bounds.midY + 3)
+        let tip = NSPoint(x: bounds.maxX - 14, y: bounds.midY + 5)
         chevron.move(to: NSPoint(x: tip.x - 4, y: tip.y - 4))
         chevron.line(to: tip)
         chevron.line(to: NSPoint(x: tip.x + 4, y: tip.y - 4))
@@ -1401,7 +1401,8 @@ final class NewDocSheet: NSView {
         func place(_ label: NSTextField, imageY: CGFloat, labelWidth: CGFloat = -1) {
             label.isHidden = false
             let height: CGFloat = 14
-            label.frame = NSRect(x: labelX, y: originY(imageY: imageY, height: height), width: labelWidth > 0 ? labelWidth : width, height: height)
+            // The UI font's CJK body sits ~6pt below the frame top, so the measured ink top is raised.
+            label.frame = NSRect(x: labelX, y: originY(imageY: imageY - 12, height: height), width: labelWidth > 0 ? labelWidth : width, height: height)
         }
 
         place(sectionLabel, imageY: 25)
@@ -1413,7 +1414,7 @@ final class NewDocSheet: NSView {
         let column = (width - 8) / 2
         widthLabel.isHidden = false
         heightLabel.isHidden = false
-        widthLabel.frame = NSRect(x: labelX, y: originY(imageY: 153, height: 14), width: column, height: 14)
+        widthLabel.frame = NSRect(x: labelX, y: originY(imageY: 141, height: 14), width: column, height: 14)
         heightLabel.frame = NSRect(x: labelX + column + 8, y: widthLabel.frame.minY, width: column, height: 14)
         widthField.frame = NSRect(x: x, y: originY(imageY: 181, height: 22), width: column, height: 22)
         heightField.frame = NSRect(x: x + column + 8, y: widthField.frame.minY, width: column, height: 22)
@@ -1430,18 +1431,18 @@ final class NewDocSheet: NSView {
 
         place(bleedLabel, imageY: 553)
         let box: CGFloat = 56
-        topLabel.frame = NSRect(x: labelX, y: originY(imageY: 587, height: 14), width: 16, height: 14)
+        topLabel.frame = NSRect(x: labelX, y: originY(imageY: 575, height: 14), width: 16, height: 14)
         bleedTop.frame = NSRect(x: columnLeft + 28.5, y: originY(imageY: 579, height: 24), width: box, height: 24)
         bottomLabel.frame = NSRect(x: columnLeft + 94.5, y: topLabel.frame.minY, width: 16, height: 14)
         bleedBottom.frame = NSRect(x: columnLeft + 108.5, y: bleedTop.frame.minY, width: box, height: 24)
         linkRect = NSRect(x: columnLeft + 270, y: bleedTop.frame.minY, width: 20, height: 20)
-        leftLabel.frame = NSRect(x: labelX, y: originY(imageY: 643, height: 14), width: 16, height: 14)
+        leftLabel.frame = NSRect(x: labelX, y: originY(imageY: 631, height: 14), width: 16, height: 14)
         bleedLeft.frame = NSRect(x: columnLeft + 28.5, y: originY(imageY: 635, height: 24), width: box, height: 24)
         rightLabel.frame = NSRect(x: columnLeft + 94.5, y: leftLabel.frame.minY, width: 16, height: 14)
         bleedRight.frame = NSRect(x: columnLeft + 108.5, y: bleedLeft.frame.minY, width: box, height: 24)
 
         advancedLabel.isHidden = false
-        advancedRect = NSRect(x: columnLeft + 12, y: originY(imageY: 704, height: 14), width: width, height: 14)
+        advancedRect = NSRect(x: columnLeft + 12, y: originY(imageY: 692, height: 14), width: width, height: 14)
         advancedLabel.frame = NSRect(x: columnLeft + 32, y: advancedRect.minY, width: width - 20, height: 14)
 
         modePopup.isHidden = !advancedOpen
