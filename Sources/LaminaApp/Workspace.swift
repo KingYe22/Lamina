@@ -92,6 +92,12 @@ final class Workspace: ObservableObject {
             addDocument()
             return true
         case "创建文档":
+            if session.model.dialogValues.isEmpty {
+                if let onNewDocument {
+                    onNewDocument()
+                    return true
+                }
+            }
             let values = session.model.dialogValues
             let width = Double(values["width"] ?? "") ?? 800
             let height = Double(values["height"] ?? "") ?? 600

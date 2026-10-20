@@ -64,10 +64,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             exit(0)
         }
         if ProcessInfo.processInfo.environment["LAMINA_KEYTEST"] == "1" {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.runKeyTest() }
+            runKeyTest()
         }
         if let dir = ProcessInfo.processInfo.environment["LAMINA_SHOTS"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.captureShots(in: dir) }
+            captureShots(in: dir)
         }
     }
 
@@ -96,15 +96,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func runKeyTest() {
         let path = ProcessInfo.processInfo.environment["LAMINA_KEYTEST_FILE"]
             ?? (NSTemporaryDirectory() as NSString).appendingPathComponent("lamina-keys.txt")
+        let report = KeyReport(path: path)
+        report.line("phase start")
         workspace.suppressPanels = true
         root.layoutSubtreeIfNeeded()
         root.showEditor()
         window.makeFirstResponder(root.editor.canvas.drawing)
-        var lines: [String] = []
+        func focus() {
+            root.dialog.isHidden = true
+            window.makeFirstResponder(root.editor.canvas.drawing)
+        }
         func expectTool(_ name: String, _ tool: Tool, code: CGKeyCode, flags: CGEventFlags = []) {
+            focus()
             inject(code, flags: flags)
             let ok = workspace.active.model.tool == tool
-            lines.append("\(ok ? "PASS" : "FAIL") \(name) tool=\(workspace.active.model.tool.rawValue)")
+            report.line("\(ok ? "PASS" : "FAIL") \(name) tool=\(workspace.active.model.tool.rawValue)")
         }
         expectTool("V", .selection, code: 9)
         expectTool("A", .directSelection, code: 0)
@@ -119,65 +125,145 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         expectTool("O", .reflect, code: 31)
         expectTool("S", .scale, code: 1)
         expectTool("E", .freeTransform, code: 14)
+        focus()
         let before = workspace.active.model.zoom
         inject(24, flags: .maskCommand)
         let zoomedIn = workspace.active.model.zoom > before + 0.001
-        lines.append("\(zoomedIn ? "PASS" : "FAIL") Cmd+plus zoom=\(workspace.active.model.zoom)")
+        report.line("\(zoomedIn ? "PASS" : "FAIL") Cmd+plus zoom=\(workspace.active.model.zoom)")
         let mid = workspace.active.model.zoom
         inject(27, flags: .maskCommand)
         let zoomedOut = workspace.active.model.zoom < mid - 0.001
-        lines.append("\(zoomedOut ? "PASS" : "FAIL") Cmd+minus zoom=\(workspace.active.model.zoom)")
+        report.line("\(zoomedOut ? "PASS" : "FAIL") Cmd+minus zoom=\(workspace.active.model.zoom)")
+        focus()
         inject(49, flags: [], keyUp: false)
-        lines.append("\(workspace.active.model.spaceHeld ? "PASS" : "FAIL") space spaceHeld=\(workspace.active.model.spaceHeld)")
+        let held = workspace.active.model.spaceHeld
+        report.line("\(held ? "PASS" : "FAIL") space spaceHeld=\(workspace.active.model.spaceHeld)")
+        let canvas = root.editor.canvas.drawing
+        let panBefore = workspace.active.model.pan
+        if let down = mouse(.leftMouseDown, at: NSPoint(x: 80, y: 80), in: canvas),
+           let drag = mouse(.leftMouseDragged, at: NSPoint(x: 180, y: 140), in: canvas),
+           let up = mouse(.leftMouseUp, at: NSPoint(x: 180, y: 140), in: canvas) {
+            canvas.mouseDown(with: down)
+            canvas.mouseDragged(with: drag)
+            canvas.mouseUp(with: up)
+        }
+        let panned = hypot(workspace.active.model.pan.x - panBefore.x, workspace.active.model.pan.y - panBefore.y) > 1
+        report.line("\(held && panned ? "PASS" : "FAIL") space-drag pan=\(workspace.active.model.pan.x),\(workspace.active.model.pan.y)")
         inject(49, flags: [], keyDown: false)
         workspace.active.model.spaceHeld = false
+        focus()
         inject(45, flags: .maskCommand)
-        lines.append("\(root.dialog.isHidden ? "FAIL" : "PASS") Cmd+N dialog")
-        root.dialog.isHidden = true
+        report.line("\(root.dialog.isHidden ? "FAIL" : "PASS") Cmd+N dialog")
+        focus()
         workspace.panelRequest = ""
         inject(31, flags: .maskCommand)
-        lines.append("\(workspace.panelRequest == "open" ? "PASS" : "FAIL") Cmd+O panel=\(workspace.panelRequest)")
+        report.line("\(workspace.panelRequest == "open" ? "PASS" : "FAIL") Cmd+O panel=\(workspace.panelRequest)")
         workspace.panelRequest = ""
         inject(1, flags: .maskCommand)
-        lines.append("\(workspace.panelRequest == "save" ? "PASS" : "FAIL") Cmd+S panel=\(workspace.panelRequest)")
+        report.line("\(workspace.panelRequest == "save" ? "PASS" : "FAIL") Cmd+S panel=\(workspace.panelRequest)")
+        let model = workspace.active.model
+        model.tool = .rectangle
+        model.pointerDown(at: Vec2(40, 40), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(140, 120), shift: false, option: false, command: false)
+        let drawn = itemCount()
         inject(6, flags: .maskCommand)
-        lines.append("PASS Cmd+Z")
+        let undone = model.status.contains("还原") && itemCount() < drawn
+        report.line("\(undone ? "PASS" : "FAIL") Cmd+Z status=\(model.status) items=\(itemCount())")
+        model.tool = .rectangle
+        model.pointerDown(at: Vec2(40, 40), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(140, 120), shift: false, option: false, command: false)
+        let copiedFrom = itemCount()
         inject(8, flags: .maskCommand)
-        lines.append("PASS Cmd+C")
+        report.line("\(model.status.contains("已复制") ? "PASS" : "FAIL") Cmd+C status=\(model.status)")
         inject(9, flags: .maskCommand)
-        lines.append("\(workspace.active.model.tool == .selection ? "FAIL" : "PASS") Cmd+V kept-tool=\(workspace.active.model.tool.rawValue)")
+        let pasted = itemCount() > copiedFrom && model.tool == .rectangle
+        report.line("\(pasted ? "PASS" : "FAIL") Cmd+V tool=\(model.tool.rawValue) items=\(itemCount())")
         inject(5, flags: .maskCommand)
-        lines.append("PASS Cmd+G")
-        let failed = lines.contains { $0.hasPrefix("FAIL") }
-        lines.append(failed ? "FAIL" : "OK")
-        try? lines.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
-        exit(failed ? 1 : 0)
+        report.line("\(model.status.contains("请选择多个对象") || model.status.contains("组") ? "PASS" : "FAIL") Cmd+G status=\(model.status)")
+        report.finish()
     }
 
+    /// Build a real CGEvent and hand that same event to AppKit. Posting it
+    /// through the HID tap needs Accessibility and, on the CI runner, blocks
+    /// the main thread before any result can be written.
     private func inject(_ code: CGKeyCode, flags: CGEventFlags, keyDown: Bool = true, keyUp: Bool = true) {
+        if keyDown { deliver(code, flags: flags, isDown: true) }
+        if keyUp { deliver(code, flags: flags, isDown: false) }
+    }
+
+    private func deliver(_ code: CGKeyCode, flags: CGEventFlags, isDown: Bool) {
         let source = CGEventSource(stateID: .hidSystemState)
-        if keyDown, let down = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: true) {
-            down.flags = flags
-            let toolBefore = workspace.active.model.tool
-            let zoomBefore = workspace.active.model.zoom
-            let spaceBefore = workspace.active.model.spaceHeld
-            down.post(tap: .cghidEventTap)
-            RunLoop.current.run(until: Date().addingTimeInterval(0.03))
-            let delivered = workspace.active.model.tool != toolBefore
-                || abs(workspace.active.model.zoom - zoomBefore) > 0.0001
-                || workspace.active.model.spaceHeld != spaceBefore
-                || root.dialog.isHidden == false
-                || !workspace.panelRequest.isEmpty
-            if !delivered, let event = NSEvent(cgEvent: down) {
-                NSApp.sendEvent(event)
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: isDown) else { return }
+        event.flags = flags
+        if let text = glyph(for: code, shift: flags.contains(.maskShift)) {
+            let units = Array(text.utf16)
+            units.withUnsafeBufferPointer { buffer in
+                guard let base = buffer.baseAddress else { return }
+                event.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: base)
             }
         }
-        if keyUp, let up = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: false) {
-            up.flags = flags
-            if let event = NSEvent(cgEvent: up) {
-                NSApp.sendEvent(event)
-            }
+        if let nsEvent = NSEvent(cgEvent: event) {
+            NSApp.sendEvent(nsEvent)
+            return
         }
+        let kind: NSEvent.EventType = isDown ? .keyDown : .keyUp
+        let text = glyph(for: code, shift: flags.contains(.maskShift)) ?? ""
+        guard let fallback = NSEvent.keyEvent(
+            with: kind,
+            location: .zero,
+            modifierFlags: nsFlags(flags),
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: text,
+            charactersIgnoringModifiers: text.lowercased(),
+            isARepeat: false,
+            keyCode: code
+        ) else { return }
+        NSApp.sendEvent(fallback)
+    }
+
+    private func mouse(_ type: NSEvent.EventType, at viewPoint: NSPoint, in view: NSView) -> NSEvent? {
+        let location = view.convert(viewPoint, to: nil)
+        return NSEvent.mouseEvent(
+            with: type,
+            location: location,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 1,
+            clickCount: 1,
+            pressure: 1
+        )
+    }
+
+    private func itemCount() -> Int {
+        workspace.active.model.document.layers.reduce(0) { $0 + $1.items.count }
+    }
+
+    private func glyph(for code: CGKeyCode, shift: Bool) -> String? {
+        switch code {
+        case 49: return " "
+        case 24: return shift ? "+" : "="
+        case 27: return "-"
+        default: break
+        }
+        let map: [CGKeyCode: String] = [
+            0: "a", 1: "s", 5: "g", 6: "z", 8: "c", 9: "v", 11: "b", 14: "e", 15: "r",
+            17: "t", 31: "o", 35: "p", 37: "l", 45: "n", 46: "m"
+        ]
+        guard let letter = map[code] else { return nil }
+        return shift ? letter.uppercased() : letter
+    }
+
+    private func nsFlags(_ flags: CGEventFlags) -> NSEvent.ModifierFlags {
+        var result: NSEvent.ModifierFlags = []
+        if flags.contains(.maskCommand) { result.insert(.command) }
+        if flags.contains(.maskShift) { result.insert(.shift) }
+        if flags.contains(.maskAlternate) { result.insert(.option) }
+        if flags.contains(.maskControl) { result.insert(.control) }
+        return result
     }
 
     private func captureShots(in directory: String) {
@@ -205,5 +291,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         view.cacheDisplay(in: view.bounds, to: rep)
         guard let data = rep.representation(using: .png, properties: [:]) else { return }
         try? data.write(to: url)
+    }
+}
+
+private final class KeyReport {
+    private let handle: FileHandle
+    private var failed = false
+
+    init(path: String) {
+        FileManager.default.createFile(atPath: path, contents: Data())
+        handle = FileHandle(forWritingAtPath: path) ?? FileHandle.standardError
+    }
+
+    func line(_ text: String) {
+        if text.hasPrefix("FAIL") { failed = true }
+        let data = Data((text + "\n").utf8)
+        try? handle.write(contentsOf: data)
+        try? handle.synchronize()
+        try? FileHandle.standardError.write(contentsOf: data)
+    }
+
+    func finish() {
+        line(failed ? "FAIL" : "OK")
+        exit(failed ? 1 : 0)
     }
 }
