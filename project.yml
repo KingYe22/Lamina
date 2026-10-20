@@ -13,8 +13,8 @@ settings:
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGN_IDENTITY: ""
     ENABLE_HARDENED_RUNTIME: NO
-    MARKETING_VERSION: "0.3.4"
-    CURRENT_PROJECT_VERSION: "10"
+    MARKETING_VERSION: "0.3.5"
+    CURRENT_PROJECT_VERSION: "11"
 targets:
   LaminaCore:
     type: library.static
@@ -43,9 +43,6 @@ targets:
     resources:
       - path: Sources/LaminaCore/Resources/adobe_shortcuts_cn.txt
       - path: Sources/LaminaApp/Resources/Brands
-      - path: packaging/ai-ref/toolbar.png
-      - path: packaging/ai-ref/panels.png
-      - path: packaging/ai-ref/newdoc-details.png
     dependencies:
       - target: LaminaCore
       - sdk: Carbon.framework

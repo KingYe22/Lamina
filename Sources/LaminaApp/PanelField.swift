@@ -5,10 +5,6 @@ import AppKit
 /// hand focus straight back to the canvas.
 class PanelField: NSTextField, NSTextFieldDelegate {
     var onLeave: (() -> Void)?
-    /// Stays clickable, but does not paint over a reference-matched panel until editing.
-    var quiet = false {
-        didSet { if quiet { drawsBackground = false } }
-    }
     private var armed = false
     private var leaving = false
 
@@ -36,9 +32,6 @@ class PanelField: NSTextField, NSTextFieldDelegate {
     override var mouseDownCanMoveWindow: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        if quiet && !fieldIsEditing {
-            return
-        }
         super.draw(dirtyRect)
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
         (fieldIsEditing ? Theme.focus : Theme.fieldBorder).setStroke()

@@ -115,7 +115,7 @@ final class FloatPanel: NSView {
         layer?.cornerRadius = 0
         for field in [weightField, limitField] {
             field.alignment = .center
-            field.quiet = true
+            field.font = Theme.ui(13)
             addSubview(field)
         }
         weightField.onLeave = { [weak self] in self?.applyWeight() }
@@ -154,17 +154,6 @@ final class FloatPanel: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let hostHeight = superview?.bounds.height ?? bounds.height
-        let topFromCanvas = hostHeight - frame.maxY
-        let pixel = CGRect(
-            x: (frame.minX * 2).rounded(),
-            y: ((WorkspaceMetrics.chromeInset + topFromCanvas) * 2).rounded(),
-            width: (bounds.width * 2).rounded(),
-            height: (bounds.height * 2).rounded()
-        )
-        if ReferenceChrome.draw(source: .panels, pixelRect: pixel, in: bounds) {
-            return
-        }
         Theme.panel.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
         Theme.line.setFill()
