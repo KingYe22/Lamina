@@ -1,4 +1,6 @@
 #import <AppKit/AppKit.h>
+#import <objc/runtime.h>
+#import <stdio.h>
 
 /// Returns 1 when the event was handled and must not reach the text system.
 extern int LaminaConsumeEvent(void *event);
@@ -15,13 +17,28 @@ extern int LaminaConsumeEvent(void *event);
 
 @end
 
-/// Runs at load, before NSApplication.shared, and keeps the class from being dead-stripped.
-__attribute__((used, constructor))
-static void LaminaApplicationKeep(void) {
-    (void)[LaminaApplication class];
+static NSApplication *LaminaShared(id self, SEL _cmd) {
+    static NSApplication *app;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        app = [[LaminaApplication alloc] init];
+    });
+    return app;
 }
 
-/// Referenced from main so the linker keeps this class. Nothing else mentions it.
+/// Referenced from main so the linker keeps this class. Swift's
+/// NSApplication.shared ignores NSPrincipalClass and would otherwise lock in
+/// a plain NSApplication before the first event.
 void LaminaApplicationAnchor(void) {
     (void)[LaminaApplication class];
+    Method method = class_getClassMethod([NSApplication class], @selector(sharedApplication));
+    if (method) {
+        method_setImplementation(method, (IMP)LaminaShared);
+    } else {
+        fputs("NSApplication sharedApplication method is missing\n", stderr);
+    }
+}
+
+NSApplication *LaminaSharedApplication(void) {
+    return [NSApplication sharedApplication];
 }
