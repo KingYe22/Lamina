@@ -28,7 +28,7 @@ enum PanelIcons {
     }
 
     static func field(_ rect: NSRect, text: String, align: NSTextAlignment = .left) {
-        Theme.raised.setFill()
+        Theme.panelField.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
         Theme.fieldBorder.setStroke()
         let border = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
@@ -88,7 +88,7 @@ enum PanelIcons {
     }
 
     static func well(_ rect: NSRect, selected: Bool) {
-        (selected ? Theme.accent.withAlphaComponent(0.9) : Theme.raised).setFill()
+        (selected ? Theme.accent.withAlphaComponent(0.9) : Theme.panelButton).setFill()
         NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
     }
 

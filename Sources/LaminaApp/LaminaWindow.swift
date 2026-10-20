@@ -4,8 +4,17 @@ final class LaminaWindow: NSWindow {
     weak var workspace: Workspace?
 
     override func sendEvent(_ event: NSEvent) {
-        if event.type == .keyDown, let workspace, !KeyRouter.isActivelyEditing(event) {
-            if KeyRouter.handle(event, workspace: workspace) == nil { return }
+        if event.type == .keyDown, let workspace {
+            let code = event.keyCode
+            if code == VirtualKey.escape || code == VirtualKey.returnKey || code == VirtualKey.tab,
+               let field = PanelField.fieldOwningFirstResponder(in: event.window ?? self) {
+                field.leave()
+                KeyProbe.bump(workspace)
+                return
+            }
+            if !KeyRouter.isActivelyEditing(event), KeyRouter.handle(event, workspace: workspace) == nil {
+                return
+            }
         }
         if event.type == .keyUp, event.keyCode == VirtualKey.space {
             workspace?.active.model.spaceHeld = false

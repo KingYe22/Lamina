@@ -24,7 +24,7 @@ final class EditorShell: NSView {
         floaters.workspace = workspace
         contextBar.workspace = workspace
         controlBar.workspace = workspace
-        for view in [tabs, toolbar, canvas, status, dock, floaters, shadowBand, controlBar, contextBar] as [NSView] {
+        for view in [tabs, toolbar, canvas, status, floaters, shadowBand, dock, controlBar, contextBar] as [NSView] {
             addSubview(view)
         }
     }
@@ -52,7 +52,8 @@ final class EditorShell: NSView {
         let shadowH = WorkspaceMetrics.chromeInset - WorkspaceMetrics.controlHeight
         shadowBand.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.chromeInset, width: stripW, height: shadowH)
         let columnH = max(0, bodyH - WorkspaceMetrics.chromeInset)
-        dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: columnH)
+        let lift = WorkspaceMetrics.dockLift
+        dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: columnH + lift)
         canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: columnH)
         floaters.frame = canvas.frame
         contextBar.frame = NSRect(x: canvas.frame.midX - 210, y: canvas.frame.maxY - 46, width: 420, height: 32)

@@ -6,12 +6,16 @@ enum WorkspaceMetrics {
     static let windowHeight: CGFloat = 970
     static let toolWidth: CGFloat = 81
     static let dockWidth: CGFloat = 312
+    /// Properties tabs sit in the shadow band. The dock draws that strip itself.
+    static let dockLift: CGFloat = 36
     static let controlHeight: CGFloat = 37.5
     /// Control bar plus the flat shadow drawn under it. Canvas and the dock start here.
     static let chromeInset: CGFloat = 89
     static let appearance = PanelFrame(x: 20, top: 37, width: 298, height: 212)
-    static let align = PanelFrame(x: 323, top: 37, width: 308, height: 266)
-    static let stroke = PanelFrame(x: 323, top: 340, width: 308, height: 403)
+    /// Align header starts 16pt higher than the appearance title so the dark bar covers the reference.
+    static let align = PanelFrame(x: 323, top: 21, width: 308, height: 282)
+    /// Stroke title ink sits 36pt above the previous frame.
+    static let stroke = PanelFrame(x: 323, top: 304, width: 308, height: 439)
 
     struct PanelFrame {
         var x: CGFloat
