@@ -1,4 +1,5 @@
 import AppKit
+import LaminaCore
 
 /// Original vector tool marks. The silhouettes follow the public Illustrator tool shapes.
 enum ToolIcons {
