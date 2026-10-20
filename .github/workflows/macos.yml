@@ -70,6 +70,53 @@ jobs:
           hdiutil create -volname Lamina -srcfolder dist/dmg -ov -format UDZO dist/Lamina.dmg
           du -sh dist/dmg/Lamina.app dist/Lamina.dmg
 
+      - name: Smoke test launch window
+        run: |
+          set -euo pipefail
+          APP="dist/dmg/Lamina.app"
+          BIN="$APP/Contents/MacOS/Lamina"
+          test -x "$BIN"
+          swiftc -O -framework CoreGraphics -framework Foundation packaging/SmokeWindows.swift -o /tmp/smoke-windows
+
+          MARKER="$(mktemp)"
+          rm -f "$MARKER"
+          LAMINA_SMOKE=1 LAMINA_SMOKE_FILE="$MARKER" "$BIN" >/tmp/lamina-smoke.out 2>/tmp/lamina-smoke.err &
+          smoke_pid=$!
+          ready=0
+          for _ in 1 2 3 4 5; do
+            if [[ -s "$MARKER" ]]; then ready=1; break; fi
+            sleep 1
+          done
+          if [[ "$ready" != 1 ]]; then
+            echo "applicationDidFinishLaunching did not write the smoke marker"
+            cat /tmp/lamina-smoke.out /tmp/lamina-smoke.err || true
+            kill "$smoke_pid" 2>/dev/null || true
+            exit 1
+          fi
+          for _ in 1 2 3 4 5; do
+            if ! kill -0 "$smoke_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          kill "$smoke_pid" 2>/dev/null || true
+          wait "$smoke_pid" 2>/dev/null || true
+
+          "$BIN" >/tmp/lamina-window.out 2>/tmp/lamina-window.err &
+          pid=$!
+          sleep 5
+          if ! kill -0 "$pid" 2>/dev/null; then
+            echo "app exited before the window check"
+            cat /tmp/lamina-window.out /tmp/lamina-window.err || true
+            exit 1
+          fi
+          if ! /tmp/smoke-windows "$pid"; then
+            echo "no CGWindowList window owned by pid $pid"
+            cat /tmp/lamina-window.out /tmp/lamina-window.err || true
+            kill "$pid" 2>/dev/null || true
+            exit 1
+          fi
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+
       - uses: actions/upload-artifact@v4
         with:
           name: Lamina-macOS
@@ -100,6 +147,16 @@ jobs:
           tag_name: ${{ steps.release.outputs.tag }}
           target_commitish: ${{ github.sha }}
           name: ${{ steps.release.outputs.tag }}
+          body: |
+            从浏览器下载或从磁盘映像拷出的 Lamina.app 会带隔离标记（com.apple.quarantine）。这个包是 ad-hoc 签名（`codesign --sign -`），不是 Apple 开发者证书，系统可能拒绝直接双击。
+
+            首次打开请任选一种：
+
+            1. 在 Finder 里右键 Lamina.app，选择「打开」，再点对话框里的「打开」。
+            2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
+            3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
+
+            Dock 和窗口标题显示为 Lamina。启动时会挂上应用委托并打开主窗口。
           files: |
             dist/Lamina.app.zip
             dist/Lamina.dmg

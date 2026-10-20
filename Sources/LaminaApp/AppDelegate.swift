@@ -1,7 +1,6 @@
 import AppKit
 import LaminaCore
 
-@main
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow!
     private let workspace = Workspace()
@@ -55,6 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for url in queued { workspace.open(url: url, place: false) }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        if ProcessInfo.processInfo.environment["LAMINA_SMOKE"] == "1" {
+            let path = ProcessInfo.processInfo.environment["LAMINA_SMOKE_FILE"]
+                ?? (NSTemporaryDirectory() as NSString).appendingPathComponent("lamina-started")
+            try? "started\n".write(toFile: path, atomically: true, encoding: .utf8)
+            exit(0)
+        }
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
