@@ -48,7 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return KeyRouter.handle(event, workspace: workspace)
         }
         NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
-            if event.keyCode == 49 { self?.workspace.active.model.spaceHeld = false }
+            if event.keyCode == 49 {
+                self?.workspace.active.model.spaceHeld = false
+                return nil
+            }
             return event
         }
         let queued = pendingURLs
@@ -149,10 +152,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let panned = hypot(workspace.active.model.pan.x - panBefore.x, workspace.active.model.pan.y - panBefore.y) > 1
         report.line("\(held && panned ? "PASS" : "FAIL") space-drag pan=\(workspace.active.model.pan.x),\(workspace.active.model.pan.y)")
+        report.line("phase space-up")
         inject(49, flags: [], keyDown: false)
+        let released = !workspace.active.model.spaceHeld
+        report.line("\(released ? "PASS" : "FAIL") space-up spaceHeld=\(workspace.active.model.spaceHeld)")
         workspace.active.model.spaceHeld = false
         focus()
+        report.line("phase cmd-n")
         inject(45, flags: .maskCommand)
+        pumpMain()
         report.line("\(root.dialog.isHidden ? "FAIL" : "PASS") Cmd+N dialog")
         focus()
         workspace.panelRequest = ""
@@ -236,6 +244,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             clickCount: 1,
             pressure: 1
         )
+    }
+
+    private func pumpMain() {
+        var done = false
+        DispatchQueue.main.async { done = true }
+        let deadline = Date().addingTimeInterval(1)
+        while !done, Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
     }
 
     private func itemCount() -> Int {

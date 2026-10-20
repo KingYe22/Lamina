@@ -94,7 +94,9 @@ final class Workspace: ObservableObject {
         case "创建文档":
             if session.model.dialogValues.isEmpty {
                 if let onNewDocument {
-                    onNewDocument()
+                    // Showing the text fields inside keyDown makes the field editor
+                    // wait for the next event and never return.
+                    DispatchQueue.main.async(execute: onNewDocument)
                     return true
                 }
             }
@@ -401,7 +403,7 @@ final class Workspace: ObservableObject {
 
     func perform(_ action: String) {
         if action == "创建文档" {
-            onNewDocument?()
+            DispatchQueue.main.async { [weak self] in self?.onNewDocument?() }
             return
         }
         _ = active.model.perform(action)
@@ -412,6 +414,11 @@ final class Workspace: ObservableObject {
     }
 
     private func presentDialog(_ request: DialogRequest) {
+        if suppressPanels {
+            panelRequest = "dialog:" + request.action
+            active.model.cancelDialog()
+            return
+        }
         let alert = NSAlert()
         alert.messageText = request.title
         alert.informativeText = request.action

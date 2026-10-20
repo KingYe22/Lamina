@@ -519,6 +519,7 @@ final class NewDocumentDialog: NSView {
             field.font = NSFont.systemFont(ofSize: 12)
             field.isBezeled = true
             field.bezelStyle = .roundedBezel
+            field.refusesFirstResponder = true
             card.addSubview(field)
         }
         closeButton.target = self
@@ -621,6 +622,11 @@ final class NewDocumentDialog: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let local = NSPoint(x: point.x - card.frame.minX, y: point.y - card.frame.minY)
+        for field in [nameField, widthField, heightField, bleedField, countField] where field.frame.contains(local) {
+            field.refusesFirstResponder = false
+            window?.makeFirstResponder(field)
+            return
+        }
         if NSRect(x: 740, y: 16, width: 96, height: 28).contains(local) {
             onCreate?(currentSpec())
             return
