@@ -335,8 +335,8 @@ int main(int argc, char **argv) {
         NSDictionary *created = waitUntil(^BOOL(NSDictionary *state) {
             return [state[@"dialog"] isEqualToString:@"1"];
         }, 2.5);
-        BOOL dialog = [created[@"dialog"] isEqualToString:@"1"];
-        note([NSString stringWithFormat:@"%@ Cmd+N dialog=%@", dialog ? @"PASS" : @"FAIL", created[@"dialog"] ?: @"?"]);
+        BOOL dialogShown = [created[@"dialog"] isEqualToString:@"1"];
+        note([NSString stringWithFormat:@"%@ Cmd+N dialog=%@", dialogShown ? @"PASS" : @"FAIL", created[@"dialog"] ?: @"?"]);
 
         postKey(31, kCGEventFlagMaskCommand, YES, YES);
         NSDictionary *opened = waitUntil(^BOOL(NSDictionary *state) {
