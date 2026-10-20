@@ -154,39 +154,55 @@ final class FloatPanel: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6)
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
         Theme.panel.setFill()
-        NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
+        shape.fill()
+        let headerH = titleHeight + tabHeight
+        Theme.color(0x424242).setFill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: headerH).fill()
         Theme.line.setFill()
-        NSRect(x: 0, y: titleHeight - 1, width: bounds.width, height: 1).fill()
-        let title = (collapsed ? tabs.map(\.rawValue).joined(separator: " / ") : active.rawValue) as NSString
-        title.draw(at: NSPoint(x: 10, y: 8), withAttributes: [
-            .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xF3F3F3)
-        ])
+        NSRect(x: 0, y: headerH - 1, width: bounds.width, height: 1).fill()
+        if tabs.count < 2 || collapsed {
+            let title = (collapsed ? tabs.map(\.rawValue).joined(separator: " / ") : active.rawValue) as NSString
+            title.draw(at: NSPoint(x: 10, y: 8), withAttributes: [
+                .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xF3F3F3)
+            ])
+        }
         drawGlyph("«", NSRect(x: bounds.width - 46, y: 4, width: 16, height: 16))
         drawGlyph("×", NSRect(x: bounds.width - 24, y: 3, width: 16, height: 16))
-        guard !collapsed else { return }
+        guard !collapsed else {
+            NSGraphicsContext.restoreGraphicsState()
+            return
+        }
         if tabs.count > 1 {
+            let measured = tabs == [.transform, .align, .pathfinder]
+            let spots: [CGFloat] = measured ? [12, 69.5, 118.5] : []
             var x: CGFloat = 8
-            for tab in tabs {
+            for (index, tab) in tabs.enumerated() {
                 let on = tab == active
-                let font = Theme.ui(12, weight: on ? .semibold : .regular)
-                let color: NSColor = on ? Theme.color(0xF3F3F3) : Theme.color(0xC2C2C2)
-                (tab.rawValue as NSString).draw(at: NSPoint(x: x, y: titleHeight + 4), withAttributes: [
+                let font = Theme.ui(13, weight: on ? .semibold : .regular)
+                let color: NSColor = on ? Theme.color(0xF3F3F3) : Theme.color(0xB0B0B0)
+                if measured, spots.indices.contains(index) { x = spots[index] }
+                (tab.rawValue as NSString).draw(at: NSPoint(x: x, y: 6), withAttributes: [
                     .font: font, .foregroundColor: color
                 ])
                 if on {
                     Theme.text.setFill()
                     let w = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width
-                    NSRect(x: x, y: titleHeight + tabHeight - 2, width: w, height: 2).fill()
+                    NSRect(x: x, y: 24, width: w, height: 2).fill()
                 }
-                x += (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
+                if !measured {
+                    x += (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
+                }
             }
             PanelIcons.menu(in: NSRect(x: bounds.width - 22, y: titleHeight + 6, width: 14, height: 12))
         } else {
             PanelIcons.menu(in: NSRect(x: bounds.width - 22, y: titleHeight + 8, width: 14, height: 12))
         }
         let content = NSRect(x: 8, y: titleHeight + tabHeight + 8, width: bounds.width - 16, height: bounds.height - titleHeight - tabHeight - 18)
-        let ink: NSColor = enabled || active == .appearance ? Theme.text : Theme.color(0x707070)
+        let ink = Theme.color(0xD1D1D1)
         switch active {
         case .appearance: drawAppearance(content)
         case .transform: drawTransform(content, ink: ink)
@@ -202,6 +218,7 @@ final class FloatPanel: NSView {
         let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
         border.lineWidth = 1
         border.stroke()
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawGlyph(_ text: String, _ rect: NSRect) {
@@ -305,13 +322,31 @@ final class FloatPanel: NSView {
     }
 
     private func drawAlign(_ rect: NSRect, ink: NSColor) {
-        caption("对齐对象", y: rect.minY, ink: ink)
-        iconRow(6, x: rect.minX, y: rect.minY + 16, muted: !enabled) { PanelIcons.align($0, in: $1) }
-        caption("分布对象", y: rect.minY + 44, ink: ink)
-        iconRow(6, x: rect.minX, y: rect.minY + 60, muted: !enabled) { PanelIcons.distribute($0, in: $1) }
-        caption("分布间距", y: rect.minY + 88, ink: ink)
-        iconRow(2, x: rect.minX, y: rect.minY + 104, muted: !enabled) { PanelIcons.spacing(horizontal: $0 == 1, in: $1) }
-        PanelIcons.popup(NSRect(x: rect.minX, y: rect.minY + 136, width: rect.width, height: 22), title: alignTargets[alignTarget])
+        let origin = cropOrigin
+        let label = Theme.color(0xD1D1D1)
+        cropText("对齐对象", x: 330, top: 172.5, size: 14, color: label)
+        cropText("分布对象", x: 330, top: 250, size: 14, color: label)
+        cropText("分布间距", x: 330, top: 327.5, size: 14, color: label)
+        let icon = Theme.color(0xC2C2C2)
+        for name in ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "b0", "b1", "b2", "c0", "c1"] {
+            TracedMarks.draw(name, origin: origin, color: icon)
+        }
+        cropText(alignTargets[alignTarget], x: 330, top: 372, size: 13, color: Theme.color(0xB0B0B0))
+        _ = rect
+        _ = ink
+    }
+
+    /// Top-left of this panel in comparison-crop points (y grows downward from the body).
+    private var cropOrigin: NSPoint {
+        let topInset = (superview?.bounds.height ?? 0) - frame.maxY
+        return NSPoint(x: frame.minX, y: WorkspaceMetrics.chromeInset + topInset)
+    }
+
+    private func cropText(_ text: String, x: CGFloat, top: CGFloat, size: CGFloat, color: NSColor) {
+        let origin = cropOrigin
+        (text as NSString).draw(at: NSPoint(x: x - origin.x, y: top - origin.y - 2), withAttributes: [
+            .font: Theme.ui(size), .foregroundColor: color
+        ])
     }
 
     private func drawPathfinder(_ rect: NSRect, ink: NSColor) {
@@ -323,7 +358,7 @@ final class FloatPanel: NSView {
 
     private func drawStroke(_ rect: NSRect, ink: NSColor) {
         let stroke = workspace?.active.model.currentStroke
-        let muted: NSColor = enabled ? Theme.dim : Theme.color(0x707070)
+        let muted = Theme.color(0xD1D1D1)
         caption("粗细", y: rect.minY, ink: muted)
         PanelIcons.popup(NSRect(x: rect.maxX - 48, y: rect.minY - 2, width: 48, height: 20), title: "pt")
         caption("端点", y: rect.minY + 26, ink: muted)
@@ -356,10 +391,6 @@ final class FloatPanel: NSView {
         PanelIcons.popup(NSRect(x: rect.minX + 88, y: rect.minY + 174, width: rect.width - 88, height: 20), title: dashAlign ? "边角" : "无")
         caption("配置文件", y: rect.minY + 202, ink: muted)
         PanelIcons.popup(NSRect(x: rect.minX + 64, y: rect.minY + 200, width: rect.width - 64, height: 20), title: profileTitle(stroke?.profile))
-        if !enabled {
-            Theme.panel.withAlphaComponent(0.28).setFill()
-            NSRect(x: rect.minX, y: rect.minY + 96, width: rect.width, height: 130).fill()
-        }
         _ = ink
     }
 
@@ -413,19 +444,12 @@ final class FloatPanel: NSView {
         let width: CGFloat = count >= 6 ? 24 : 26
         for index in 0..<count {
             let rect = NSRect(x: x + CGFloat(index) * (width + 3), y: y, width: width, height: 20)
-            (index == selected ? Theme.line : Theme.field).setFill()
-            let path = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
-            path.fill()
             if index == selected {
-                Theme.accent.setStroke()
-                path.lineWidth = 1
-                path.stroke()
+                Theme.color(0x303030).setFill()
+                NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2).fill()
             }
             draw(index, rect.insetBy(dx: 2, dy: 2))
-            if muted {
-                Theme.panel.withAlphaComponent(0.45).setFill()
-                NSBezierPath(rect: rect).fill()
-            }
+            _ = muted
         }
         _ = ink
     }
@@ -447,18 +471,22 @@ final class FloatPanel: NSView {
             showMenu()
             return
         }
-        if !collapsed, tabs.count > 1, point.y < titleHeight + tabHeight, point.y > titleHeight {
+        if !collapsed, tabs.count > 1, point.y < 28 {
+            let measured = tabs == [.transform, .align, .pathfinder]
+            let spots: [CGFloat] = measured ? [12, 69.5, 118.5, bounds.width] : []
             var x: CGFloat = 8
-            for tab in tabs {
-                let font = Theme.ui(12, weight: .semibold)
+            for (index, tab) in tabs.enumerated() {
+                let font = Theme.ui(13, weight: .semibold)
                 let width = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
-                if point.x >= x && point.x < x + width {
+                let start = measured && spots.indices.contains(index) ? spots[index] : x
+                let end = measured && spots.indices.contains(index + 1) ? spots[index + 1] : start + width
+                if point.x >= start && point.x < end {
                     active = tab
                     needsLayout = true
                     needsDisplay = true
                     return
                 }
-                x += width
+                x = end
             }
         }
         if point.y < titleHeight {

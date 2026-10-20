@@ -33,6 +33,10 @@ enum Theme {
     static let dialog = color(0x323232)
     /// Depressed fields. New-document inputs sample to about #1C1C1C.
     static let field = color(0x1C1C1C)
+    /// Panel popups and value fields sample to about #4B4B4B, not the dialog black.
+    static let panelField = color(0x4B4B4B)
+    /// Panel push buttons sample to about #505050.
+    static let panelButton = color(0x505050)
     static let raised = color(0x3A3A3A)
     /// Dividers.
     static let line = color(0x6A6A6A)

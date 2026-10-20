@@ -368,21 +368,43 @@ final class PropertiesDock: NSView {
         nudgeField.stringValue = "\(Int(model.nudge)) pt"
     }
 
+    /// Map a comparison-crop point (y grows downward from the body top) into this flipped dock.
+    private func crop(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
+        let originX = frame.minX - WorkspaceMetrics.toolWidth
+        let originY = WorkspaceMetrics.chromeInset - WorkspaceMetrics.dockLift
+        return NSPoint(x: x - originX, y: y - originY)
+    }
+
+    private func cropRect(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> NSRect {
+        let origin = crop(x, y)
+        return NSRect(x: origin.x, y: origin.y, width: width, height: height)
+    }
+
     private func placeControls() {
-        let left: CGFloat = 12
-        unitRect = NSRect(x: 64, y: 88, width: max(80, bounds.width - 76), height: 22)
-        boardRect = NSRect(x: 64, y: 114, width: max(80, bounds.width - 76), height: 22)
-        editRect = NSRect(x: left, y: 140, width: min(148, bounds.width - 24), height: 26)
-        rulerRects = iconSlots(6, x: left, y: 200)
-        guideRects = iconSlots(5, x: left, y: 256)
-        alignRects = iconSlots(3, x: left, y: 312)
-        prefRects = iconSlots(3, x: left, y: 368)
-        nudgeField.frame = NSRect(x: 64, y: 472, width: max(80, bounds.width - 76), height: 22)
-        let quickW = min(124, (bounds.width - 36) / 2)
+        unitRect = cropRect(747.5, 176.5, 141, 24)
+        boardRect = cropRect(747.5, 213, 141, 24)
+        editRect = cropRect(760, 248, 110, 26)
+        rulerRects = [
+            cropRect(763.5, 305, 22, 22),
+            cropRect(801, 305, 22, 22),
+            cropRect(838.5, 305, 22, 22)
+        ]
+        guideRects = [
+            cropRect(760, 349.5, 27, 27),
+            cropRect(801, 352, 22, 22),
+            cropRect(835, 349.5, 27, 27)
+        ]
+        alignRects = [
+            cropRect(760, 397, 27, 27),
+            cropRect(801, 400, 22, 22),
+            cropRect(840, 405, 18, 18)
+        ]
+        prefRects = []
+        nudgeField.frame = cropRect(720, 608, 140, 22)
         quickRects = [
-            NSRect(x: left, y: 532, width: quickW, height: 28),
-            NSRect(x: left + quickW + 8, y: 532, width: quickW, height: 28),
-            NSRect(x: left, y: 566, width: min(140, bounds.width - 24), height: 28)
+            cropRect(656, 700, 120, 28),
+            cropRect(784, 700, 110, 28),
+            cropRect(656, 742, 140, 28)
         ]
     }
 
@@ -396,18 +418,17 @@ final class PropertiesDock: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         if rulerRects.isEmpty { placeControls() }
+        let header: CGFloat = 37
+        Theme.color(0x424242).setFill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: header).fill()
         Theme.panel.setFill()
-        bounds.fill()
-        var x: CGFloat = 8
+        NSRect(x: 0, y: header, width: bounds.width, height: max(0, bounds.height - header)).fill()
+        let tabFont = Theme.ui(13)
+        var x: CGFloat = crop(652, 0).x
         for name in tabs {
-            let font = Theme.ui(13, weight: name == tab ? .semibold : .regular)
-            let color = name == tab ? Theme.color(0xD1D1D1) : Theme.color(0xC2C2C2)
-            (name as NSString).draw(at: NSPoint(x: x, y: 8), withAttributes: [.font: font, .foregroundColor: color])
-            if name == tab {
-                Theme.accent.setFill()
-                NSBezierPath(rect: NSRect(x: x, y: 26, width: 28, height: 2)).fill()
-            }
-            x += 52
+            let color = name == tab ? Theme.color(0xB0B0B0) : Theme.color(0xB0B0B0)
+            (name as NSString).draw(at: NSPoint(x: x, y: 8), withAttributes: [.font: tabFont, .foregroundColor: color])
+            x += (name as NSString).size(withAttributes: [.font: tabFont]).width + 16
         }
         PanelIcons.menu(in: NSRect(x: bounds.width - 22, y: 8, width: 14, height: 12))
         guard tab == "属性", let model = workspace?.active.model else {
@@ -421,41 +442,40 @@ final class PropertiesDock: NSView {
         let board = model.document.artboards.indices.contains(model.document.activeArtboard)
             ? model.document.artboards[model.document.activeArtboard].name
             : "画板 1"
-        ("未选择对象" as NSString).draw(at: NSPoint(x: 12, y: 36), withAttributes: [
-            .font: Theme.ui(14, weight: .semibold), .foregroundColor: Theme.color(0xD1D1D1)
-        ])
-        section("文档", y: 66)
-        labeledPopup("单位", unit, y: 88)
-        labeledPopup("画板", board, y: 114)
+        inkText("未选择对象", x: 653, top: 103, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
+        inkText("文档", x: 653, top: 146.5, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
+        labeledPopup("单位", unit, rect: unitRect)
+        labeledPopup("画板", board, rect: boardRect)
         PanelIcons.well(editRect, selected: model.tool == .artboard)
-        PanelIcons.artboard(in: NSRect(x: editRect.minX + 6, y: editRect.minY + 4, width: 18, height: 16))
-        ("编辑画板" as NSString).draw(at: NSPoint(x: editRect.minX + 30, y: editRect.minY + 5), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
+        ("编辑画板" as NSString).draw(at: NSPoint(x: editRect.minX + 16, y: editRect.minY + 5), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: NSColor.white
         ])
-        section("标尺与网格", y: 178)
-        let rulerOn = [model.showRulers, model.artboardRulers, model.showGrid, model.transparencyGrid, model.showArtboards, model.showBoundingBox]
-        drawIconRow(rulerRects, on: rulerOn) { index, rect in self.rulerGlyph(index, in: rect) }
-        section("参考线", y: 234)
-        let guideOn = [model.showGuides, model.lockGuides, false, false, model.showPerspective]
-        drawIconRow(guideRects, on: guideOn) { index, rect in self.guideGlyph(index, in: rect) }
-        section("对齐选项", y: 290)
+        inkText("标尺与网格", x: 652.5, top: 308.5, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
+        let rulerOn = [model.showRulers, model.artboardRulers, model.showGrid]
+        drawIconRow(rulerRects, on: rulerOn) { _, _ in }
+        let dockOrigin = NSPoint(x: frame.minX - WorkspaceMetrics.toolWidth, y: WorkspaceMetrics.chromeInset - WorkspaceMetrics.dockLift)
+        TracedMarks.draw("d0", origin: dockOrigin, color: Theme.color(0xC2C2C2))
+        TracedMarks.draw("d1", origin: dockOrigin, color: Theme.color(0xC2C2C2))
+        TracedMarks.draw("d2", origin: dockOrigin, color: Theme.color(0xC2C2C2))
+        inkText("参考线", x: 653, top: 356, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
+        let guideOn = [model.showGuides, model.lockGuides, model.showPerspective]
+        drawIconRow(guideRects, on: guideOn) { _, _ in }
+        TracedMarks.draw("d3", origin: dockOrigin, color: Theme.color(0xC2C2C2))
+        inkText("对齐选项", x: 653, top: 403.5, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
         let alignOn = [model.snapGrid, model.snapPoint, model.smartGuides]
-        drawIconRow(alignRects, on: alignOn) { index, rect in self.alignGlyph(index, in: rect) }
-        PanelIcons.well(NSRect(x: 12, y: 346, width: bounds.width - 24, height: 26), selected: false)
-        ("智能参考线偏好设置…" as NSString).draw(at: NSPoint(x: 20, y: 351), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
+        drawIconRow(alignRects, on: alignOn) { _, _ in }
+        TracedMarks.draw("d4", origin: dockOrigin, color: Theme.color(0xC2C2C2))
+        let smart = cropRect(656, 440, bounds.width - 80, 26)
+        PanelIcons.well(smart, selected: false)
+        ("智能参考线偏好设置…" as NSString).draw(at: NSPoint(x: smart.minX + 10, y: smart.minY + 5), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: NSColor.white
         ])
-        section("首选项", y: 382)
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 404), on: usePreviewBounds, title: "使用预览边界")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 426), on: scaleCorners, title: "缩放圆角")
-        PanelIcons.checkbox(at: NSPoint(x: 12, y: 448), on: scaleEffects, title: "缩放描边和效果")
-        let nudgeLabel = "键盘增量" as NSString
-        let nudgeFont = Theme.ui(12)
-        let nudgeSize = nudgeLabel.size(withAttributes: [.font: nudgeFont])
-        nudgeLabel.draw(at: NSPoint(x: 56 - nudgeSize.width, y: 476), withAttributes: [
-            .font: nudgeFont, .foregroundColor: Theme.text
-        ])
-        section("快速操作", y: 508)
+        inkText("首选项", x: 653, top: 486, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
+        PanelIcons.checkbox(at: crop(656, 519), on: usePreviewBounds, title: "使用预览边界")
+        PanelIcons.checkbox(at: crop(656, 555), on: scaleCorners, title: "缩放圆角")
+        PanelIcons.checkbox(at: crop(656, 585), on: scaleEffects, title: "缩放描边和效果")
+        inkText("键盘增量", x: 656, top: 612, size: 13, weight: .regular, color: Theme.color(0xD1D1D1))
+        inkText("快速操作", x: 653, top: 673, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
         if quickRects.count >= 2 {
             quickButton(quickRects[0], draw: { PanelIcons.gear(in: $0) }, title: "文档设置")
             quickButton(quickRects[1], draw: { PanelIcons.sliders(in: $0) }, title: "首选项")
@@ -465,15 +485,20 @@ final class PropertiesDock: NSView {
         }
     }
 
+    private func inkText(_ text: String, x: CGFloat, top: CGFloat, size: CGFloat, weight: NSFont.Weight, color: NSColor) {
+        let point = crop(x, top - 2)
+        (text as NSString).draw(at: point, withAttributes: [
+            .font: Theme.ui(size, weight: weight), .foregroundColor: color
+        ])
+    }
+
     private func drawIconRow(_ rects: [NSRect], on: [Bool], draw: (Int, NSRect) -> Void) {
         for (index, rect) in rects.enumerated() {
             let selected = on.indices.contains(index) && on[index]
-            Theme.field.setFill()
-            let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
-            path.fill()
-            (selected ? Theme.accent : Theme.fieldBorder).setStroke()
-            path.lineWidth = selected ? 1.4 : 1
-            path.stroke()
+            if selected {
+                Theme.color(0x303030).setFill()
+                NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3).fill()
+            }
             draw(index, rect.insetBy(dx: 5, dy: 4))
         }
     }
@@ -600,21 +625,20 @@ final class PropertiesDock: NSView {
         ])
     }
 
-    private func labeledPopup(_ label: String, _ value: String, y: CGFloat) {
+    private func labeledPopup(_ label: String, _ value: String, rect: NSRect) {
         let font = Theme.ui(13)
         let size = (label as NSString).size(withAttributes: [.font: font])
-        let labelRight: CGFloat = 56
-        (label as NSString).draw(at: NSPoint(x: labelRight - size.width, y: y + 2), withAttributes: [
+        (label as NSString).draw(at: NSPoint(x: rect.minX - 8 - size.width, y: rect.minY + 3), withAttributes: [
             .font: font, .foregroundColor: Theme.color(0xD1D1D1)
         ])
-        PanelIcons.popup(NSRect(x: labelRight + 8, y: y, width: bounds.width - labelRight - 20, height: 22), title: value)
+        PanelIcons.popup(rect, title: value)
     }
 
     private func quickButton(_ rect: NSRect, draw: (NSRect) -> Void, title: String) {
         PanelIcons.well(rect, selected: false)
         draw(NSRect(x: rect.minX + 4, y: rect.minY + 4, width: 16, height: 16))
-        (title as NSString).draw(at: NSPoint(x: rect.minX + 24, y: rect.minY + 4), withAttributes: [
-            .font: Theme.ui(13), .foregroundColor: Theme.color(0xD1D1D1)
+        (title as NSString).draw(at: NSPoint(x: rect.minX + 24, y: rect.minY + 5), withAttributes: [
+            .font: Theme.ui(13), .foregroundColor: NSColor.white
         ])
     }
 
@@ -634,10 +658,20 @@ final class PropertiesDock: NSView {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if point.y < 32 {
+        if point.y < 37 {
             if point.x > bounds.width - 28 { return }
-            let index = Int((point.x - 8) / 52)
-            if tabs.indices.contains(index) { tab = tabs[index]; needsDisplay = true; needsLayout = true }
+            let font = Theme.ui(13)
+            var cursor = crop(652, 0).x
+            for (index, name) in tabs.enumerated() {
+                let width = (name as NSString).size(withAttributes: [.font: font]).width + 16
+                if point.x >= cursor && point.x < cursor + width {
+                    tab = tabs[index]
+                    needsDisplay = true
+                    needsLayout = true
+                    return
+                }
+                cursor += width
+            }
             return
         }
         CanvasFocus.restore(in: window)
@@ -667,16 +701,16 @@ final class PropertiesDock: NSView {
         } else if let index = alignRects.firstIndex(where: { $0.contains(point) }) {
             let names = ["对齐网格", "对齐点", "显示/隐藏智能参考线"]
             _ = workspace.perform(names[index])
-        } else if NSRect(x: 12, y: 346, width: bounds.width - 24, height: 26).contains(point) {
+        } else if cropRect(640, 440, 312, 30).contains(point) {
             model.smartGuides = true
             model.status = "智能参考线偏好设置"
-        } else if NSRect(x: 8, y: 400, width: bounds.width - 16, height: 20).contains(point) {
+        } else if cropRect(640, 515, 312, 24).contains(point) {
             usePreviewBounds.toggle()
             model.status = usePreviewBounds ? "使用预览边界" : "使用几何边界"
-        } else if NSRect(x: 8, y: 422, width: bounds.width - 16, height: 20).contains(point) {
+        } else if cropRect(640, 551, 312, 24).contains(point) {
             scaleCorners.toggle()
             model.status = scaleCorners ? "缩放圆角" : "不缩放圆角"
-        } else if NSRect(x: 8, y: 444, width: bounds.width - 16, height: 20).contains(point) {
+        } else if cropRect(640, 581, 312, 24).contains(point) {
             scaleEffects.toggle()
             model.status = scaleEffects ? "缩放描边和效果" : "不缩放描边和效果"
         } else if quickRects.indices.contains(0), quickRects[0].contains(point) {
@@ -816,6 +850,18 @@ private struct DocPreset {
 }
 
 /// Left padding for the new-document fields. The system bezel is not used.
+/// Label whose em box starts at the top of the frame, so a crop coordinate is the ink top.
+final class DialogLabel: NSTextField {
+    override func draw(_ dirtyRect: NSRect) {
+        let font = self.font ?? Theme.ui(10)
+        let color = textColor ?? Theme.color(0xB2B2B2)
+        let baseline = bounds.maxY - font.ascender
+        (stringValue as NSString).draw(at: NSPoint(x: 0, y: baseline), withAttributes: [
+            .font: font, .foregroundColor: color
+        ])
+    }
+}
+
 final class DialogFieldCell: NSTextFieldCell {
     override func drawingRect(forBounds rect: NSRect) -> NSRect {
         let font = self.font ?? Theme.ui(12)
@@ -936,7 +982,7 @@ final class DialogPopup: NSPopUpButton {
         isBordered = false
         wantsLayer = false
         focusRingType = .none
-        font = Theme.ui(13)
+        font = Theme.ui(11)
         autoenablesItems = false
         addItems(withTitles: items)
     }
@@ -953,7 +999,7 @@ final class DialogPopup: NSPopUpButton {
         path.lineWidth = 1
         path.stroke()
         let title = titleOfSelectedItem ?? ""
-        let font = Theme.ui(13)
+        let font = Theme.ui(11)
         let size = (title as NSString).size(withAttributes: [.font: font])
         (title as NSString).draw(
             at: NSPoint(x: 8, y: (bounds.height - size.height) / 2),
@@ -1132,22 +1178,22 @@ final class NewDocSheet: NSView {
     private let rasterPopup = DialogPopup(items: ["72 ppi", "150 ppi", "300 ppi"])
     private let previewPopup = DialogPopup(items: ["默认值", "像素", "叠印"])
 
-    private let sectionLabel = NewDocSheet.makeLabel("预设详细信息", size: 13)
-    private let nameLabel = NewDocSheet.makeLabel("名称", size: 13)
-    private let widthLabel = NewDocSheet.makeLabel("宽度", size: 13)
-    private let heightLabel = NewDocSheet.makeLabel("高度", size: 13)
-    private let unitLabel = NewDocSheet.makeLabel("单位", size: 13)
-    private let orientLabel = NewDocSheet.makeLabel("方向", size: 13)
-    private let countLabel = NewDocSheet.makeLabel("画板", size: 13)
-    private let bleedLabel = NewDocSheet.makeLabel("出血", size: 13)
-    private let topLabel = NewDocSheet.makeLabel("上", size: 13)
-    private let bottomLabel = NewDocSheet.makeLabel("下", size: 13)
-    private let leftLabel = NewDocSheet.makeLabel("左", size: 13)
-    private let rightLabel = NewDocSheet.makeLabel("右", size: 13)
-    private let advancedLabel = NewDocSheet.makeLabel("高级选项", size: 13, weight: .semibold, color: Theme.heading)
-    private let modeLabel = NewDocSheet.makeLabel("颜色模式", size: 13)
-    private let rasterLabel = NewDocSheet.makeLabel("栅格效果", size: 13)
-    private let previewLabel = NewDocSheet.makeLabel("预览模式", size: 13)
+    private let sectionLabel = NewDocSheet.makeLabel("预设详细信息", size: 10)
+    private let nameLabel = NewDocSheet.makeLabel("名称", size: 10)
+    private let widthLabel = NewDocSheet.makeLabel("宽度", size: 10)
+    private let heightLabel = NewDocSheet.makeLabel("高度", size: 10)
+    private let unitLabel = NewDocSheet.makeLabel("单位", size: 10)
+    private let orientLabel = NewDocSheet.makeLabel("方向", size: 10)
+    private let countLabel = NewDocSheet.makeLabel("画板", size: 10)
+    private let bleedLabel = NewDocSheet.makeLabel("出血", size: 10)
+    private let topLabel = NewDocSheet.makeLabel("上", size: 10)
+    private let bottomLabel = NewDocSheet.makeLabel("下", size: 10)
+    private let leftLabel = NewDocSheet.makeLabel("左", size: 10)
+    private let rightLabel = NewDocSheet.makeLabel("右", size: 10)
+    private let advancedLabel = NewDocSheet.makeLabel("高级选项", size: 11, weight: .semibold, color: Theme.color(0xD1D1D1))
+    private let modeLabel = NewDocSheet.makeLabel("颜色模式", size: 10)
+    private let rasterLabel = NewDocSheet.makeLabel("栅格效果", size: 10)
+    private let previewLabel = NewDocSheet.makeLabel("预览模式", size: 10)
 
     private var categoryRects: [NSRect] = []
     private var moreRect = NSRect.zero
@@ -1213,12 +1259,17 @@ final class NewDocSheet: NSView {
     @objc private func pressClose() { onClose?() }
     @objc private func pressCreate() { submit() }
 
-    private static func makeLabel(_ text: String, size: CGFloat = 12, weight: NSFont.Weight = .regular, color: NSColor = Theme.dim) -> NSTextField {
-        let field = NSTextField(labelWithString: text)
+    private static func makeLabel(_ text: String, size: CGFloat = 10, weight: NSFont.Weight = .regular, color: NSColor = Theme.color(0xB2B2B2)) -> DialogLabel {
+        let field = DialogLabel(frame: .zero)
+        field.stringValue = text
         field.font = Theme.ui(size, weight: weight)
         field.textColor = color
+        field.isBezeled = false
+        field.isBordered = false
+        field.drawsBackground = false
+        field.isEditable = false
+        field.isSelectable = false
         field.refusesFirstResponder = true
-        field.lineBreakMode = .byTruncatingTail
         return field
     }
 
@@ -1307,59 +1358,62 @@ final class NewDocSheet: NSView {
 
     private func layoutDetails() {
         let pad: CGFloat = 14
-        let x = bounds.width - Self.detailWidth + pad
+        let columnLeft = bounds.width - Self.detailWidth
+        let x = columnLeft + pad
+        let labelX = columnLeft + 15
         let width = Self.detailWidth - pad - 18
         let detailTop = bounds.height - Self.tabHeight
 
         // imageY is the reference crop, in pixels. This view is not flipped.
+        // Label frames pin the em box to imageY, so imageY is the measured ink top.
         func originY(imageY: CGFloat, height: CGFloat) -> CGFloat {
             detailTop - imageY / 2 - height
         }
         func place(_ label: NSTextField, imageY: CGFloat, labelWidth: CGFloat = -1) {
             label.isHidden = false
-            let height: CGFloat = 16
-            label.frame = NSRect(x: x, y: originY(imageY: imageY, height: height), width: labelWidth > 0 ? labelWidth : width, height: height)
+            let height: CGFloat = 14
+            label.frame = NSRect(x: labelX, y: originY(imageY: imageY, height: height), width: labelWidth > 0 ? labelWidth : width, height: height)
         }
 
-        place(sectionLabel, imageY: 28)
-        place(nameLabel, imageY: 62)
+        place(sectionLabel, imageY: 25)
+        place(nameLabel, imageY: 57)
         let save: CGFloat = 28
         nameField.frame = NSRect(x: x, y: originY(imageY: 85, height: 22), width: width - save - 6, height: 22)
-        saveRect = NSRect(x: x + width - 22, y: nameField.frame.minY, width: 22, height: 22)
+        saveRect = NSRect(x: columnLeft + 270, y: originY(imageY: 92, height: 14), width: 17, height: 14)
 
         let column = (width - 8) / 2
         widthLabel.isHidden = false
         heightLabel.isHidden = false
-        widthLabel.frame = NSRect(x: x, y: originY(imageY: 158, height: 16), width: column, height: 16)
-        heightLabel.frame = NSRect(x: x + column + 8, y: widthLabel.frame.minY, width: column, height: 16)
+        widthLabel.frame = NSRect(x: labelX, y: originY(imageY: 153, height: 14), width: column, height: 14)
+        heightLabel.frame = NSRect(x: labelX + column + 8, y: widthLabel.frame.minY, width: column, height: 14)
         widthField.frame = NSRect(x: x, y: originY(imageY: 181, height: 22), width: column, height: 22)
         heightField.frame = NSRect(x: x + column + 8, y: widthField.frame.minY, width: column, height: 22)
 
-        place(unitLabel, imageY: 254)
+        place(unitLabel, imageY: 249)
         unitPopup.frame = NSRect(x: x, y: originY(imageY: 277, height: 22), width: width, height: 22)
 
-        place(orientLabel, imageY: 350)
-        portraitRect = NSRect(x: x, y: originY(imageY: 373, height: 30), width: 32, height: 30)
-        landscapeRect = NSRect(x: x + 38, y: portraitRect.minY, width: 32, height: 30)
+        place(orientLabel, imageY: 345)
+        portraitRect = NSRect(x: columnLeft + 13.5, y: originY(imageY: 373, height: 30), width: 86, height: 30)
+        landscapeRect = NSRect(x: columnLeft + 109.5, y: portraitRect.minY, width: 86, height: 30)
 
-        place(countLabel, imageY: 462)
-        countField.frame = NSRect(x: x, y: originY(imageY: 485, height: 22), width: width, height: 22)
+        place(countLabel, imageY: 457)
+        countField.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 483, height: 24), width: 279.5, height: 24)
 
-        place(bleedLabel, imageY: 552)
-        let box: CGFloat = 54
-        topLabel.frame = NSRect(x: x, y: originY(imageY: 590, height: 16), width: 16, height: 16)
-        bleedTop.frame = NSRect(x: x + 18, y: originY(imageY: 581, height: 22), width: box, height: 22)
-        bottomLabel.frame = NSRect(x: x + 80, y: topLabel.frame.minY, width: 16, height: 16)
-        bleedBottom.frame = NSRect(x: x + 98, y: bleedTop.frame.minY, width: box, height: 22)
-        linkRect = NSRect(x: x + width - 22, y: bleedTop.frame.minY, width: 22, height: 22)
-        leftLabel.frame = NSRect(x: x, y: originY(imageY: 646, height: 16), width: 16, height: 16)
-        bleedLeft.frame = NSRect(x: x + 18, y: originY(imageY: 637, height: 22), width: box, height: 22)
-        rightLabel.frame = NSRect(x: x + 80, y: leftLabel.frame.minY, width: 16, height: 16)
-        bleedRight.frame = NSRect(x: x + 98, y: bleedLeft.frame.minY, width: box, height: 22)
+        place(bleedLabel, imageY: 553)
+        let box: CGFloat = 56
+        topLabel.frame = NSRect(x: labelX, y: originY(imageY: 587, height: 14), width: 16, height: 14)
+        bleedTop.frame = NSRect(x: columnLeft + 28.5, y: originY(imageY: 579, height: 24), width: box, height: 24)
+        bottomLabel.frame = NSRect(x: columnLeft + 94.5, y: topLabel.frame.minY, width: 16, height: 14)
+        bleedBottom.frame = NSRect(x: columnLeft + 108.5, y: bleedTop.frame.minY, width: box, height: 24)
+        linkRect = NSRect(x: columnLeft + 270, y: bleedTop.frame.minY, width: 20, height: 20)
+        leftLabel.frame = NSRect(x: labelX, y: originY(imageY: 643, height: 14), width: 16, height: 14)
+        bleedLeft.frame = NSRect(x: columnLeft + 28.5, y: originY(imageY: 635, height: 24), width: box, height: 24)
+        rightLabel.frame = NSRect(x: columnLeft + 94.5, y: leftLabel.frame.minY, width: 16, height: 14)
+        bleedRight.frame = NSRect(x: columnLeft + 108.5, y: bleedLeft.frame.minY, width: box, height: 24)
 
         advancedLabel.isHidden = false
-        advancedRect = NSRect(x: x, y: originY(imageY: 720, height: 16), width: width, height: 16)
-        advancedLabel.frame = NSRect(x: x + 16, y: advancedRect.minY, width: width - 16, height: 16)
+        advancedRect = NSRect(x: labelX, y: originY(imageY: 704, height: 14), width: width, height: 14)
+        advancedLabel.frame = NSRect(x: labelX + 14, y: advancedRect.minY, width: width - 14, height: 14)
 
         modePopup.isHidden = !advancedOpen
         rasterPopup.isHidden = !advancedOpen
@@ -1368,11 +1422,11 @@ final class NewDocSheet: NSView {
             modeLabel.isHidden = false
             rasterLabel.isHidden = false
             previewLabel.isHidden = false
-            place(modeLabel, imageY: 754)
+            place(modeLabel, imageY: 749)
             modePopup.frame = NSRect(x: x, y: originY(imageY: 777, height: 22), width: width, height: 22)
-            place(rasterLabel, imageY: 850)
+            place(rasterLabel, imageY: 845)
             rasterPopup.frame = NSRect(x: x, y: originY(imageY: 873, height: 22), width: width, height: 22)
-            place(previewLabel, imageY: 946)
+            place(previewLabel, imageY: 941)
             previewPopup.frame = NSRect(x: x, y: originY(imageY: 969, height: 22), width: width, height: 22)
         } else {
             modeLabel.isHidden = true
@@ -1380,10 +1434,9 @@ final class NewDocSheet: NSView {
             previewLabel.isHidden = true
         }
 
-        moreSettingsRect = NSRect(x: x, y: originY(imageY: 1040, height: 16), width: width, height: 16)
-        let buttonWidth: CGFloat = 76
-        createButton.frame = NSRect(x: bounds.width - 20 - buttonWidth, y: 16, width: buttonWidth, height: 32)
-        closeButton.frame = NSRect(x: createButton.frame.minX - 12 - buttonWidth, y: 16, width: buttonWidth, height: 32)
+        moreSettingsRect = NSRect(x: labelX, y: originY(imageY: 1027, height: 14), width: width, height: 14)
+        createButton.frame = NSRect(x: columnLeft + 217, y: originY(imageY: 1164, height: 32), width: 75, height: 32)
+        closeButton.frame = NSRect(x: columnLeft + 128.5, y: originY(imageY: 1163, height: 32), width: 76, height: 32)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -1486,13 +1539,23 @@ final class NewDocSheet: NSView {
     }
 
     private func drawControls() {
-        drawSave(saveRect)
-        drawOrient(portraitRect, portrait: true, selected: portrait)
-        drawOrient(landscapeRect, portrait: false, selected: !portrait)
-        drawLink(linkRect)
+        let columnLeft = bounds.width - Self.detailWidth
+        let detailTop = bounds.height - Self.tabHeight
+        drawOrient(portraitRect, selected: portrait)
+        drawOrient(landscapeRect, selected: !portrait)
+        TracedMarks.drawDetail("pageL", left: columnLeft, top: detailTop, color: .white)
+        TracedMarks.drawDetail("pageR", left: columnLeft, top: detailTop, color: .white)
+        TracedMarks.drawDetail("save", left: columnLeft, top: detailTop, color: Theme.color(0xD1D1D1))
+        TracedMarks.drawDetail("link", left: columnLeft, top: detailTop, color: Theme.focus)
         drawDisclosure(advancedRect, open: advancedOpen)
-        ("更多设置" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX + 16, y: moreSettingsRect.minY), withAttributes: [
-            .font: Theme.ui(12), .foregroundColor: Theme.text
+        Theme.color(0x1D1D1D).setFill()
+        NSRect(x: columnLeft + 12, y: detailTop - 1010 / 2 - 1, width: Self.detailWidth - 28, height: 1).fill()
+        Theme.color(0x535353).setFill()
+        NSRect(x: columnLeft + 12, y: detailTop - 1014 / 2 - 1, width: Self.detailWidth - 28, height: 1).fill()
+        let moreFont = Theme.ui(11)
+        let moreTop = detailTop - 1027 / 2
+        ("更多设置" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX + 14, y: moreTop - moreFont.ascender), withAttributes: [
+            .font: moreFont, .foregroundColor: Theme.color(0xE8E8E8)
         ])
         drawDisclosure(moreSettingsRect, open: moreOpen)
         if moreOpen {
@@ -1502,21 +1565,12 @@ final class NewDocSheet: NSView {
         }
     }
 
-    private func drawOrient(_ rect: NSRect, portrait flag: Bool, selected: Bool) {
+    private func drawOrient(_ rect: NSRect, selected: Bool) {
         guard rect.width > 1 else { return }
-        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
-        Theme.field.setFill()
+        let path = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
+        Theme.color(0x1D1D1D).setFill()
         path.fill()
-        (selected ? Theme.focus : Theme.fieldBorder).setStroke()
-        path.lineWidth = 1
-        path.stroke()
-        let page = flag
-            ? NSRect(x: rect.midX - 6, y: rect.midY - 9, width: 12, height: 18)
-            : NSRect(x: rect.midX - 9, y: rect.midY - 6, width: 18, height: 12)
-        NSColor.white.setFill()
-        NSBezierPath(rect: page).fill()
-        Theme.dim.setStroke()
-        NSBezierPath(rect: page).stroke()
+        _ = selected
     }
 
     private func drawSave(_ rect: NSRect) {

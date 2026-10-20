@@ -20,7 +20,7 @@ class PanelField: NSTextField, NSTextFieldDelegate {
         isBezeled = false
         isBordered = false
         drawsBackground = true
-        backgroundColor = Theme.field
+        backgroundColor = Theme.panelField
         textColor = Theme.text
         font = Theme.ui(12)
         alignment = .center
