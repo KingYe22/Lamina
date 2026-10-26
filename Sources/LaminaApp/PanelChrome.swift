@@ -254,7 +254,6 @@ final class FloatPanel: NSView {
         opacityLine(top: 198, indented: true, ink: dim)
         appearanceRow(top: 230, title: "填色", swatch: .black, ink: ink, dim: dim)
         opacityLine(top: 260.5, indented: true, ink: dim)
-        appearanceRow(top: 292, title: "不透明度：默认值", swatch: nil, ink: ink, dim: dim)
         let centers: [CGFloat] = [41.75, 74.25, 108.5, 212.75, 247, 278]
         for (index, center) in centers.enumerated() {
             let point = place(center, 318)
@@ -323,38 +322,46 @@ final class FloatPanel: NSView {
         path.stroke()
     }
 
+    /// Footer, left to right: new stroke, new fill, fx, clear, duplicate, delete.
     private func appearanceIcon(_ index: Int, in rect: NSRect) {
-        Theme.text.setStroke()
+        let color: NSColor = (!enabled && index >= 3) ? Theme.color(0x6E6E6E) : Theme.color(0xE4E4E4)
+        color.setStroke()
+        color.setFill()
         let path = NSBezierPath()
-        path.lineWidth = 1.2
+        path.lineWidth = 1.1
         path.lineCapStyle = .round
+        path.lineJoinStyle = .round
         switch index {
         case 0:
-            ("fx" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY), withAttributes: [
-                .font: Theme.ui(11, weight: .semibold), .foregroundColor: Theme.text
-            ])
-            return
+            path.appendRect(rect.insetBy(dx: 3.5, dy: 2.5))
+            path.stroke()
         case 1:
-            path.appendOval(in: rect.insetBy(dx: 1, dy: 1))
-            path.move(to: NSPoint(x: rect.midX, y: rect.minY + 1))
-            path.line(to: NSPoint(x: rect.midX, y: rect.maxY - 1))
-            path.move(to: NSPoint(x: rect.minX + 1, y: rect.midY))
-            path.line(to: NSPoint(x: rect.maxX - 1, y: rect.midY))
+            path.appendRect(rect.insetBy(dx: 3.5, dy: 2.5))
+            path.fill()
         case 2:
-            path.appendRect(rect.insetBy(dx: 2, dy: 2))
+            ("fx" as NSString).draw(at: NSPoint(x: rect.minX + 1, y: rect.minY + 1), withAttributes: [
+                .font: Theme.ui(12, weight: .medium), .foregroundColor: color
+            ])
         case 3:
-            path.appendRect(NSRect(x: rect.minX + 1, y: rect.minY + 3, width: rect.width - 6, height: rect.height - 6))
-            path.appendRect(NSRect(x: rect.minX + 5, y: rect.minY + 1, width: rect.width - 6, height: rect.height - 6))
+            path.appendOval(in: rect.insetBy(dx: 2.5, dy: 1.5))
+            path.move(to: NSPoint(x: rect.minX + 5, y: rect.minY + 3))
+            path.line(to: NSPoint(x: rect.maxX - 5, y: rect.maxY - 3))
+            path.stroke()
         case 4:
-            path.move(to: NSPoint(x: rect.minX + 2, y: rect.minY + 2))
-            path.line(to: NSPoint(x: rect.maxX - 2, y: rect.maxY - 2))
-            path.move(to: NSPoint(x: rect.maxX - 2, y: rect.minY + 2))
-            path.line(to: NSPoint(x: rect.minX + 2, y: rect.maxY - 2))
+            path.appendRect(NSRect(x: rect.minX + 2, y: rect.minY + 4, width: rect.width - 8, height: rect.height - 7))
+            path.appendRect(NSRect(x: rect.minX + 6, y: rect.minY + 1, width: rect.width - 8, height: rect.height - 7))
+            path.stroke()
         default:
-            path.move(to: NSPoint(x: rect.minX, y: rect.midY))
-            path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
+            let body = NSRect(x: rect.minX + 4, y: rect.minY + 1, width: rect.width - 8, height: rect.height - 6)
+            path.appendRect(body)
+            path.move(to: NSPoint(x: rect.minX + 3, y: body.maxY))
+            path.line(to: NSPoint(x: rect.maxX - 3, y: body.maxY))
+            path.move(to: NSPoint(x: rect.midX - 2.5, y: body.maxY))
+            path.line(to: NSPoint(x: rect.midX - 2.5, y: rect.maxY - 1))
+            path.line(to: NSPoint(x: rect.midX + 2.5, y: rect.maxY - 1))
+            path.line(to: NSPoint(x: rect.midX + 2.5, y: body.maxY))
+            path.stroke()
         }
-        path.stroke()
     }
 
     private func row(_ x: CGFloat, _ y: CGFloat, title: String, detail: String, color: NSColor) {
@@ -391,14 +398,31 @@ final class FloatPanel: NSView {
         cropText("分布对象", x: 330, top: 250, size: 14, color: label)
         cropText("分布间距", x: 330, top: 327.5, size: 14, color: label)
         let icon = Theme.color(0xC2C2C2)
-        for name in ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "b0", "b1", "b2"] {
+        for name in ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "b0", "b1", "b2", "c0", "c1"] {
             TracedMarks.draw(name, origin: origin, color: icon)
         }
-        // The reference keeps "对齐" on the 分布间距 row, with three icons under it.
-        cropText("对齐", x: 516, top: 327, size: 13, color: label)
+        let spacing = place(458, 352)
+        let value = NSRect(x: spacing.x, y: spacing.y, width: 48, height: 18)
+        Theme.color(0x454545).setFill()
+        NSBezierPath(roundedRect: value, xRadius: 2, yRadius: 2).fill()
+        let valueText = "0 mm" as NSString
+        let valueFont = Theme.ui(11)
+        let valueSize = valueText.size(withAttributes: [.font: valueFont])
+        valueText.draw(
+            at: NSPoint(x: value.midX - valueSize.width / 2, y: value.midY - valueSize.height / 2),
+            withAttributes: [.font: valueFont, .foregroundColor: Theme.color(0x878787)]
+        )
+        cropText("对齐到", x: 516, top: 327, size: 13, color: label)
         for index in 0..<3 {
             let point = place(510.5 + CGFloat(index) * 40.5, 351)
-            PanelIcons.align(index, in: NSRect(x: point.x, y: point.y, width: 22, height: 18))
+            let slot = NSRect(x: point.x, y: point.y, width: 22, height: 18)
+            if alignTarget != 0, index == alignTarget {
+                Theme.focus.setStroke()
+                let ring = NSBezierPath(roundedRect: slot.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
+                ring.lineWidth = 1
+                ring.stroke()
+            }
+            PanelIcons.align(index, in: slot)
         }
         _ = ink
     }
@@ -445,6 +469,9 @@ final class FloatPanel: NSView {
         caption("边角", at: place(362.5, 508.5), ink: label)
         iconRow(3, x: place(412, 505).x, y: place(412, 505).y, selected: enabled ? joinIndex(stroke?.join) : -1, muted: !enabled) { PanelIcons.corner($0, in: $1) }
         caption("限制", at: place(520, 508.5), ink: label)
+        ("×" as NSString).draw(at: NSPoint(x: limitField.frame.maxX + 4, y: limitField.frame.minY + 1), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: label
+        ])
 
         caption("对齐描边", at: place(330.5, 543), ink: label)
         iconRow(3, x: place(412, 540).x, y: place(412, 540).y, selected: enabled ? strokeAlign : -1, muted: !enabled) { PanelIcons.strokeAlign($0, in: $1) }
@@ -467,18 +494,95 @@ final class FloatPanel: NSView {
             PanelIcons.field(NSRect(x: origin.x, y: origin.y + 16, width: 44, height: 18), text: "", align: .center)
         }
 
-        let arrowY = place(330.5, 678).y
-        let arrowX = place(330.5, 678).x
-        PanelIcons.popup(NSRect(x: arrowX, y: arrowY, width: 140, height: 26), title: arrowTitle)
-        PanelIcons.popup(NSRect(x: arrowX + 148, y: arrowY, width: 140, height: 26), title: "无")
+        caption("箭头", at: place(330.5, 682), ink: label)
+        let arrowY = place(372, 678).y
+        let arrowX = place(372, 678).x
+        let popupW: CGFloat = 108
+        PanelIcons.popup(NSRect(x: arrowX, y: arrowY, width: popupW, height: 22), title: arrowTitle)
+        swapArrows(NSRect(x: arrowX + popupW + 3, y: arrowY + 2, width: 14, height: 16))
+        PanelIcons.popup(NSRect(x: arrowX + popupW + 20, y: arrowY, width: popupW, height: 22), title: "无")
 
         caption("缩放", at: place(362.5, 722.5), ink: label)
-        PanelIcons.field(NSRect(x: place(403, 719).x, y: place(403, 719).y, width: 74, height: 20), text: "100%", align: .center)
+        let scaleY = place(403, 719).y
+        PanelIcons.field(NSRect(x: place(403, 719).x, y: scaleY, width: 62, height: 20), text: "100%", align: .center)
+        PanelIcons.field(NSRect(x: place(470, 719).x, y: scaleY, width: 62, height: 20), text: "100%", align: .center)
+        chainLink(NSRect(x: place(538, 722).x, y: scaleY + 4, width: 16, height: 12), linked: true)
+
         caption("对齐", at: place(362.5, 759), ink: label)
-        PanelIcons.popup(NSRect(x: place(410, 756).x, y: place(410, 756).y, width: 120, height: 22), title: dashAlign ? "边角" : "无")
+        segmentPair(place(410, 756), selected: dashAlign ? 1 : 0)
         caption("配置文件", at: place(330.5, 802.5), ink: label)
-        PanelIcons.popup(NSRect(x: place(410, 799).x, y: place(410, 799).y, width: 160, height: 22), title: profileTitle(stroke?.profile))
+        PanelIcons.popup(NSRect(x: place(400, 799).x, y: place(400, 799).y, width: 150, height: 22), title: profileTitle(stroke?.profile))
+        flipMark(NSRect(x: place(558, 802).x, y: place(558, 802).y, width: 14, height: 16))
         _ = ink
+    }
+
+    private func swapArrows(_ rect: NSRect) {
+        Theme.color(0xC2C2C2).setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.1
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.move(to: NSPoint(x: rect.minX, y: rect.midY - 3))
+        path.line(to: NSPoint(x: rect.maxX - 3, y: rect.midY - 3))
+        path.move(to: NSPoint(x: rect.maxX - 6, y: rect.midY - 6))
+        path.line(to: NSPoint(x: rect.maxX - 2, y: rect.midY - 3))
+        path.line(to: NSPoint(x: rect.maxX - 6, y: rect.midY))
+        path.move(to: NSPoint(x: rect.maxX, y: rect.midY + 4))
+        path.line(to: NSPoint(x: rect.minX + 3, y: rect.midY + 4))
+        path.move(to: NSPoint(x: rect.minX + 6, y: rect.midY + 1))
+        path.line(to: NSPoint(x: rect.minX + 2, y: rect.midY + 4))
+        path.line(to: NSPoint(x: rect.minX + 6, y: rect.midY + 7))
+        path.stroke()
+    }
+
+    private func chainLink(_ rect: NSRect, linked: Bool) {
+        let color = Theme.color(0xC2C2C2)
+        _ = linked
+        color.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.2
+        path.appendOval(in: NSRect(x: rect.minX, y: rect.midY - 3, width: 7, height: 6))
+        path.appendOval(in: NSRect(x: rect.maxX - 7, y: rect.midY - 3, width: 7, height: 6))
+        path.stroke()
+    }
+
+    private func segmentPair(_ origin: NSPoint, selected: Int) {
+        for index in 0..<2 {
+            let rect = NSRect(x: origin.x + CGFloat(index) * 28, y: origin.y, width: 24, height: 18)
+            if selected != 0, index == selected {
+                Theme.focus.setStroke()
+                let ring = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
+                ring.lineWidth = 1
+                ring.stroke()
+            }
+            Theme.color(0xC2C2C2).setStroke()
+            let path = NSBezierPath()
+            path.lineWidth = 1.15
+            let inset = rect.insetBy(dx: 4, dy: 4)
+            path.move(to: NSPoint(x: inset.minX, y: inset.minY))
+            path.line(to: NSPoint(x: inset.minX, y: inset.maxY))
+            path.move(to: NSPoint(x: inset.maxX, y: inset.minY))
+            path.line(to: NSPoint(x: inset.maxX, y: inset.maxY))
+            let markX = index == 0 ? inset.minX + 3 : inset.maxX - 3
+            path.move(to: NSPoint(x: markX, y: inset.minY + 1))
+            path.line(to: NSPoint(x: markX, y: inset.maxY - 1))
+            path.stroke()
+        }
+    }
+
+    private func flipMark(_ rect: NSRect) {
+        Theme.color(0xC2C2C2).setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1.1
+        path.lineJoinStyle = .round
+        path.move(to: NSPoint(x: rect.midX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.minX + 1, y: rect.midY))
+        path.line(to: NSPoint(x: rect.maxX - 1, y: rect.midY))
+        path.close()
+        path.move(to: NSPoint(x: rect.midX, y: rect.maxY))
+        path.line(to: NSPoint(x: rect.minX + 1, y: rect.midY))
+        path.line(to: NSPoint(x: rect.maxX - 1, y: rect.midY))
+        path.stroke()
     }
 
     private func stepperArrows(_ rect: NSRect) {
@@ -676,9 +780,9 @@ final class FloatPanel: NSView {
                 cycleOpacity(model)
             } else if point.x < 120, localY > 100 {
                 let index = Int((point.x - 8) / 28)
-                if index == 0 { _ = workspace.perform("效果 圆角") }
-                else if index == 2 { model.addFillLayer() }
-                else if index == 3 { model.addStrokeLayer(); model.status = "添加描边" }
+                if index == 0 { model.addStrokeLayer(); model.status = "添加描边" }
+                else if index == 1 { model.addFillLayer() }
+                else if index == 2 { _ = workspace.perform("效果 圆角") }
                 else { model.status = "外观目标" }
             }
         case .align:

@@ -330,7 +330,10 @@ final class PropertiesDock: NSView {
         super.init(frame: frameRect)
         nudgeField.font = Theme.ui(13)
         nudgeField.alignment = .left
+        nudgeField.backgroundColor = Theme.color(0x454545)
+        nudgeField.usesPanelChrome = false
         (nudgeField.cell as? NSTextFieldCell)?.alignment = .left
+        (nudgeField.cell as? NSTextFieldCell)?.backgroundColor = Theme.color(0x454545)
         addSubview(nudgeField)
         nudgeField.onLeave = { [weak self] in self?.applyNudge() }
     }
@@ -391,7 +394,7 @@ final class PropertiesDock: NSView {
     private func placeControls() {
         unitRect = cropRect(698, 172, 190, 24)
         boardRect = cropRect(698, 209, 190, 24)
-        editRect = cropRect(746, 250, 144, 26)
+        editRect = cropRect(746, 250, 144, 25)
         rulerRects = [
             cropRect(763.5, 305, 22, 22),
             cropRect(801, 305, 22, 22),
@@ -952,9 +955,10 @@ final class DialogField: PanelField {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        Theme.color(0x545454).setStroke()
+        let focused = fieldIsEditing
+        (focused ? Theme.color(0x54A3F6) : Theme.color(0x545454)).setStroke()
         let border = NSBezierPath(rect: bounds.insetBy(dx: 0.5, dy: 0.5))
-        border.lineWidth = 1
+        border.lineWidth = focused ? 1 : 1
         border.stroke()
     }
 }
@@ -1009,7 +1013,7 @@ final class DialogPushButton: NSButton {
         let word = primary ? "创建" : "关闭"
         let font = Theme.ui(13, weight: .semibold)
         if primary {
-            let fill = pressed ? Theme.accentDown : (hovered ? Theme.accentHover : Theme.accent)
+            let fill = pressed ? Theme.color(0x0159C4) : (hovered ? Theme.color(0x1474E8) : Theme.color(0x0267E0))
             fill.setFill()
             path.fill()
         } else {
@@ -1020,7 +1024,7 @@ final class DialogPushButton: NSButton {
                 Theme.line.setFill()
                 path.fill()
             }
-            Theme.secondaryStroke.setStroke()
+            Theme.color(0x8D8D8D).setStroke()
             path.lineWidth = 1
             path.stroke()
         }
@@ -1050,10 +1054,10 @@ final class DialogPopup: NSPopUpButton {
     override var mouseDownCanMoveWindow: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 2, yRadius: 2)
-        Theme.field.setFill()
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 1, yRadius: 1)
+        Theme.color(0x1D1D1D).setFill()
         path.fill()
-        Theme.fieldBorder.setStroke()
+        Theme.color(0x545454).setStroke()
         path.lineWidth = 1
         path.stroke()
         let title = titleOfSelectedItem ?? ""
@@ -1063,7 +1067,7 @@ final class DialogPopup: NSPopUpButton {
             at: NSPoint(x: 8, y: (bounds.height - size.height) / 2),
             withAttributes: [.font: font, .foregroundColor: Theme.text]
         )
-        Theme.dim.setStroke()
+        Theme.color(0xB2B2B2).setStroke()
         let chevron = NSBezierPath()
         chevron.lineWidth = 1.2
         chevron.lineCapStyle = .round
@@ -1419,7 +1423,6 @@ final class NewDocSheet: NSView {
     private func layoutDetails() {
         let pad: CGFloat = 14
         let columnLeft = bounds.width - Self.detailWidth
-        let x = columnLeft + pad
         let labelX = columnLeft + 15
         let width = Self.detailWidth - pad - 15
         let detailTop = bounds.height - Self.tabHeight
@@ -1439,7 +1442,7 @@ final class NewDocSheet: NSView {
         place(sectionLabel, imageY: 25)
         place(nameLabel, imageY: 57)
         let save: CGFloat = 28
-        nameField.frame = NSRect(x: x, y: originY(imageY: 83, height: 24), width: width - save - 6, height: 24)
+        nameField.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 83, height: 24), width: 240, height: 24)
         saveRect = NSRect(x: columnLeft + 270, y: originY(imageY: 92, height: 14), width: 17, height: 14)
 
         let column = (width - 8) / 2
@@ -1447,15 +1450,15 @@ final class NewDocSheet: NSView {
         heightLabel.isHidden = false
         widthLabel.frame = NSRect(x: labelX, y: originY(imageY: 141, height: 14), width: column, height: 14)
         heightLabel.frame = NSRect(x: labelX + column + 8, y: widthLabel.frame.minY, width: column, height: 14)
-        widthField.frame = NSRect(x: x, y: originY(imageY: 179, height: 24), width: column, height: 24)
-        heightField.frame = NSRect(x: x + column + 8, y: widthField.frame.minY, width: column, height: 24)
+        widthField.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 179, height: 24), width: 136, height: 24)
+        heightField.frame = NSRect(x: columnLeft + 156.5, y: widthField.frame.minY, width: 136, height: 24)
 
         place(unitLabel, imageY: 249)
-        unitPopup.frame = NSRect(x: x, y: originY(imageY: 275, height: 24.5), width: width, height: 24.5)
+        unitPopup.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 275, height: 24), width: 280, height: 24)
 
         place(orientLabel, imageY: 345)
-        portraitRect = NSRect(x: columnLeft + 13.5, y: originY(imageY: 373, height: 30), width: 86, height: 30)
-        landscapeRect = NSRect(x: columnLeft + 109.5, y: portraitRect.minY, width: 86, height: 30)
+        portraitRect = NSRect(x: columnLeft + 12.5, y: originY(imageY: 371, height: 32), width: 88, height: 32)
+        landscapeRect = NSRect(x: columnLeft + 108.5, y: portraitRect.minY, width: 87.5, height: 32)
 
         place(countLabel, imageY: 457)
         countField.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 483, height: 24), width: 279.5, height: 24)
@@ -1466,15 +1469,15 @@ final class NewDocSheet: NSView {
         bleedTop.frame = NSRect(x: columnLeft + 28.5, y: originY(imageY: 579, height: 24), width: box, height: 24)
         bottomLabel.frame = NSRect(x: columnLeft + 94.5, y: topLabel.frame.minY, width: 16, height: 14)
         bleedBottom.frame = NSRect(x: columnLeft + 108.5, y: bleedTop.frame.minY, width: box, height: 24)
-        linkRect = NSRect(x: columnLeft + 270, y: bleedTop.frame.minY, width: 20, height: 20)
+        linkRect = NSRect(x: columnLeft + 271, y: originY(imageY: 594, height: 9), width: 18, height: 9)
         leftLabel.frame = NSRect(x: labelX, y: originY(imageY: 631, height: 14), width: 16, height: 14)
         bleedLeft.frame = NSRect(x: columnLeft + 28.5, y: originY(imageY: 635, height: 24), width: box, height: 24)
         rightLabel.frame = NSRect(x: columnLeft + 94.5, y: leftLabel.frame.minY, width: 16, height: 14)
         bleedRight.frame = NSRect(x: columnLeft + 108.5, y: bleedLeft.frame.minY, width: box, height: 24)
 
         advancedLabel.isHidden = false
-        advancedRect = NSRect(x: columnLeft + 16, y: originY(imageY: 692, height: 14), width: width, height: 14)
-        advancedLabel.frame = NSRect(x: columnLeft + 36, y: advancedRect.minY, width: width - 24, height: 14)
+        advancedRect = NSRect(x: columnLeft + 12, y: originY(imageY: 708, height: 8), width: 8, height: 8)
+        advancedLabel.frame = NSRect(x: columnLeft + 15, y: originY(imageY: 692, height: 14), width: width - 8, height: 14)
 
         modePopup.isHidden = !advancedOpen
         rasterPopup.isHidden = !advancedOpen
@@ -1484,11 +1487,11 @@ final class NewDocSheet: NSView {
             rasterLabel.isHidden = false
             previewLabel.isHidden = false
             place(modeLabel, imageY: 749)
-            modePopup.frame = NSRect(x: x, y: originY(imageY: 775, height: 24.5), width: width, height: 24.5)
+            modePopup.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 775, height: 24), width: 280, height: 24)
             place(rasterLabel, imageY: 845)
-            rasterPopup.frame = NSRect(x: x, y: originY(imageY: 871, height: 24.5), width: width, height: 24.5)
+            rasterPopup.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 871, height: 24), width: 280, height: 24)
             place(previewLabel, imageY: 941)
-            previewPopup.frame = NSRect(x: x, y: originY(imageY: 967, height: 24.5), width: width, height: 24.5)
+            previewPopup.frame = NSRect(x: columnLeft + 12.5, y: originY(imageY: 967, height: 24), width: 280, height: 24)
         } else {
             modeLabel.isHidden = true
             rasterLabel.isHidden = true
@@ -1496,7 +1499,7 @@ final class NewDocSheet: NSView {
         }
 
         moreSettingsRect = NSRect(x: columnLeft + 12, y: originY(imageY: 1027, height: 14), width: width, height: 14)
-        createButton.frame = NSRect(x: columnLeft + 217, y: originY(imageY: 1164, height: 32), width: 75, height: 32)
+        createButton.frame = NSRect(x: columnLeft + 217, y: originY(imageY: 1164, height: 31), width: 75, height: 31)
         closeButton.frame = NSRect(x: columnLeft + 128.5, y: originY(imageY: 1163, height: 32), width: 76, height: 32)
     }
 
@@ -1608,17 +1611,18 @@ final class NewDocSheet: NSView {
         TracedMarks.drawDetail("pageR", left: columnLeft, top: detailTop, color: .white)
         TracedMarks.drawDetail("save", left: columnLeft, top: detailTop, color: Theme.color(0xD1D1D1))
         TracedMarks.drawDetail("link", left: columnLeft, top: detailTop, color: Theme.focus)
-        drawDisclosure(advancedRect, open: advancedOpen)
+        drawDisclosure(NSRect(x: advancedRect.minX, y: advancedRect.midY - 2.5, width: 4, height: 5), open: advancedOpen)
         Theme.color(0x1D1D1D).setFill()
         NSRect(x: columnLeft + 12, y: detailTop - 1010 / 2 - 1, width: Self.detailWidth - 28, height: 1).fill()
         Theme.color(0x535353).setFill()
         NSRect(x: columnLeft + 12, y: detailTop - 1014 / 2 - 1, width: Self.detailWidth - 28, height: 1).fill()
         let moreFont = Theme.ui(11)
         let moreTop = detailTop - 1027 / 2
-        ("更多设置" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX + 20, y: moreTop - moreFont.ascender), withAttributes: [
+        ("更多设置" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX + 3, y: moreTop - moreFont.ascender), withAttributes: [
             .font: moreFont, .foregroundColor: Theme.color(0xE8E8E8)
         ])
-        drawDisclosure(moreSettingsRect, open: moreOpen)
+        let moreMark = NSRect(x: moreSettingsRect.minX + 66, y: moreSettingsRect.midY - 3.5, width: 5, height: 7)
+        drawDisclosure(moreMark, open: moreOpen)
         if moreOpen {
             ("颜色配置文件    默认" as NSString).draw(at: NSPoint(x: moreSettingsRect.minX, y: moreSettingsRect.minY - 22), withAttributes: [
                 .font: Theme.ui(11), .foregroundColor: Theme.dim
@@ -1632,7 +1636,11 @@ final class NewDocSheet: NSView {
         Theme.color(0x1D1D1D).setFill()
         path.fill()
         if selected {
-            Theme.color(0x52A3F6).setStroke()
+            Theme.color(0x54A3F6).setStroke()
+            path.lineWidth = 1
+            path.stroke()
+        } else {
+            Theme.color(0x545454).setStroke()
             path.lineWidth = 1
             path.stroke()
         }
@@ -1659,7 +1667,7 @@ final class NewDocSheet: NSView {
 
     private func drawLink(_ rect: NSRect) {
         guard rect.width > 1 else { return }
-        let color: NSColor = bleedLinked ? Theme.accent : Theme.dim
+        let color: NSColor = bleedLinked ? Theme.color(0x54A3F6) : Theme.dim
         color.setStroke()
         let path = NSBezierPath()
         path.lineWidth = 1.3
@@ -1676,16 +1684,16 @@ final class NewDocSheet: NSView {
     private func drawDisclosure(_ rect: NSRect, open: Bool) {
         guard rect.width > 1 else { return }
         if open {
-            chevronDown(in: NSRect(x: rect.minX, y: rect.midY - 3, width: 8, height: 6))
+            chevronDown(in: rect)
         } else {
-            chevronRight(in: NSRect(x: rect.minX, y: rect.midY - 4, width: 6, height: 8))
+            chevronRight(in: rect)
         }
     }
 
     private func chevronDown(in rect: NSRect) {
-        Theme.dim.setStroke()
+        Theme.color(0xB2B2B2).setStroke()
         let path = NSBezierPath()
-        path.lineWidth = 1.2
+        path.lineWidth = 1.0
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         path.move(to: NSPoint(x: rect.minX, y: rect.minY))
@@ -1695,9 +1703,9 @@ final class NewDocSheet: NSView {
     }
 
     private func chevronRight(in rect: NSRect) {
-        Theme.dim.setStroke()
+        Theme.color(0xB2B2B2).setStroke()
         let path = NSBezierPath()
-        path.lineWidth = 1.2
+        path.lineWidth = 1.0
         path.lineCapStyle = .round
         path.lineJoinStyle = .round
         path.move(to: NSPoint(x: rect.minX, y: rect.minY))

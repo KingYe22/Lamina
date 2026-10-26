@@ -134,6 +134,8 @@ final class IllustratorToolbar: NSView {
             Theme.color(0x303030).setFill()
             NSBezierPath(roundedRect: NSRect(x: 0.5, y: 80, width: 35, height: 27), xRadius: 2, yRadius: 2).fill()
         }
+        Theme.color(0x2D8CEB).setFill()
+        NSBezierPath(ovalIn: NSRect(x: 4.5, y: 252.5, width: 9, height: 9)).fill()
         Theme.color(0x4B4B4B).setFill()
         for y in [141, 226, 341, 426, 481, 566, 621] as [CGFloat] {
             NSRect(x: 0, y: y, width: bounds.width, height: 0.5).fill()
