@@ -9,6 +9,7 @@ are the thing to iterate on.
 import sys
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 
@@ -76,13 +77,60 @@ def compare(shot_path, ref_path, crop_box, out_dir, name):
     histogram = sample.convert("L").histogram()
     total = overlap * width
     mean = sum(index * count for index, count in enumerate(histogram)) / max(total, 1)
+    masked, region_max = element_metrics(
+        np.asarray(ours_scaled.crop((0, 0, width, overlap))),
+        np.asarray(reference.crop((0, 0, width, overlap))),
+    )
     font = load_font(18)
     out_dir.mkdir(parents=True, exist_ok=True)
     labeled_pair(ours_pad, ref_pad, font).save(out_dir / f"compare-{name}.png")
     overlay.save(out_dir / f"overlay-{name}.png")
     difference.save(out_dir / f"diff-{name}.png")
-    print(f"{name}: crop {ours.size} -> {ours_scaled.size}, ref {reference.size}, mean-abs {mean:.2f}")
-    return mean
+    print(
+        f"{name}: crop {ours.size} -> {ours_scaled.size}, ref {reference.size}, "
+        f"mean-abs {mean:.2f} masked {masked:.2f} region-max {region_max:.2f}"
+    )
+    return mean, masked, region_max
+
+
+def element_metrics(ours, reference):
+    """Mean difference on UI pixels, plus the worst 48px cell.
+
+    Flat gray (the pasteboard and empty panel fill) is left out of the masked
+    mean so a large empty area cannot hide a wrong control.
+    """
+    ours_i = ours.astype(np.int16)
+    ref_i = reference.astype(np.int16)
+    channel = np.abs(ours_i - ref_i).mean(axis=2)
+
+    def away_from_flat(image):
+        flat = image.reshape(-1, 3).astype(np.int16)
+        # The two most common colors are the pasteboard and the panel fill.
+        quant = (flat // 8) * 8
+        # Pack RGB so bincount can find the modes.
+        packed = quant[:, 0].astype(np.int32) * 65536 + quant[:, 1].astype(np.int32) * 256 + quant[:, 2].astype(np.int32)
+        counts = np.bincount(packed)
+        modes = np.argsort(counts)[-2:]
+        distance = np.full(flat.shape[0], 999, dtype=np.int16)
+        for mode in modes:
+            color = np.array([(mode >> 16) & 255, (mode >> 8) & 255, mode & 255], dtype=np.int16)
+            distance = np.minimum(distance, np.abs(flat - color).sum(axis=1))
+        return distance.reshape(image.shape[:2]) > 36
+
+    mask = away_from_flat(reference) | away_from_flat(ours)
+    if int(mask.sum()) < 32:
+        masked = float(channel.mean())
+    else:
+        masked = float(channel[mask].mean())
+
+    cell = 48
+    region_max = 0.0
+    height, width = channel.shape
+    for y in range(0, height, cell):
+        for x in range(0, width, cell):
+            block = channel[y:y + cell, x:x + cell]
+            region_max = max(region_max, float(block.mean()))
+    return masked, region_max
 
 
 def main():
@@ -116,8 +164,8 @@ def main():
     for name, shot, ref, box in jobs:
         if not shot.exists() or not ref.exists():
             raise SystemExit(f"missing {shot} or {ref}")
-        mean = compare(shot, ref, box, out, name)
-        lines.append(f"{name} {mean:.2f}")
+        mean, masked, region_max = compare(shot, ref, box, out, name)
+        lines.append(f"{name} {mean:.2f} masked {masked:.2f} region-max {region_max:.2f}")
     (out / "diff.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
