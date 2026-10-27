@@ -37,6 +37,53 @@ final class UXLockTests: XCTestCase {
         XCTAssertEqual(free.frame.x, 9, accuracy: 0.001)
     }
 
+    func testRightShoulderSnapsFlushInsideEightAndIgnoresNine() {
+        XCTAssertEqual(DockSnap.guideHex, 0x0072EF)
+        let host = DockFrame(x: 0, y: 0, width: 1000, height: 700)
+        let near = DockFrame(x: 1000 - 180 - 6, y: 80, width: 180, height: 120)
+        let hit = DockSnap.magnet(frame: near, others: [], host: host)
+        XCTAssertEqual(hit.frame.maxX, host.maxX, accuracy: 0.001)
+        XCTAssertEqual(host.maxX - hit.frame.maxX, 0, accuracy: 0.001)
+        XCTAssertTrue(hit.guides.contains { guide in
+            if case .vertical(let x) = guide.axis { return abs(x - host.maxX) < 0.001 }
+            return false
+        })
+
+        let edge = DockFrame(x: 1000 - 180 - 8, y: 80, width: 180, height: 120)
+        let atLimit = DockSnap.magnet(frame: edge, others: [], host: host)
+        XCTAssertEqual(atLimit.frame.maxX, host.maxX, accuracy: 0.001)
+
+        let far = DockFrame(x: 1000 - 180 - 9, y: 80, width: 180, height: 120)
+        let miss = DockSnap.magnet(frame: far, others: [], host: host)
+        XCTAssertEqual(miss.frame.x, far.x, accuracy: 0.001)
+        XCTAssertTrue(miss.guides.isEmpty)
+    }
+
+    func testGenerativeEntryLeavesPanelsAndStrokeAlone() {
+        let model = EditorModel()
+        model.openPanels = ["属性", "图层", "外观", "对齐", "描边"]
+        let width = model.currentStroke?.width
+        let selection = model.selection
+        model.presentGenerative()
+        XCTAssertTrue(model.generativeOpen)
+        XCTAssertEqual(model.openPanels, ["属性", "图层", "外观", "对齐", "描边"])
+        XCTAssertEqual(model.currentStroke?.width, width)
+        XCTAssertEqual(model.selection, selection)
+        XCTAssertEqual(model.status, "生成式")
+    }
+
+    func testPenHotSpotIsTheNibTipNotTheCenter() {
+        XCTAssertEqual(PenHotSpot.width, 32)
+        XCTAssertEqual(PenHotSpot.height, 32)
+        XCTAssertEqual(PenHotSpot.x, 0)
+        XCTAssertEqual(PenHotSpot.y, 25)
+        XCTAssertFalse(PenHotSpot.isCenter)
+        XCTAssertEqual(PenHotSpot.cursorX, 0, accuracy: 0.001)
+        XCTAssertEqual(PenHotSpot.cursorY, 7, accuracy: 0.001)
+        XCTAssertNotEqual(PenHotSpot.cursorX, 16)
+        XCTAssertNotEqual(PenHotSpot.cursorY, 16)
+    }
+
     func testPenChromeDistanceAnchorAndNewPath() {
         let model = EditorModel()
         model.document.units = .mm

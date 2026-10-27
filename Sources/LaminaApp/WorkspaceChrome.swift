@@ -799,7 +799,7 @@ final class PropertiesDock: NSView {
         } else if quickRects.indices.contains(1), quickRects[1].contains(point) {
             _ = workspace.perform("打开“偏好设置”对话框")
         } else if quickRects.indices.contains(2), quickRects[2].contains(point) {
-            _ = workspace.perform("显示/隐藏 AI")
+            workspace.presentGenerative()
             model.status = "生成矢量"
         }
         workspace.touch()

@@ -78,7 +78,7 @@ final class IllustratorToolbar: NSView {
     /// Empty space in the band above the canvas drags the window. Tool buttons keep the click.
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if point.y < WorkspaceMetrics.chromeInset {
+        if point.y < WorkspaceMetrics.chromeInset + WorkspaceMetrics.toolbarLift {
             window?.performDrag(with: event)
         }
     }
@@ -88,8 +88,8 @@ final class IllustratorToolbar: NSView {
         for slot in slots {
             if let current, slot.tools.contains(current) { slot.tool = current }
             slot.isCurrent = slot.tool == current
-            if let rect = TracedIcons.bounds(for: slot.tool) {
-                slot.frame = rect.insetBy(dx: -0.5, dy: -0.5)
+            if let rect = slotFrame(for: slot.tool) {
+                slot.frame = rect
             }
             slot.needsDisplay = true
         }
@@ -98,9 +98,10 @@ final class IllustratorToolbar: NSView {
 
     override func layout() {
         super.layout()
-        let footerTop: CGFloat = 627
+        let footerTop: CGFloat = 627 + WorkspaceMetrics.toolbarLift
         footer.frame = NSRect(x: 0, y: min(footerTop, bounds.height), width: bounds.width, height: max(0, bounds.height - footerTop))
         placeSlots()
+        // Titles are drawn inside the lift transform, so these stay at the traced y.
         sectionTitles = [
             ("选择", 65), ("形状", 149.5), ("绘图", 234), ("修改", 349),
             ("文字", 434), ("导航", 489), ("颜色", 574)
@@ -109,8 +110,8 @@ final class IllustratorToolbar: NSView {
 
     private func placeSlots() {
         for slot in slots {
-            if let rect = TracedIcons.bounds(for: slot.tool) {
-                slot.frame = rect.insetBy(dx: -0.5, dy: -0.5)
+            if let rect = slotFrame(for: slot.tool) {
+                slot.frame = rect
             }
             slot.isHidden = slot.frame.maxY > footer.frame.minY + 4
         }
@@ -136,9 +137,18 @@ final class IllustratorToolbar: NSView {
 
     override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }
 
+    private func slotFrame(for tool: Tool) -> NSRect? {
+        guard var rect = TracedIcons.bounds(for: tool) else { return nil }
+        rect = rect.insetBy(dx: -0.5, dy: -0.5)
+        rect.origin.y += WorkspaceMetrics.toolbarLift
+        return rect
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         Theme.panel.setFill()
         bounds.fill()
+        NSGraphicsContext.saveGraphicsState()
+        AffineTransform(translationByX: 0, byY: WorkspaceMetrics.toolbarLift).concat()
         drawHeader()
         let current = workspace?.active.model.tool ?? .selection
         if current == .selection {
@@ -160,6 +170,7 @@ final class IllustratorToolbar: NSView {
             let width = text.size(withAttributes: attrs).width
             text.draw(at: NSPoint(x: 36.5 - width / 2, y: y), withAttributes: attrs)
         }
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawHeader() {
@@ -212,7 +223,7 @@ final class IllustratorToolbar: NSView {
             model.status = model.toolbarAdvanced ? "高级工具栏" : "基本工具栏"
             workspace.touch()
         case "生成式 AI":
-            _ = workspace.perform("显示/隐藏 AI")
+            workspace.presentGenerative()
         default:
             _ = workspace.perform(name)
         }

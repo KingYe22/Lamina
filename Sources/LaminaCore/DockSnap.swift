@@ -36,6 +36,8 @@ public struct DockGuide: Equatable, Sendable {
 public enum DockSnap {
     /// Lock range is 6–8 pt. 8 is the inclusive end of that range.
     public static let threshold: Double = 8
+    /// Snap guide. RGB(0, 114, 239).
+    public static let guideHex = 0x0072EF
 
     public static func magnet(
         frame: DockFrame,

@@ -10,6 +10,61 @@ enum PanelKind: String {
     case opacity = "透明度"
 }
 
+/// One logical pixel on every outer edge and under the title bar.
+enum PanelHairline {
+    static func draw(in bounds: NSRect, titleHeight: CGFloat) {
+        guard let context = NSGraphicsContext.current else { return }
+        context.saveGraphicsState()
+        context.shouldAntialias = false
+        Theme.line.setFill()
+        let width = bounds.width
+        let height = bounds.height
+        guard width >= 2, height >= 2 else {
+            context.restoreGraphicsState()
+            return
+        }
+        NSRect(x: 0, y: 0, width: width, height: 1).fill()
+        NSRect(x: 0, y: height - 1, width: width, height: 1).fill()
+        NSRect(x: 0, y: 0, width: 1, height: height).fill()
+        NSRect(x: width - 1, y: 0, width: 1, height: height).fill()
+        let dividerY = min(max(titleHeight - 1, 1), height - 2)
+        NSRect(x: 1, y: dividerY, width: width - 2, height: 1).fill()
+        context.restoreGraphicsState()
+    }
+}
+
+/// Extra generative surface. It never replaces Appearance, Align, or Stroke.
+final class GenerativePanel: NSView {
+    override var isFlipped: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
+    override var isOpaque: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        Theme.panel.setFill()
+        bounds.fill()
+        Theme.color(0x424242).setFill()
+        let titleH = WorkspaceMetrics.panelTitleHeight
+        NSRect(x: 0, y: 0, width: bounds.width, height: titleH).fill()
+        ("生成式" as NSString).draw(at: NSPoint(x: 10, y: 4), withAttributes: [
+            .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xF3F3F3)
+        ])
+        ("外观、对齐和描边保持不变。" as NSString).draw(at: NSPoint(x: 12, y: 36), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: Theme.color(0xD1D1D1)
+        ])
+        let button = NSRect(x: 12, y: 68, width: 88, height: 26)
+        Theme.accent.setFill()
+        NSBezierPath(roundedRect: button, xRadius: 2, yRadius: 2).fill()
+        let label = "生成" as NSString
+        let font = Theme.ui(13, weight: .medium)
+        let size = label.size(withAttributes: [.font: font])
+        label.draw(
+            at: NSPoint(x: button.midX - size.width / 2, y: button.midY - size.height / 2),
+            withAttributes: [.font: font, .foregroundColor: NSColor.white]
+        )
+        PanelHairline.draw(in: bounds, titleHeight: titleH)
+    }
+}
+
 /// Bright blue snap guide. Drawn above the panels and ignored by hit testing.
 final class DockGuideOverlay: NSView {
     var guides: [DockGuide] = []
@@ -19,7 +74,7 @@ final class DockGuideOverlay: NSView {
     override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        Theme.color(0x0072EF).setFill()
+        Theme.color(DockSnap.guideHex).setFill()
         for guide in guides {
             switch guide.axis {
             case .vertical(let x):
@@ -37,6 +92,7 @@ final class DockGuideOverlay: NSView {
 final class FloatingPanels: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
     private let guideOverlay = DockGuideOverlay(frame: .zero)
+    private let generative = GenerativePanel(frame: .zero)
     weak var workspace: Workspace? {
         didSet {
             for panel in panels { panel.workspace = workspace }
@@ -59,6 +115,8 @@ final class FloatingPanels: NSView {
             panel.host = self
             addSubview(panel)
         }
+        generative.isHidden = true
+        addSubview(generative)
         addSubview(guideOverlay)
     }
 
@@ -66,11 +124,14 @@ final class FloatingPanels: NSView {
 
     func sync() {
         panels.forEach { $0.sync() }
+        generative.isHidden = workspace?.active.model.generativeOpen != true
+        generative.needsDisplay = true
     }
 
     override func layout() {
         super.layout()
         guideOverlay.frame = bounds
+        placeGenerative()
         guard bounds.width > 400, bounds.height > 200 else { return }
         let size = bounds.size
         if placed, size == placedSize { return }
@@ -82,6 +143,51 @@ final class FloatingPanels: NSView {
     }
 
     private var placedSize = NSSize.zero
+
+    /// Sits to the right of Align and Stroke so it does not cover them.
+    private func placeGenerative() {
+        let width = min(280, max(0, bounds.width - 16))
+        let height: CGFloat = 132
+        let x = min(648, max(0, bounds.width - width - 8))
+        let y = bounds.height - 20 - height
+        generative.frame = NSRect(x: x, y: y, width: width, height: height)
+    }
+
+    /// Appearance panel parked `gap` points from the host's right edge.
+    /// `applySnap` false leaves the guide up; true commits the zero-gap frame.
+    func poseRightShoulder(applySnap: Bool) {
+        layoutSubtreeIfNeeded()
+        guard bounds.width > 400, let panel = panels.first(where: { $0.tabs == [.appearance] }) else { return }
+        let gap: CGFloat = 4
+        panel.frame.origin.x = bounds.width - panel.frame.width - gap
+        let magnet = DockSnap.magnet(
+            frame: dockBox(panel.frame),
+            others: dockTargets(excluding: panel),
+            host: dockBox(bounds)
+        )
+        if applySnap {
+            panel.frame.origin = NSPoint(x: CGFloat(magnet.frame.x), y: CGFloat(magnet.frame.y))
+            showGuides([])
+        } else {
+            showGuides(magnet.guides)
+        }
+        panel.needsDisplay = true
+    }
+
+    func restoreMetricFrames() {
+        placed = false
+        placedSize = .zero
+        showGuides([])
+        needsLayout = true
+        layoutSubtreeIfNeeded()
+    }
+
+    private func dockBox(_ rect: NSRect) -> DockFrame {
+        DockFrame(
+            x: Double(rect.origin.x), y: Double(rect.origin.y),
+            width: Double(rect.size.width), height: Double(rect.size.height)
+        )
+    }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
@@ -181,20 +287,14 @@ final class FloatPanel: NSView {
     }
 
     private var enabled: Bool { !(workspace?.active.model.selection.isEmpty ?? true) }
-    /// Appearance is one tall title. Align keeps a title row plus tabs. Stroke is tabs only.
-    private var titleHeight: CGFloat {
-        if collapsed { return 26 }
+    /// Same 22 pt title bar on Appearance, Align, and Stroke. Tabs sit inside it.
+    private var titleHeight: CGFloat { WorkspaceMetrics.panelTitleHeight }
+    /// Content hits stay on the controls placed by the metric crop.
+    private var interactionTop: CGFloat {
+        if collapsed { return titleHeight }
         if tabs == [.appearance] { return 51 }
-        if tabs.contains(.stroke) { return 11 }
-        return 26
-    }
-    private var tabHeight: CGFloat {
-        guard tabs.count > 1, !collapsed else { return 0 }
-        return tabs.contains(.stroke) ? 26 : 24
-    }
-    private var tabLabelY: CGFloat {
-        if tabs.contains(.stroke) { return titleHeight - 4 }
-        if tabs.contains(.align) { return titleHeight - 4 }
+        if tabs.contains(.stroke) { return 37 }
+        if tabs.contains(.align) { return 50 }
         return titleHeight
     }
 
@@ -213,31 +313,20 @@ final class FloatPanel: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6)
-        NSGraphicsContext.saveGraphicsState()
-        shape.addClip()
         Theme.panel.setFill()
-        shape.fill()
-        let headerH = titleHeight + tabHeight
+        bounds.fill()
         Theme.color(0x424242).setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: headerH).fill()
-        Theme.line.setFill()
-        NSRect(x: 0, y: headerH - 1, width: bounds.width, height: 1).fill()
+        NSRect(x: 0, y: 0, width: bounds.width, height: titleHeight).fill()
         if tabs.count < 2 || collapsed {
             let title = (collapsed ? tabs.map(\.rawValue).joined(separator: " / ") : active.rawValue) as NSString
-            let titleY: CGFloat = tabs == [.appearance] ? 22 : 5
-            let titleX: CGFloat = tabs == [.appearance] ? 14 : 10
-            title.draw(at: NSPoint(x: titleX, y: titleY), withAttributes: [
+            title.draw(at: NSPoint(x: 10, y: 4), withAttributes: [
                 .font: Theme.ui(13, weight: .semibold), .foregroundColor: Theme.color(0xF3F3F3)
             ])
         }
-        drawGlyph("«", NSRect(x: bounds.width - 46, y: 4, width: 16, height: 16))
+        drawGlyph("«", NSRect(x: bounds.width - 46, y: 3, width: 16, height: 16))
         drawGlyph("×", NSRect(x: bounds.width - 24, y: 3, width: 16, height: 16))
-        guard !collapsed else {
-            NSGraphicsContext.restoreGraphicsState()
-            return
-        }
-        if tabs.count > 1 {
+        var activeTab: (CGFloat, CGFloat)?
+        if !collapsed, tabs.count > 1 {
             let measured = tabs == [.transform, .align, .pathfinder]
             let spots: [CGFloat] = measured ? [12, 69.5, 118.5] : []
             var x: CGFloat = 8
@@ -246,41 +335,38 @@ final class FloatPanel: NSView {
                 let font = Theme.ui(13, weight: on ? .semibold : .regular)
                 let color: NSColor = on ? Theme.color(0xF3F3F3) : Theme.color(0xB0B0B0)
                 if measured, spots.indices.contains(index) { x = spots[index] }
-                let labelY = tabLabelY
-                (tab.rawValue as NSString).draw(at: NSPoint(x: x, y: labelY), withAttributes: [
+                (tab.rawValue as NSString).draw(at: NSPoint(x: x, y: 4), withAttributes: [
                     .font: font, .foregroundColor: color
                 ])
-                if on {
-                    Theme.text.setFill()
-                    let w = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width
-                    NSRect(x: x, y: labelY + 18, width: w, height: 2).fill()
-                }
-                if !measured {
-                    x += (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
-                }
+                let labelWidth = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width
+                if on { activeTab = (x, labelWidth) }
+                if !measured { x += labelWidth + 12 }
             }
-            PanelIcons.menu(in: NSRect(x: bounds.width - 22, y: titleHeight + 6, width: 14, height: 12))
-        } else {
-            PanelIcons.menu(in: NSRect(x: bounds.width - 22, y: titleHeight + 8, width: 14, height: 12))
         }
-        let content = NSRect(x: 8, y: titleHeight + tabHeight + 8, width: bounds.width - 16, height: bounds.height - titleHeight - tabHeight - 18)
-        let ink = Theme.color(0xD1D1D1)
-        switch active {
-        case .appearance: drawAppearance(content)
-        case .transform: drawTransform(content, ink: ink)
-        case .align: drawAlign(content, ink: ink)
-        case .pathfinder: drawPathfinder(content, ink: enabled ? Theme.text : Theme.color(0x707070))
-        case .stroke: drawStroke(content, ink: ink)
-        case .opacity: drawOpacity(content, ink: ink)
+        if !collapsed {
+            PanelIcons.menu(in: NSRect(x: bounds.width - 68, y: 4, width: 14, height: 12))
+            let content = NSRect(x: 8, y: titleHeight + 8, width: bounds.width - 16, height: max(0, bounds.height - titleHeight - 18))
+            let ink = Theme.color(0xD1D1D1)
+            switch active {
+            case .appearance: drawAppearance(content)
+            case .transform: drawTransform(content, ink: ink)
+            case .align: drawAlign(content, ink: ink)
+            case .pathfinder: drawPathfinder(content, ink: enabled ? Theme.text : Theme.color(0x707070))
+            case .stroke: drawStroke(content, ink: ink)
+            case .opacity: drawOpacity(content, ink: ink)
+            }
+            Theme.dim.setFill()
+            let grip = NSRect(x: bounds.midX - 16, y: bounds.height - 8, width: 32, height: 3)
+            NSBezierPath(roundedRect: grip, xRadius: 1, yRadius: 1).fill()
         }
-        Theme.dim.setFill()
-        let grip = NSRect(x: bounds.midX - 16, y: bounds.height - 8, width: 32, height: 3)
-        NSBezierPath(roundedRect: grip, xRadius: 1, yRadius: 1).fill()
-        Theme.line.setStroke()
-        let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
-        border.lineWidth = 1
-        border.stroke()
-        NSGraphicsContext.restoreGraphicsState()
+        PanelHairline.draw(in: bounds, titleHeight: titleHeight)
+        if let activeTab, let context = NSGraphicsContext.current {
+            context.saveGraphicsState()
+            context.shouldAntialias = false
+            Theme.text.setFill()
+            NSRect(x: activeTab.0, y: titleHeight - 1, width: activeTab.1, height: 1).fill()
+            context.restoreGraphicsState()
+        }
     }
 
     private func drawGlyph(_ text: String, _ rect: NSRect) {
@@ -472,10 +558,18 @@ final class FloatPanel: NSView {
         _ = ink
     }
 
-    /// Top-left of this panel in comparison-crop points (y grows downward from the body).
+    /// Glyphs stay at the metric crop even if the host resizes or the panel moves.
+    /// A live superview height was sliding the body out while the title stayed put.
     private var cropOrigin: NSPoint {
-        let topInset = (superview?.bounds.height ?? 0) - frame.maxY
-        return NSPoint(x: frame.minX, y: WorkspaceMetrics.chromeInset + topInset)
+        let metric: WorkspaceMetrics.PanelFrame
+        if tabs.contains(.stroke) {
+            metric = WorkspaceMetrics.stroke
+        } else if tabs.count == 1 && tabs.contains(.appearance) {
+            metric = WorkspaceMetrics.appearance
+        } else {
+            metric = WorkspaceMetrics.align
+        }
+        return NSPoint(x: metric.x, y: WorkspaceMetrics.chromeInset + metric.top)
     }
 
     /// Crop point (y grows down from the body top) into this flipped panel.
@@ -720,16 +814,16 @@ final class FloatPanel: NSView {
         }
         if NSRect(x: bounds.width - 48, y: 2, width: 20, height: 20).contains(point) {
             collapsed.toggle()
-            let height: CGFloat = collapsed ? 28 : 312
+            let height: CGFloat = collapsed ? WorkspaceMetrics.panelTitleHeight : 312
             frame.size.height = height
             needsDisplay = true
             return
         }
-        if NSRect(x: bounds.width - 28, y: titleHeight + 2, width: 24, height: 20).contains(point) {
+        if NSRect(x: bounds.width - 72, y: 2, width: 22, height: 18).contains(point) {
             showMenu()
             return
         }
-        if !collapsed, tabs.count > 1, point.y >= titleHeight - 4, point.y < titleHeight + tabHeight {
+        if !collapsed, tabs.count > 1, point.y < titleHeight, point.x < bounds.width - 74 {
             let measured = tabs == [.transform, .align, .pathfinder]
             let spots: [CGFloat] = measured ? [12, 69.5, 118.5, bounds.width] : []
             var x: CGFloat = 8
@@ -776,7 +870,7 @@ final class FloatPanel: NSView {
 
     @objc private func menuCollapse() {
         collapsed = true
-        frame.size.height = 28
+        frame.size.height = WorkspaceMetrics.panelTitleHeight
         needsLayout = true
         needsDisplay = true
     }
@@ -846,7 +940,7 @@ final class FloatPanel: NSView {
     private func handleContent(_ point: NSPoint) {
         guard let workspace else { return }
         let model = workspace.active.model
-        let top = titleHeight + tabHeight
+        let top = interactionTop
         switch active {
         case .appearance:
             let localY = point.y - top

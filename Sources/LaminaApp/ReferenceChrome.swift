@@ -6,6 +6,13 @@ enum WorkspaceMetrics {
     static let windowHeight: CGFloat = 970
     static let toolWidth: CGFloat = 81
     static let dockWidth: CGFloat = 312
+    /// Window title chrome. The toolbar's top edge meets this band.
+    static let titleBand: CGFloat = 28
+    /// Document tab row. The toolbar fills this height on the left so the tab chip cannot open a gap.
+    static let documentTabHeight: CGFloat = 28
+    static let toolbarLift: CGFloat = documentTabHeight
+    /// Floating panel title bar. One height for Appearance, Align, and Stroke.
+    static let panelTitleHeight: CGFloat = 22
     /// Properties tabs sit in the shadow band. The dock draws that strip itself.
     static let dockLift: CGFloat = 36
     static let controlHeight: CGFloat = 37.5

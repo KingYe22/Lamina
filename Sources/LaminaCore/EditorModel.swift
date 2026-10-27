@@ -36,6 +36,8 @@ public final class EditorModel {
     public var screenMode = 0
     public var drawMode = 0
     public var openPanels: Set<String> = ["属性", "图层"]
+    /// Generative entry. Independent of the floating Appearance, Align, and Stroke panels.
+    public var generativeOpen = false
     public var status = "就绪"
     public var nudge: Double = 1
     public var editingText: UUID?
@@ -973,6 +975,12 @@ public final class EditorModel {
             return true
         }
         return true
+    }
+
+    /// Opens the generative workflow. Does not hide, clear, or reset other panels.
+    public func presentGenerative() {
+        generativeOpen = true
+        status = "生成式"
     }
 
     public func togglePanel(_ name: String) {
