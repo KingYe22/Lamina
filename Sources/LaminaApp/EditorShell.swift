@@ -24,8 +24,9 @@ final class EditorShell: NSView {
         floaters.workspace = workspace
         contextBar.workspace = workspace
         controlBar.workspace = workspace
-        // Canvas, then floating panels, then docked chrome. Artwork cannot paint over a bar.
-        for view in [canvas, floaters, shadowBand, contextBar, dock, toolbar, status, controlBar, tabs] as [NSView] {
+        // Canvas, then the properties dock, then floating panels so a panel can cover the
+        // dock when it snaps to the window's right edge. Docked chrome stays above the canvas.
+        for view in [canvas, shadowBand, dock, floaters, contextBar, toolbar, status, controlBar, tabs] as [NSView] {
             addSubview(view)
         }
     }
@@ -36,17 +37,18 @@ final class EditorShell: NSView {
 
     override func layout() {
         super.layout()
-        let titleBand: CGFloat = 28
-        let tabHeight: CGFloat = 28
+        let titleBand = WorkspaceMetrics.titleBand
+        let tabHeight = WorkspaceMetrics.documentTabHeight
         let statusHeight: CGFloat = 20
         let toolWidth = WorkspaceMetrics.toolWidth
         let dockWidth = WorkspaceMetrics.dockWidth
         let top = bounds.height - titleBand
-        tabs.frame = NSRect(x: 0, y: top - tabHeight, width: bounds.width, height: tabHeight)
+        tabs.frame = NSRect(x: toolWidth, y: top - tabHeight, width: max(0, bounds.width - toolWidth), height: tabHeight)
         status.frame = NSRect(x: toolWidth, y: 0, width: max(0, bounds.width - toolWidth - dockWidth), height: statusHeight)
         let bodyY = statusHeight
         let bodyH = max(0, top - tabHeight - statusHeight)
-        toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: bodyH)
+        // Top meets the title chrome. Left edge stays on the window.
+        toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: max(0, top - statusHeight))
         let stripX = toolWidth
         let stripW = max(0, bounds.width - toolWidth)
         controlBar.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.controlHeight, width: stripW, height: WorkspaceMetrics.controlHeight)
@@ -56,7 +58,8 @@ final class EditorShell: NSView {
         let lift = WorkspaceMetrics.dockLift
         dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: columnH + lift)
         canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: columnH)
-        floaters.frame = canvas.frame
+        // Host reaches the window's right client edge. The properties dock stays underneath.
+        floaters.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth), height: columnH)
         contextBar.frame = NSRect(x: canvas.frame.midX - 210, y: canvas.frame.maxY - 46, width: 420, height: 32)
         contextBar.isHidden = workspace.active.model.selection.isEmpty
     }

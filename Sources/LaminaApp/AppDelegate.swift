@@ -259,6 +259,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         root.editor.sync()
         root.displayIfNeeded()
         writePNG(root, to: dir.appendingPathComponent("workspace.png"))
+        captureP0Proofs(in: dir, model: model)
         centerArtboard(model)
         let board = model.document.currentArtboard.rect
         let start = Vec2(board.midX - 90, board.midY - 60)
@@ -295,6 +296,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         root.displayIfNeeded()
         writePNG(root, to: dir.appendingPathComponent("tool-flyout.png"))
         exit(0)
+    }
+
+    /// Window captures for the five v0.4.0 checks. The artboard stays parked.
+    private func captureP0Proofs(in dir: URL, model: EditorModel) {
+        workspace.presentGenerative()
+        root.editor.sync()
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+        writePNG(root, to: dir.appendingPathComponent("p0-generative.png"))
+        model.generativeOpen = false
+        root.editor.sync()
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+
+        root.editor.floaters.poseRightShoulder(applySnap: false)
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+        writePNG(root, to: dir.appendingPathComponent("p0-dock-guide.png"))
+        root.editor.floaters.poseRightShoulder(applySnap: true)
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+        writePNG(root, to: dir.appendingPathComponent("p0-dock-snapped.png"))
+        root.editor.floaters.restoreMetricFrames()
+        root.layoutSubtreeIfNeeded()
+        root.displayIfNeeded()
+
+        PenCursor.writePNG(to: dir.appendingPathComponent("pen-cursor.png"))
+        let report = """
+        titlePt=\(Int(WorkspaceMetrics.panelTitleHeight))
+        borderPt=1
+        toolbarLift=\(Int(WorkspaceMetrics.toolbarLift))
+        toolWidth=\(Int(WorkspaceMetrics.toolWidth))
+        dockThreshold=\(DockSnap.threshold)
+        guideHex=\(String(format: "%06X", DockSnap.guideHex))
+        penTL=\(PenHotSpot.x),\(PenHotSpot.y)
+        penCursor=\(Int(PenHotSpot.cursorX)),\(Int(PenHotSpot.cursorY))
+        penCenter=\(PenHotSpot.isCenter)
+        generative=opens-only
+        """
+        try? report.write(to: dir.appendingPathComponent("p0-report.txt"), atomically: true, encoding: .utf8)
     }
 
     /// The panel screenshot is pasteboard gray. Park the white page outside the view for that capture.

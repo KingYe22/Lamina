@@ -412,6 +412,11 @@ final class Workspace: ObservableObject {
         touch()
     }
 
+    func presentGenerative() {
+        active.model.presentGenerative()
+        touch()
+    }
+
     func perform(_ action: String) {
         if action == "创建文档" {
             onNewDocument?()

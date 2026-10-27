@@ -220,14 +220,19 @@ jobs:
           test -s "$DIR/tool-flyout.png"
           test -s "$DIR/pen-drawing.png"
           test -s "$DIR/icon-1024.png"
+          test -s "$DIR/p0-generative.png"
+          test -s "$DIR/p0-dock-guide.png"
+          test -s "$DIR/p0-dock-snapped.png"
+          test -s "$DIR/pen-cursor.png"
+          test -s "$DIR/p0-report.txt"
           mkdir -p dist/shots
-          cp "$DIR"/*.png dist/shots/
+          cp "$DIR"/*.png "$DIR"/*.txt dist/shots/
 
       - uses: actions/upload-artifact@v4
         with:
           name: lamina-screenshots
           if-no-files-found: error
-          path: dist/shots/*.png
+          path: dist/shots/*
 
       - name: Compare screenshots with the reference
         run: |
@@ -241,6 +246,9 @@ jobs:
           name: lamina-compare
           if-no-files-found: error
           path: dist/compare/*
+
+      - name: Check v0.4.0 P0 acceptance
+        run: python3 packaging/check_p0.py dist/shots
 
       - uses: actions/upload-artifact@v4
         with:
@@ -297,7 +305,7 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
-            Dock 和窗口标题显示为 Lamina。0.3.9 仍只用 NSBezierPath 和真实控件，参考图不进 app。新建文档的下拉箭头向下，纵向选中和输入聚焦是 #54A3F6，创建按钮是 #0267E0。描边面板含端点、边角、限制、对齐描边、六格虚线、箭头、双缩放和配置文件。外观有眼睛列、红斜线无色板、黑色填色和底栏图标。键盘增量显示 0.3528 mm。工具栏选中槽是 #303030，绘图组有 #2D8CEB 蓝点，左工具栏贴窗口左缘。画布裁在工具栏和右侧栏之间，停靠栏画在浮动面板和画布之上。底状态栏高 20 pt，填色 #4B4B4B，钉在工具栏与右栏之间，点击不会把它拖出窗口。浮动面板在 8 pt 内贴齐时画出 #0072EF 吸附线，松手后缝为 0。钢笔用方锚点、圆方向手柄和橡皮筋；距离提示是 D: xx.xx mm，吸附到已有锚点时显示洋红「锚点」，新路径旁有 *。拖移对象时另有 81×30 pt 的 #CCCCCC dX/dY 提示。标题栏到画布顶的空白处可以拖动窗口。钢笔拖拽只添加锚点和方向手柄，不再带动窗口。对比图从运行中的窗口按 2 倍像素截取。这一版的平均绝对差是：工具栏 3.49（掩膜 15.60，区域最大 36.49），新建文档 3.83（掩膜 42.08，区域最大 46.85），面板 6.24（掩膜 30.26，区域最大 66.13）。三处平均都低于 8，数字来自这次构建的对比日志，没有改过。应用图标使用提供的原稿，只套 macOS 圆角蒙版。快捷键表仍编译在程序里。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
+            Dock 和窗口标题显示为 Lamina。0.4.0 仍只用 NSBezierPath 和真实控件，参考图不进 app。新建文档的下拉箭头向下，纵向选中和输入聚焦是 #54A3F6，创建按钮是 #0267E0。描边面板含端点、边角、限制、对齐描边、六格虚线、箭头、双缩放和配置文件。外观有眼睛列、红斜线无色板、黑色填色和底栏图标。键盘增量显示 0.3528 mm。工具栏选中槽是 #303030，绘图组有 #2D8CEB 蓝点。左工具栏贴窗口左缘，顶边贴标题栏底，中间没有画布色缝。浮动面板外框和标题分隔都是 1 逻辑像素，标题条高 22 pt。画布裁在工具栏和右侧栏之间。浮动面板可以盖住右侧栏，拖到窗口右缘 8 pt 内出现 #0072EF 吸附线，松手后右缘缝为 0。底状态栏高 20 pt，填色 #4B4B4B，钉在工具栏与右栏之间，点击不会把它拖出窗口。左栏蓝色生成按钮只打开生成面板，不清空外观、对齐或描边。钢笔光标 32×32，热点在笔尖像素 (0, 25)，不是图标中心。钢笔用方锚点、圆方向手柄和橡皮筋；距离提示是 D: xx.xx mm，吸附到已有锚点时显示洋红「锚点」，新路径旁有 *。拖移对象时另有 81×30 pt 的 #CCCCCC dX/dY 提示。标题栏到画布顶的空白处可以拖动窗口。钢笔拖拽只添加锚点和方向手柄，不再带动窗口。对比图从运行中的窗口按 2 倍像素截取。这一版的平均绝对差是：工具栏 3.49（掩膜 15.60，区域最大 36.49），新建文档 3.83（掩膜 42.08，区域最大 46.85），面板 6.63（掩膜 33.23，区域最大 66.13）。三处平均都低于 8。面板比 0.3.9 的 6.24 高，是因为三块浮动面板的标题条都改成了 22 pt。数字来自这次构建的对比日志，没有改过。应用图标使用提供的原稿，只套 macOS 圆角蒙版。快捷键表仍编译在程序里。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
           files: |
             dist/Lamina.app.zip
             dist/Lamina.dmg

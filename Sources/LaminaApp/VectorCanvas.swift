@@ -311,7 +311,7 @@ final class VectorCanvas: NSView {
         case .hand: return .openHand
         case .zoom: return .crosshair
         case .text, .areaText, .verticalText, .pathText, .touchType: return .iBeam
-        case .pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor: return Self.penNib
+        case .pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor: return PenCursor.cursor
         default: return .arrow
         }
     }
@@ -424,30 +424,6 @@ final class VectorCanvas: NSView {
             (Double(bounds.height) - Double(viewPoint.y)) / zoom + pan.y
         )
     }
-
-    private static let penNib: NSCursor = {
-        let image = NSImage(size: NSSize(width: 24, height: 24), flipped: false) { _ in
-            let nib = NSBezierPath()
-            nib.move(to: NSPoint(x: 3, y: 21))
-            nib.line(to: NSPoint(x: 8.5, y: 19))
-            nib.curve(to: NSPoint(x: 18, y: 8), controlPoint1: NSPoint(x: 12, y: 16), controlPoint2: NSPoint(x: 16, y: 12))
-            nib.line(to: NSPoint(x: 15, y: 4.5))
-            nib.curve(to: NSPoint(x: 3, y: 21), controlPoint1: NSPoint(x: 9, y: 8), controlPoint2: NSPoint(x: 5.5, y: 15))
-            nib.close()
-            NSColor.white.setFill()
-            nib.fill()
-            NSColor.black.setStroke()
-            nib.lineWidth = 1.25
-            nib.stroke()
-            let slit = NSBezierPath()
-            slit.move(to: NSPoint(x: 4.2, y: 19.4))
-            slit.line(to: NSPoint(x: 13.5, y: 8.5))
-            slit.lineWidth = 0.9
-            slit.stroke()
-            return true
-        }
-        return NSCursor(image: image, hotSpot: NSPoint(x: 3, y: 21))
-    }()
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
 
