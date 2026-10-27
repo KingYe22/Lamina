@@ -10,9 +10,33 @@ enum PanelKind: String {
     case opacity = "透明度"
 }
 
+/// Bright blue snap guide. Drawn above the panels and ignored by hit testing.
+final class DockGuideOverlay: NSView {
+    var guides: [DockGuide] = []
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override var isOpaque: Bool { false }
+
+    override func draw(_ dirtyRect: NSRect) {
+        Theme.color(0x0072EF).setFill()
+        for guide in guides {
+            switch guide.axis {
+            case .vertical(let x):
+                let origin = min(max(x - 1, 0), max(0, bounds.width - 2))
+                NSRect(x: origin, y: 0, width: 2, height: bounds.height).fill()
+            case .horizontal(let y):
+                let origin = min(max(y - 1, 0), max(0, bounds.height - 2))
+                NSRect(x: 0, y: origin, width: bounds.width, height: 2).fill()
+            }
+        }
+    }
+}
+
 /// Host for the floating panels. Empty space passes the click through to the canvas.
 final class FloatingPanels: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
+    private let guideOverlay = DockGuideOverlay(frame: .zero)
     weak var workspace: Workspace? {
         didSet {
             for panel in panels { panel.workspace = workspace }
@@ -23,6 +47,9 @@ final class FloatingPanels: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        clipsToBounds = true
         let appearance = FloatPanel(tabs: [.appearance])
         let grouped = FloatPanel(tabs: [.transform, .align, .pathfinder])
         grouped.active = .align
@@ -32,6 +59,7 @@ final class FloatingPanels: NSView {
             panel.host = self
             addSubview(panel)
         }
+        addSubview(guideOverlay)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -42,6 +70,7 @@ final class FloatingPanels: NSView {
 
     override func layout() {
         super.layout()
+        guideOverlay.frame = bounds
         guard bounds.width > 400, bounds.height > 200 else { return }
         let size = bounds.size
         if placed, size == placedSize { return }
@@ -58,9 +87,25 @@ final class FloatingPanels: NSView {
         let local = convert(point, from: superview)
         guard bounds.contains(local) else { return nil }
         for child in subviews.reversed() where !child.isHidden && child.frame.contains(local) {
+            if child is DockGuideOverlay { continue }
             return child.hitTest(point) ?? child
         }
         return nil
+    }
+
+    func bringToFront(_ panel: FloatPanel) {
+        addSubview(panel, positioned: .below, relativeTo: guideOverlay)
+    }
+
+    func showGuides(_ guides: [DockGuide]) {
+        guideOverlay.guides = guides
+        guideOverlay.needsDisplay = true
+    }
+
+    func dockTargets(excluding panel: FloatPanel) -> [DockFrame] {
+        subviews.compactMap { $0 as? FloatPanel }.filter { $0 !== panel && !$0.isHidden }.map {
+            DockFrame(x: Double($0.frame.origin.x), y: Double($0.frame.origin.y), width: Double($0.frame.width), height: Double($0.frame.height))
+        }
     }
 
     func merge(_ panel: FloatPanel, into target: FloatPanel) {
@@ -83,7 +128,7 @@ final class FloatingPanels: NSView {
         born.host = self
         born.frame = panel.frame.offsetBy(dx: 24, dy: 24)
         panels.append(born)
-        addSubview(born)
+        addSubview(born, positioned: .below, relativeTo: guideOverlay)
     }
 }
 
@@ -745,14 +790,43 @@ final class FloatPanel: NSView {
     private func dragMove(_ event: NSEvent) {
         guard !dragging else { return }
         dragging = true
+        host?.bringToFront(self)
         let start = event.locationInWindow
         let origin = frame.origin
         while true {
             guard let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
-            frame.origin = NSPoint(x: origin.x + next.locationInWindow.x - start.x, y: origin.y + next.locationInWindow.y - start.y)
-            if next.type == .leftMouseUp { break }
+            var proposed = NSPoint(
+                x: origin.x + next.locationInWindow.x - start.x,
+                y: origin.y + next.locationInWindow.y - start.y
+            )
+            if let host {
+                let maxX = max(0, host.bounds.width - frame.width)
+                let maxY = max(0, host.bounds.height - frame.height)
+                proposed.x = min(max(proposed.x, 0), maxX)
+                proposed.y = min(max(proposed.y, 0), maxY)
+                frame.origin = proposed
+                let magnet = DockSnap.magnet(
+                    frame: Self.dockBox(frame),
+                    others: host.dockTargets(excluding: self),
+                    host: Self.dockBox(host.bounds)
+                )
+                if next.type == .leftMouseUp {
+                    frame.origin = NSPoint(x: magnet.frame.x, y: magnet.frame.y)
+                    host.showGuides([])
+                    break
+                }
+                host.showGuides(magnet.guides)
+            } else {
+                frame.origin = proposed
+                if next.type == .leftMouseUp { break }
+            }
         }
         dragging = false
+        host?.showGuides([])
+    }
+
+    private static func dockBox(_ rect: NSRect) -> DockFrame {
+        DockFrame(x: Double(rect.origin.x), y: Double(rect.origin.y), width: Double(rect.size.width), height: Double(rect.size.height))
     }
 
     private func dragResize(_ event: NSEvent) {

@@ -499,12 +499,18 @@ enum CanvasDrawing {
         if options.showAnchors {
             let anchorSide = 5 / options.zoom
             context.setLineWidth(1 / options.zoom)
-            for node in options.penNodes {
+            let last = options.penNodes.count - 1
+            for (index, node) in options.penNodes.enumerated() {
                 let box = CGRect(x: node.anchor.x - anchorSide / 2, y: node.anchor.y - anchorSide / 2, width: anchorSide, height: anchorSide)
-                context.setFillColor(NSColor.white.cgColor)
-                context.fill(box)
-                context.setStrokeColor(Theme.accent.cgColor)
-                context.stroke(box)
+                if index == last {
+                    context.setFillColor(Theme.accent.cgColor)
+                    context.fill(box)
+                } else {
+                    context.setFillColor(NSColor.white.cgColor)
+                    context.fill(box)
+                    context.setStrokeColor(Theme.accent.cgColor)
+                    context.stroke(box)
+                }
             }
         }
     }

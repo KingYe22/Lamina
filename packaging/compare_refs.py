@@ -145,7 +145,7 @@ def main():
     def px(points):
         return int(round(points * scale))
 
-    title, tabs, status, tool = px(28), px(28), px(26), px(81)
+    title, tabs, status, tool = px(28), px(28), px(20), px(81)
     body_top = title + tabs
     body_h = workspace.height - body_top - status
     sheet_w = min(px(1000), document.width - px(80))

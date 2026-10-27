@@ -32,6 +32,10 @@ enum WorkspaceMetrics {
 final class ShadowBand: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
 
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         Theme.color(0x424242).setFill()
         bounds.fill()
@@ -60,6 +64,10 @@ final class ControlBar: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override var mouseDownCanMoveWindow: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
 
     override func layout() {
         super.layout()

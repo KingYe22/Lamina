@@ -161,6 +161,36 @@ public enum ToolBehaviors {
         return flat
     }
 
+    /// Pen readout. `D: 0.35 mm` for one point in a millimetre document.
+    public static func distanceLabel(points: Double, unit: UnitKind) -> String {
+        let measured = measurement(points, unit: unit)
+        return String(format: "D: %.2f %@", locale: Locale(identifier: "en_US_POSIX"), measured.value, measured.suffix)
+    }
+
+    public struct MoveDeltaText: Equatable, Sendable {
+        public var dx: String
+        public var dy: String
+    }
+
+    /// Object-move readout. Separate from `distanceLabel`.
+    public static func moveDeltaLines(dx: Double, dy: Double, unit: UnitKind) -> MoveDeltaText {
+        let horizontal = measurement(dx, unit: unit)
+        let vertical = measurement(dy, unit: unit)
+        return MoveDeltaText(
+            dx: String(format: "dX: %.2f %@", locale: Locale(identifier: "en_US_POSIX"), horizontal.value, horizontal.suffix),
+            dy: String(format: "dY: %.2f %@", locale: Locale(identifier: "en_US_POSIX"), vertical.value, vertical.suffix)
+        )
+    }
+
+    private static func measurement(_ points: Double, unit: UnitKind) -> (value: Double, suffix: String) {
+        switch unit {
+        case .mm: return (points * 25.4 / 72.0, "mm")
+        case .inch: return (points / 72.0, "in")
+        case .px: return (points, "px")
+        case .pt: return (points, "pt")
+        }
+    }
+
     public static func scissors(_ path: PathItem, segment: Int, t: Double) -> [PathItem] {
         let split = Bezier.split(path, segment: segment, t: t)
         guard split.nodes.count >= 2 else { return [path] }

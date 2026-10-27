@@ -112,6 +112,21 @@ public final class EditorModel {
     public var liveLabel = ""
     public var liveAnchor = Vec2.zero
     public var liveOutline = false
+    /// Pen readout, exactly `D: 61.09 mm`. Empty when the pen is not measuring.
+    public var penDistance = ""
+    /// Magenta 「锚点」 when the cursor is within slop of an existing anchor.
+    public var penAnchorLabel = false
+    /// `*` beside the nib when the next click starts a new path.
+    public var penNewPathMark = false
+    public private(set) var penPullingHandle = false
+    /// Object-move readout. Not the pen `D:` tooltip.
+    public var moveDX = ""
+    public var moveDY = ""
+
+    public var penRubberLive: Bool {
+        let penLike = tool == .pen || tool == .curvature
+        return rubberBand && penLike && !penNodes.isEmpty && !penPullingHandle
+    }
 
     private var undoStack: [Data] = []
     private var redoStack: [Data] = []
@@ -129,6 +144,7 @@ public final class EditorModel {
     private var penAnchorOrigin = Vec2.zero
     private var strokeSamples: [StrokeSample] = []
     private var gestureOrigin = Vec2.zero
+    private var rawHover = Vec2.zero
 
     private enum Drag {
         case marquee(Vec2)
@@ -197,7 +213,12 @@ public final class EditorModel {
     // MARK: Pointer
 
     public func pointerDown(at p: Vec2, shift: Bool, option: Bool, command: Bool, space: Bool = false, stylus: StylusSample = .mouse, clickCount: Int = 1) {
+        defer { refreshPenChrome() }
+        rawHover = p
         hover = snapped(p)
+        penPullingHandle = false
+        moveDX = ""
+        moveDY = ""
         let p = hover
         gestureOrigin = p
         if space || spaceHeld {
@@ -389,7 +410,10 @@ public final class EditorModel {
     }
 
     public func pointerDrag(to p: Vec2, shift: Bool, option: Bool, command: Bool, space: Bool = false, stylus: StylusSample = .mouse) {
+        defer { refreshPenChrome() }
+        rawHover = p
         hover = p
+        penPullingHandle = false
         guard let drag else { return }
         switch drag {
         case .pan:
@@ -401,11 +425,14 @@ public final class EditorModel {
                 pan = createOrigin - (p - moveOrigin)
                 return
             }
+            let delta = p - moveOrigin
+            let lines = ToolBehaviors.moveDeltaLines(dx: delta.x, dy: delta.y, unit: document.units)
+            moveDX = lines.dx
+            moveDY = lines.dy
             if tool == .perspectiveSelection {
                 applyPlaneMove(to: p)
             } else {
                 applyMove(to: p, copy: option)
-                if tool == .freeTransform || tool == .selection { noteLiveBounds() }
             }
         case .marquee(let origin):
             interactionHint = .marquee(Rect2(
@@ -469,10 +496,15 @@ public final class EditorModel {
     }
 
     public func pointerUp(at p: Vec2, shift: Bool, option: Bool, command: Bool, space: Bool = false, stylus: StylusSample = .mouse) {
+        defer { refreshPenChrome() }
+        rawHover = p
         hover = p
         bakeCreateShift()
         livePaths = []
         liveLabel = ""
+        moveDX = ""
+        moveDY = ""
+        penPullingHandle = false
         liveOutline = false
         let kind = drag
         drag = nil
@@ -538,15 +570,77 @@ public final class EditorModel {
         return true
     }
 
-    public func pointerMove(to p: Vec2) {
-        hover = p
+    public func pointerMove(to p: Vec2, shift: Bool = false) {
+        rawHover = p
+        lastShift = shift
+        hover = penHoverSnapped(p, shift: shift)
+        penPullingHandle = false
+        refreshPenChrome()
     }
 
     public func updateLiveModifiers(shift: Bool, option: Bool) {
         lastShift = shift
         lastOption = option
-        guard case .create = drag else { return }
+        if drag == nil && (tool == .pen || tool == .curvature) {
+            hover = penHoverSnapped(rawHover, shift: shift)
+        }
+        guard case .create = drag else {
+            refreshPenChrome()
+            return
+        }
         publishCreatePreview(to: hover, shift: shift, option: option)
+        refreshPenChrome()
+    }
+
+    private func penHoverSnapped(_ point: Vec2, shift: Bool) -> Vec2 {
+        guard shift, drag == nil, (tool == .pen || tool == .curvature), let last = penNodes.last else { return point }
+        return ToolBehaviors.constrain45(point, from: last.anchor)
+    }
+
+    private func refreshPenChrome() {
+        let penLike = tool == .pen || tool == .curvature
+        penNewPathMark = tool == .pen && penNodes.isEmpty && drag == nil
+        if penLike {
+            penAnchorLabel = penNearExistingAnchor(hover)
+        } else {
+            penAnchorLabel = false
+            penNewPathMark = false
+            penDistance = ""
+            return
+        }
+        guard let last = penNodes.last else {
+            penDistance = ""
+            return
+        }
+        let length: Double?
+        if penPullingHandle, let tip = last.outHandle ?? last.inHandle {
+            length = last.anchor.distance(to: tip)
+        } else if !penPullingHandle {
+            let span = last.anchor.distance(to: hover)
+            length = span > 0.4 ? span : nil
+        } else {
+            length = nil
+        }
+        if let length {
+            penDistance = ToolBehaviors.distanceLabel(points: length, unit: document.units)
+        } else {
+            penDistance = ""
+        }
+    }
+
+    private func penNearExistingAnchor(_ point: Vec2) -> Bool {
+        let slop = 8 / max(zoom, 0.05)
+        if penNodes.count >= 2 {
+            for node in penNodes.dropLast() where node.anchor.distance(to: point) <= slop {
+                return true
+            }
+        }
+        for item in allItems() {
+            for anchor in pathAnchors(item) where anchor.distance(to: point) <= slop {
+                return true
+            }
+        }
+        return false
     }
 
     public func keyDown(chord: KeyChord) -> Bool {
@@ -1418,6 +1512,7 @@ public final class EditorModel {
         guard !penNodes.isEmpty else { return }
         let last = penNodes.count - 1
         if space || spaceHeld {
+            penPullingHandle = false
             let moved = penAnchorOrigin + (p - gestureOrigin)
             let delta = moved - penNodes[last].anchor
             penNodes[last].anchor = moved
@@ -1425,6 +1520,7 @@ public final class EditorModel {
             if let h = penNodes[last].outHandle { penNodes[last].outHandle = h + delta }
             return
         }
+        penPullingHandle = true
         let placed = ToolBehaviors.placeHandle(anchor: penNodes[last].anchor, drag: p, shift: shift, option: option)
         penNodes[last].outHandle = placed.outHandle
         penNodes[last].inHandle = placed.inHandle
@@ -1432,12 +1528,17 @@ public final class EditorModel {
     }
 
     public func finishPen() {
-        guard penNodes.count >= 2 else { penNodes = []; return }
+        guard penNodes.count >= 2 else {
+            penNodes = []
+            refreshPenChrome()
+            return
+        }
         beginChange()
         let path = PathItem(nodes: penNodes, closed: penClosed, shape: .free)
         insertNew(.path(styled(PathObject(name: "路径", path: path))))
         penNodes = []
         status = "路径"
+        refreshPenChrome()
     }
 
     private func curvatureDown(_ p: Vec2, clickCount: Int) {

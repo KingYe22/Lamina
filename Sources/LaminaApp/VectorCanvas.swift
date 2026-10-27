@@ -44,6 +44,9 @@ final class CanvasHost: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        clipsToBounds = true
         metal.autoresizingMask = [.width, .height]
         drawing.autoresizingMask = [.width, .height]
         addSubview(metal)
@@ -79,6 +82,8 @@ final class VectorCanvas: NSView {
         wantsLayer = true
         layer?.isOpaque = false
         layer?.backgroundColor = NSColor.clear.cgColor
+        layer?.masksToBounds = true
+        clipsToBounds = true
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -170,7 +175,7 @@ final class VectorCanvas: NSView {
         options.hint = model.interactionHint
         options.showAnchors = model.showAnchors
         options.showHandles = model.showHandles
-        options.rubberBand = model.rubberBand
+        options.rubberBand = model.penRubberLive
         options.livePaths = model.livePaths
         options.liveOutline = model.liveOutline
         options.perspective = model.perspectiveGrid
@@ -180,11 +185,13 @@ final class VectorCanvas: NSView {
         context.restoreGState()
         drawArtboardLabel(model)
         drawMeasure(model)
+        drawMoveReadout(model)
+        drawPenFeedback(model)
         if model.showRulers { drawRulers(model, in: context) }
     }
 
     private func drawMeasure(_ model: EditorModel) {
-        guard !model.liveLabel.isEmpty else { return }
+        guard model.moveDX.isEmpty, !model.liveLabel.isEmpty else { return }
         let viewX = (model.liveAnchor.x - model.pan.x) * model.zoom + 16
         let viewY = bounds.height - (model.liveAnchor.y - model.pan.y) * model.zoom + 16
         let text = model.liveLabel as NSString
@@ -198,6 +205,71 @@ final class VectorCanvas: NSView {
         text.draw(at: NSPoint(x: rect.minX + 6, y: rect.minY + 3), withAttributes: [
             .font: font, .foregroundColor: NSColor(calibratedWhite: 0.95, alpha: 1)
         ])
+    }
+
+    /// Light-gray object-move box. 81×30 pt, #CCCCCC. Not the pen `D:` pill.
+    private func drawMoveReadout(_ model: EditorModel) {
+        guard !model.moveDX.isEmpty else { return }
+        let cursor = viewPoint(model.hover, model: model)
+        var box = NSRect(x: cursor.x + 12, y: cursor.y - 12 - 30, width: 81, height: 30)
+        box.origin.x = min(max(4, box.origin.x), max(4, bounds.width - box.width - 4))
+        box.origin.y = min(max(4, box.origin.y), max(4, bounds.height - box.height - 4))
+        Theme.color(0xCCCCCC).setFill()
+        NSBezierPath(roundedRect: box, xRadius: 3, yRadius: 3).fill()
+        let font = Theme.ui(10)
+        let ink = NSColor.black
+        (model.moveDX as NSString).draw(at: NSPoint(x: box.minX + 6, y: box.minY + 15), withAttributes: [
+            .font: font, .foregroundColor: ink
+        ])
+        (model.moveDY as NSString).draw(at: NSPoint(x: box.minX + 6, y: box.minY + 4), withAttributes: [
+            .font: font, .foregroundColor: ink
+        ])
+    }
+
+    /// Pen nib extras: magenta 「锚点」, new-path `*`, and the dark `D:` pill.
+    private func drawPenFeedback(_ model: EditorModel) {
+        let penLike: Set<Tool> = [.pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor]
+        guard penLike.contains(model.tool) else { return }
+        let cursor = viewPoint(model.hover, model: model)
+        if model.penAnchorLabel {
+            let label = "锚点" as NSString
+            label.draw(at: NSPoint(x: cursor.x + 12, y: cursor.y + 6), withAttributes: [
+                .font: Theme.ui(11, weight: .medium),
+                .foregroundColor: Theme.color(0xFF2BD6)
+            ])
+        }
+        if model.penNewPathMark {
+            let star = "*" as NSString
+            let font = NSFont.systemFont(ofSize: 14, weight: .bold)
+            let origin = NSPoint(x: cursor.x + 11, y: cursor.y - 16)
+            for shift in [NSPoint(x: -1, y: 0), NSPoint(x: 1, y: 0), NSPoint(x: 0, y: -1), NSPoint(x: 0, y: 1)] {
+                star.draw(at: NSPoint(x: origin.x + shift.x, y: origin.y + shift.y), withAttributes: [
+                    .font: font, .foregroundColor: NSColor.white
+                ])
+            }
+            star.draw(at: origin, withAttributes: [
+                .font: font, .foregroundColor: NSColor.black
+            ])
+        }
+        guard !model.penDistance.isEmpty else { return }
+        let text = model.penDistance as NSString
+        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        let size = text.size(withAttributes: [.font: font])
+        var pill = NSRect(x: cursor.x + 12, y: cursor.y - 12 - size.height - 6, width: size.width + 12, height: size.height + 6)
+        pill.origin.x = min(max(4, pill.origin.x), max(4, bounds.width - pill.width - 4))
+        pill.origin.y = min(max(4, pill.origin.y), max(4, bounds.height - pill.height - 4))
+        NSColor(srgbRed: 0.22, green: 0.22, blue: 0.22, alpha: 0.9).setFill()
+        NSBezierPath(roundedRect: pill, xRadius: 4, yRadius: 4).fill()
+        text.draw(at: NSPoint(x: pill.minX + 6, y: pill.minY + 3), withAttributes: [
+            .font: font, .foregroundColor: NSColor(srgbRed: 0.95, green: 0.95, blue: 0.95, alpha: 1)
+        ])
+    }
+
+    private func viewPoint(_ document: Vec2, model: EditorModel) -> NSPoint {
+        NSPoint(
+            x: (document.x - model.pan.x) * model.zoom,
+            y: bounds.height - (document.y - model.pan.y) * model.zoom
+        )
     }
 
     private func drawArtboardLabel(_ model: EditorModel) {
@@ -239,7 +311,7 @@ final class VectorCanvas: NSView {
         case .hand: return .openHand
         case .zoom: return .crosshair
         case .text, .areaText, .verticalText, .pathText, .touchType: return .iBeam
-        case .pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor: return .crosshair
+        case .pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor: return Self.penNib
         default: return .arrow
         }
     }
@@ -267,9 +339,9 @@ final class VectorCanvas: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         guard let model = workspace?.active.model else { return }
-        model.pointerMove(to: documentPoint(event, pan: model.pan))
+        model.pointerMove(to: documentPoint(event, pan: model.pan), shift: event.modifierFlags.contains(.shift))
         let penLike: Set<Tool> = [.pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor]
-        if penLike.contains(model.tool), !model.penNodes.isEmpty || model.rubberBand {
+        if penLike.contains(model.tool) || model.penAnchorLabel || model.penNewPathMark || !model.penDistance.isEmpty {
             needsDisplay = true
         }
     }
@@ -352,6 +424,30 @@ final class VectorCanvas: NSView {
             (Double(bounds.height) - Double(viewPoint.y)) / zoom + pan.y
         )
     }
+
+    private static let penNib: NSCursor = {
+        let image = NSImage(size: NSSize(width: 24, height: 24), flipped: false) { _ in
+            let nib = NSBezierPath()
+            nib.move(to: NSPoint(x: 3, y: 21))
+            nib.line(to: NSPoint(x: 8.5, y: 19))
+            nib.curve(to: NSPoint(x: 18, y: 8), controlPoint1: NSPoint(x: 12, y: 16), controlPoint2: NSPoint(x: 16, y: 12))
+            nib.line(to: NSPoint(x: 15, y: 4.5))
+            nib.curve(to: NSPoint(x: 3, y: 21), controlPoint1: NSPoint(x: 9, y: 8), controlPoint2: NSPoint(x: 5.5, y: 15))
+            nib.close()
+            NSColor.white.setFill()
+            nib.fill()
+            NSColor.black.setStroke()
+            nib.lineWidth = 1.25
+            nib.stroke()
+            let slit = NSBezierPath()
+            slit.move(to: NSPoint(x: 4.2, y: 19.4))
+            slit.line(to: NSPoint(x: 13.5, y: 8.5))
+            slit.lineWidth = 0.9
+            slit.stroke()
+            return true
+        }
+        return NSCursor(image: image, hotSpot: NSPoint(x: 3, y: 21))
+    }()
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
 

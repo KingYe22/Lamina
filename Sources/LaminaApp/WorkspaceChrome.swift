@@ -190,28 +190,54 @@ final class DocumentTabBar: NSView {
         let preview = model.outline ? "轮廓" : "预览"
         let title = "\(model.document.title) @ \(zoom) (\(mode)/\(preview))" as NSString
         let font = Theme.ui(12)
-        let size = title.size(withAttributes: [.font: font])
-        let rect = NSRect(x: 12, y: 4, width: size.width + 28, height: bounds.height - 6)
+        let rect = tabChipRect()
         Theme.pasteboard.setFill()
         NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
         title.draw(at: NSPoint(x: rect.minX + 12, y: rect.midY - 7), withAttributes: [
             .font: font, .foregroundColor: Theme.text
         ])
     }
+
+    private func tabChipRect() -> NSRect {
+        guard let model = workspace?.active.model else { return .zero }
+        let zoom = String(format: "%.2f%%", model.zoom * 100)
+        let mode = model.document.colorMode == .cmyk ? "CMYK" : "RGB"
+        let preview = model.outline ? "轮廓" : "预览"
+        let title = "\(model.document.title) @ \(zoom) (\(mode)/\(preview))" as NSString
+        let size = title.size(withAttributes: [.font: Theme.ui(12)])
+        return NSRect(x: 12, y: 4, width: size.width + 28, height: max(0, bounds.height - 6))
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if tabChipRect().contains(point) { return }
+        window?.performDrag(with: event)
+    }
 }
 
 final class IllustratorStatusBar: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
+    override var isOpaque: Bool { true }
     weak var workspace: Workspace?
 
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        clipsToBounds = true
+        layer?.backgroundColor = Theme.color(0x4B4B4B).cgColor
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     override func draw(_ dirtyRect: NSRect) {
-        Theme.panel.setFill()
+        Theme.color(0x4B4B4B).setFill()
         bounds.fill()
         Theme.line.setFill()
         NSBezierPath(rect: NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)).fill()
         guard let model = workspace?.active.model else { return }
         let hint = Self.hint(for: model.tool) as NSString
-        hint.draw(at: NSPoint(x: 10, y: 6), withAttributes: [
+        hint.draw(at: NSPoint(x: 10, y: 4), withAttributes: [
             .font: Theme.ui(11), .foregroundColor: Theme.dim
         ])
         let zoom = String(format: "%.2f%%", model.zoom * 100)
@@ -220,7 +246,7 @@ final class IllustratorStatusBar: NSView {
         let right = "\(zoom) ▾    0°    ‹ \(index) / \(boards) ›    \(model.tool.title)" as NSString
         let font = Theme.ui(11)
         let size = right.size(withAttributes: [.font: font])
-        right.draw(at: NSPoint(x: bounds.width - size.width - 12, y: 6), withAttributes: [
+        right.draw(at: NSPoint(x: bounds.width - size.width - 12, y: 4), withAttributes: [
             .font: font, .foregroundColor: Theme.text
         ])
     }
@@ -228,9 +254,12 @@ final class IllustratorStatusBar: NSView {
     override func mouseDown(with event: NSEvent) {
         guard let workspace else { return }
         let x = convert(event.locationInWindow, from: nil).x
-        if x > bounds.width - 70 { return }
-        if x > bounds.width - 160 { workspace.perform("画板适合窗口大小") }
+        if x > bounds.width - 160, x <= bounds.width - 70 {
+            workspace.perform("画板适合窗口大小")
+        }
     }
+
+    override func mouseDragged(with event: NSEvent) {}
 
     private static func hint(for tool: Tool) -> String {
         switch tool {
@@ -324,10 +353,15 @@ final class PropertiesDock: NSView {
     private var tab = "属性"
 
     override var isFlipped: Bool { true }
+    override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { false }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        clipsToBounds = true
+        layer?.backgroundColor = Theme.panel.cgColor
         nudgeField.font = Theme.ui(13)
         nudgeField.alignment = .left
         nudgeField.backgroundColor = Theme.color(0x454545)
@@ -718,6 +752,7 @@ final class PropertiesDock: NSView {
                     return
                 }
             }
+            window?.performDrag(with: event)
             return
         }
         CanvasFocus.restore(in: window)
