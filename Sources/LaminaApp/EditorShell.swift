@@ -24,7 +24,8 @@ final class EditorShell: NSView {
         floaters.workspace = workspace
         contextBar.workspace = workspace
         controlBar.workspace = workspace
-        for view in [tabs, toolbar, canvas, status, floaters, shadowBand, dock, controlBar, contextBar] as [NSView] {
+        // Canvas, then floating panels, then docked chrome. Artwork cannot paint over a bar.
+        for view in [canvas, floaters, shadowBand, contextBar, dock, toolbar, status, controlBar, tabs] as [NSView] {
             addSubview(view)
         }
     }
@@ -37,12 +38,12 @@ final class EditorShell: NSView {
         super.layout()
         let titleBand: CGFloat = 28
         let tabHeight: CGFloat = 28
-        let statusHeight: CGFloat = 26
+        let statusHeight: CGFloat = 20
         let toolWidth = WorkspaceMetrics.toolWidth
         let dockWidth = WorkspaceMetrics.dockWidth
         let top = bounds.height - titleBand
         tabs.frame = NSRect(x: 0, y: top - tabHeight, width: bounds.width, height: tabHeight)
-        status.frame = NSRect(x: 0, y: 0, width: bounds.width, height: statusHeight)
+        status.frame = NSRect(x: toolWidth, y: 0, width: max(0, bounds.width - toolWidth - dockWidth), height: statusHeight)
         let bodyY = statusHeight
         let bodyH = max(0, top - tabHeight - statusHeight)
         toolbar.frame = NSRect(x: 0, y: bodyY, width: toolWidth, height: bodyH)

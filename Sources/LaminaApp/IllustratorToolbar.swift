@@ -3,6 +3,7 @@ import LaminaCore
 
 final class IllustratorToolbar: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
+    override var isOpaque: Bool { true }
     weak var workspace: Workspace?
     private var slots: [ToolSlotButton] = []
     private var sectionTitles: [(String, CGFloat)] = []
@@ -55,6 +56,8 @@ final class IllustratorToolbar: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.backgroundColor = Theme.panel.cgColor
+        layer?.masksToBounds = true
+        clipsToBounds = true
         for section in Self.sections {
             for row in section.rows {
                 for spec in row {
@@ -71,6 +74,14 @@ final class IllustratorToolbar: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Empty space in the band above the canvas drags the window. Tool buttons keep the click.
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if point.y < WorkspaceMetrics.chromeInset {
+            window?.performDrag(with: event)
+        }
+    }
 
     func sync() {
         let current = workspace?.active.model.tool
