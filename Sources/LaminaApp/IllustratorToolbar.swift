@@ -148,7 +148,7 @@ final class IllustratorToolbar: NSView {
         Theme.panel.setFill()
         bounds.fill()
         NSGraphicsContext.saveGraphicsState()
-        AffineTransform(translationByX: 0, byY: WorkspaceMetrics.toolbarLift).concat()
+        NSAffineTransform(transform: AffineTransform(translationByX: 0, byY: WorkspaceMetrics.toolbarLift)).concat()
         drawHeader()
         let current = workspace?.active.model.tool ?? .selection
         if current == .selection {
