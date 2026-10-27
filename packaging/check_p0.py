@@ -118,7 +118,9 @@ def check_borders(workspace):
     right_n, right_c = edge_run(workspace, title_row, right, -1)
     ok &= require(right_n == 2 and near(right_c, LINE, 18), f"appearance right edge {right_n}px {right_c.tolist()}")
     gap = workspace[title_row, right + 1]
-    ok &= require(not near(gap, LINE, 12), f"gap after appearance is not a second border {gap.tolist()}")
+    # Pasteboard #606060 sits 10 levels from the #6A line. A stacked border would be the line itself.
+    gap_line = int(np.max(np.abs(gap.astype(np.int16) - LINE)))
+    ok &= require(gap_line > 6, f"gap after appearance is not a second border {gap.tolist()} (line distance {gap_line})")
     lx, ly, lw, _ = align_box()
     align_n, align_c = edge_run(workspace, ly + 10, lx, 1)
     ok &= require(align_n == 2 and near(align_c, LINE, 18), f"align left edge {align_n}px {align_c.tolist()}")

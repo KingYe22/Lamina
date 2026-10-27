@@ -336,7 +336,11 @@ final class ToolSlotButton: NSView {
                 Theme.color(0x303030).setFill()
                 NSBezierPath(roundedRect: bounds.insetBy(dx: -1, dy: -1), xRadius: 3, yRadius: 3).fill()
             }
-            TracedIcons.draw(tool, toolbarOrigin: frame.origin)
+            // The glyph is stored in unshifted toolbar coordinates. The view grew
+            // upward by toolbarLift, so the slot moved down and the origin passed
+            // here stays on the traced point. That keeps the icon on the same window pixel.
+            let traced = NSPoint(x: frame.origin.x, y: frame.origin.y - WorkspaceMetrics.toolbarLift)
+            TracedIcons.draw(tool, toolbarOrigin: traced)
             return
         }
         if isCurrent {
