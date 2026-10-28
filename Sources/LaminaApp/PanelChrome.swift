@@ -136,12 +136,19 @@ final class FloatingPanels: NSView {
         placeGenerative()
         guard bounds.width > 400, bounds.height > 200 else { return }
         let size = bounds.size
-        if placed, size == placedSize { return }
-        placed = true
-        placedSize = size
-        panels[0].frame = WorkspaceMetrics.appearance.rect(in: bounds.height)
-        panels[1].frame = WorkspaceMetrics.align.rect(in: bounds.height)
-        panels[2].frame = WorkspaceMetrics.stroke.rect(in: bounds.height)
+        if !placed || size != placedSize {
+            placed = true
+            placedSize = size
+            let metrics = [
+                WorkspaceMetrics.appearance.rect(in: bounds.height),
+                WorkspaceMetrics.align.rect(in: bounds.height),
+                WorkspaceMetrics.stroke.rect(in: bounds.height)
+            ]
+            for (panel, rect) in zip(panels, metrics) where !panel.shoulderAnchored && !panel.dragging {
+                panel.frame = rect
+            }
+        }
+        seatAnchoredPanels()
     }
 
     private var placedSize = NSSize.zero
@@ -218,6 +225,27 @@ final class FloatingPanels: NSView {
         }
     }
 
+    func anchoredFrames(excluding panel: FloatPanel) -> [DockFrame] {
+        panels.filter { $0 !== panel && $0.shoulderAnchored && !$0.isHidden }.map { dockBox($0.frame) }
+    }
+
+    /// Put every latched panel back in the shoulder. Layout and the drag loop
+    /// both call this, so a display pass cannot leave the raw drag frame behind.
+    func seatAnchoredPanels() {
+        guard let shoulder = rightShoulder, bounds.width > 1, bounds.height > 1 else { return }
+        let host = dockBox(bounds)
+        for panel in panels where panel.shoulderAnchored {
+            let seated = DockSnap.commitShoulder(
+                proposed: dockBox(panel.frame),
+                shoulder: shoulder,
+                host: host,
+                occupied: anchoredFrames(excluding: panel)
+            )
+            let rect = NSRect(x: seated.x, y: seated.y, width: seated.width, height: seated.height)
+            if panel.frame != rect { panel.frame = rect }
+        }
+    }
+
     func merge(_ panel: FloatPanel, into target: FloatPanel) {
         guard panel !== target else { return }
         for tab in panel.tabs where !target.tabs.contains(tab) {
@@ -256,7 +284,11 @@ final class FloatPanel: NSView {
     private var arrowHead = 0
     private var scaleStrokes = false
     private var dashAlign = false
-    private var dragging = false
+    var dragging = false
+    /// Mouse-up landed while the shoulder guide was lit. Layout keeps seating it.
+    var shoulderAnchored = false
+    /// Width before the panel joined the column, so a later drag can undock.
+    private var undockedWidth: CGFloat?
 
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
@@ -875,32 +907,22 @@ final class FloatPanel: NSView {
     /// grouped panel such as 路径查找器 can still be pulled into the shoulder.
     private func trackTab(_ tab: PanelKind, from event: NSEvent) {
         let start = event.locationInWindow
-        let origin = frame.origin
-        let startMaxX = Double(origin.x + frame.width)
-        var moving = false
         while true {
             guard let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
             let dx = next.locationInWindow.x - start.x
             let dy = next.locationInWindow.y - start.y
-            if !moving {
-                if hypot(dx, dy) < 3 {
-                    if next.type == .leftMouseUp {
-                        active = tab
-                        needsLayout = true
-                        needsDisplay = true
-                        return
-                    }
-                    continue
+            if hypot(dx, dy) < 3 {
+                if next.type == .leftMouseUp {
+                    active = tab
+                    needsLayout = true
+                    needsDisplay = true
+                    return
                 }
-                moving = true
-                dragging = true
-                host?.bringToFront(self)
+                continue
             }
-            applyDrag(next, origin: origin, start: start, startMaxX: startMaxX)
-            if next.type == .leftMouseUp { break }
+            trackDrag(from: event, first: next)
+            return
         }
-        dragging = false
-        host?.showGuides([])
     }
 
     private func tab(at point: NSPoint) -> PanelKind? {
@@ -920,23 +942,51 @@ final class FloatPanel: NSView {
 
     private func dragMove(_ event: NSEvent) {
         guard !dragging else { return }
+        trackDrag(from: event, first: nil)
+    }
+
+    /// Magnet uses the unsnapped pointer delta. While the blue shoulder guide is
+    /// lit, the panel occupies that column; mouse-up keeps it there instead of
+    /// writing the raw drag origin back.
+    private func trackDrag(from event: NSEvent, first: NSEvent?) {
         dragging = true
         host?.bringToFront(self)
-        let start = event.locationInWindow
         let origin = frame.origin
-        let startMaxX = Double(origin.x + frame.width)
+        let start = event.locationInWindow
+        let floatSize = NSSize(width: undockedWidth ?? frame.width, height: frame.height)
+        let startMaxX = Double(origin.x) + Double(floatSize.width)
+        var gesture = DockGesture(floating: DockFrame(
+            x: Double(origin.x), y: Double(origin.y),
+            width: Double(floatSize.width), height: Double(floatSize.height)
+        ))
+        var pending = first
         while true {
-            guard let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
-            applyDrag(next, origin: origin, start: start, startMaxX: startMaxX)
-            if next.type == .leftMouseUp { break }
+            let sample: NSEvent?
+            if let queued = pending {
+                sample = queued
+                pending = nil
+            } else {
+                sample = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp])
+            }
+            guard let sample else { break }
+            applyDrag(sample, origin: origin, start: start, startMaxX: startMaxX, floatSize: floatSize, gesture: &gesture)
+            if sample.type == .leftMouseUp { break }
         }
         dragging = false
         host?.showGuides([])
+        if shoulderAnchored {
+            host?.seatAnchoredPanels()
+        }
     }
 
-    /// Magnet uses the unsnapped pointer delta. The snapped frame is what the
-    /// user sees during the drag, including the jump into the right shoulder.
-    private func applyDrag(_ next: NSEvent, origin: NSPoint, start: NSPoint, startMaxX: Double) {
+    private func applyDrag(
+        _ next: NSEvent,
+        origin: NSPoint,
+        start: NSPoint,
+        startMaxX: Double,
+        floatSize: NSSize,
+        gesture: inout DockGesture
+    ) {
         var proposed = NSPoint(
             x: origin.x + next.locationInWindow.x - start.x,
             y: origin.y + next.locationInWindow.y - start.y
@@ -945,24 +995,37 @@ final class FloatPanel: NSView {
             frame.origin = proposed
             return
         }
-        let limitX = max(0, host.bounds.width - frame.width)
-        let limitY = max(0, host.bounds.height - frame.height)
+        let limitX = max(0, host.bounds.width - floatSize.width)
+        let limitY = max(0, host.bounds.height - floatSize.height)
         proposed.x = min(max(proposed.x, 0), limitX)
         proposed.y = min(max(proposed.y, 0), limitY)
         let local = host.convert(next.locationInWindow, from: nil)
-        let magnet = DockSnap.magnet(
-            frame: Self.dockBox(NSRect(origin: proposed, size: frame.size)),
+        let sample = DockFrame(
+            x: Double(proposed.x), y: Double(proposed.y),
+            width: Double(floatSize.width), height: Double(floatSize.height)
+        )
+        let result = gesture.step(
+            proposed: sample,
             others: host.dockTargets(excluding: self),
             host: Self.dockBox(host.bounds),
             shoulder: host.rightShoulder,
             pointer: Vec2(Double(local.x), Double(local.y)),
-            dragStartMaxX: startMaxX
+            dragStartMaxX: startMaxX,
+            occupied: host.anchoredFrames(excluding: self),
+            up: next.type == .leftMouseUp
         )
-        frame.origin = NSPoint(x: CGFloat(magnet.frame.x), y: CGFloat(magnet.frame.y))
+        if result.docked, undockedWidth == nil {
+            undockedWidth = floatSize.width
+        }
+        if next.type == .leftMouseUp, !result.docked {
+            undockedWidth = nil
+        }
+        shoulderAnchored = result.docked
+        frame = NSRect(x: result.frame.x, y: result.frame.y, width: result.frame.width, height: result.frame.height)
         if next.type == .leftMouseUp {
             host.showGuides([])
         } else {
-            host.showGuides(magnet.guides)
+            host.showGuides(result.guides)
         }
         needsDisplay = true
         window?.displayIfNeeded()

@@ -336,6 +336,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         penCursor=\(String(format: "%.1f", PenHotSpot.cursorX)),\(String(format: "%.1f", PenHotSpot.cursorY))
         penCenter=\(PenHotSpot.isCenter)
         penTipError=\(String(format: "%.3f", PenHotSpot.tipError))
+        penTipError1=\(String(format: "%.3f", PenCursorBitmap.measureTip(scale: 1).absolute))
+        penTipError2=\(String(format: "%.3f", PenCursorBitmap.measureTip(scale: 2).absolute))
         generative=opens-only
         """
         try? report.write(to: dir.appendingPathComponent("p0-report.txt"), atomically: true, encoding: .utf8)

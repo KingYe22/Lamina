@@ -5,188 +5,170 @@ import Darwin
 import Glibc
 #endif
 
-/// 32×32 pen cursor, top row first. The hotspot is the nib's outer tip.
+/// 32×32 pen cursor, top row first. The hotspot is the nib tip.
 ///
-/// Bytes are straight RGBA with row 0 at the top. NSCursor measures its hotspot
-/// from the lower-left, so `hotspotY = height - tipY`. The previous (0, 25)
-/// constant did not land on this silhouette.
+/// v0.4.1 stored the tip at `(3.5, 5.5)` and passed NSCursor `y = 32 - 5.5 = 26.5`,
+/// on the assumption that AppKit measures the hotspot from the lower-left. The Mac
+/// retest (crop center 80,80, tip upper-left ≈ 84,41 at 2×) put the nib 19.5 logical
+/// points above the click: the `26.5` was applied from the top of this upright image.
+/// The hotspot is therefore the tip in the same top-left, y-down space as the bytes.
+///
+/// The nib is solid black with a white slit and no sticker outline. The foremost
+/// opaque pixel is the tip; its upper-left corner is the hotspot at 1× and 2×.
 public enum PenCursorBitmap {
     public static let width = 32
     public static let height = 32
 
-    /// Outer tip in top-left pixel space. y grows down. The point is the center
-    /// of the tip pixel.
-    public static let tipX = 3.5
-    public static let tipY = 5.5
+    /// Tip pixel. `tipX` / `tipY` are that pixel's upper-left in logical points.
+    public static let tipPixel = (x: 1, y: 1)
+    public static let tipX = Double(tipPixel.x)
+    public static let tipY = Double(tipPixel.y)
 
-    public static var tipPixel: (x: Int, y: Int) {
-        (Int(tipX.rounded(.down)), Int(tipY.rounded(.down)))
+    /// NSCursor hotspot, top-left origin, y down. Same numbers as the tip corner.
+    public static var hotspotX: Double { tipX }
+    public static var hotspotY: Double { tipY }
+
+    /// Larger of the 1× and 2× absolute errors. The Mac method: upper-left of the
+    /// foremost opaque pixel minus the hotspot, in logical points.
+    public static var tipError: Double {
+        max(measureTip(scale: 1).absolute, measureTip(scale: 2).absolute)
     }
 
-    /// NSCursor hotspot. Origin is the image's lower-left, in points.
-    public static var hotspotX: Double { tipX }
-    public static var hotspotY: Double { Double(height) - tipY }
-
-    /// Distance from the hotspot back to the tip vertex. Zero by construction.
-    public static var tipError: Double { 0 }
+    public static func measureTip(scale: Int) -> PenTipMeasure {
+        let scale = max(1, scale)
+        let bytes = rgba(state: .pen, newPath: false, scale: scale)
+        let pixels = width * scale
+        var bestX = 0
+        var bestY = 0
+        var best = Int.max
+        var found = false
+        for y in 0..<pixels {
+            for x in 0..<pixels {
+                if bytes[(y * pixels + x) * 4 + 3] <= 16 { continue }
+                let score = x + y
+                if score < best {
+                    best = score
+                    bestX = x
+                    bestY = y
+                    found = true
+                }
+            }
+        }
+        let ulX = found ? Double(bestX) / Double(scale) : 0
+        let ulY = found ? Double(bestY) / Double(scale) : 0
+        let dx = ulX - hotspotX
+        let dy = ulY - hotspotY
+        return PenTipMeasure(
+            scale: scale,
+            ulX: ulX,
+            ulY: ulY,
+            dx: dx,
+            dy: dy,
+            absolute: max(abs(dx), abs(dy))
+        )
+    }
 
     public static func rgba(state: PenCursor, newPath: Bool, scale: Int = 1) -> [UInt8] {
         let scale = max(1, scale)
         let pixels = width * scale
         var buffer = [UInt8](repeating: 0, count: pixels * pixels * 4)
         if state == .convert {
-            let shape = placed(caretSource, outline: caretOutline)
-            fill(shape, into: &buffer, scale: scale, slit: nil)
+            fill(caret, into: &buffer, scale: scale, slit: nil)
         } else {
-            let shape = placed(nibSource, outline: nibOutline)
-            let slit = nibSlit(shape.black)
-            fill(shape, into: &buffer, scale: scale, slit: slit)
+            let shape = nib
+            fill(shape, into: &buffer, scale: scale, slit: nibSlit(shape))
             if let glyph = badge(state, newPath: newPath) {
                 stamp(&buffer, glyph: glyph, center: (27, 27), scale: scale)
             }
         }
-        reinforceTip(&buffer, scale: scale)
+        protectTip(&buffer, scale: scale)
         return buffer
     }
 
     // MARK: - Geometry
 
-    /// Convex nib. Both edges leave the first vertex toward the lower right,
-    /// so that vertex stays the upper-left tip after the outline grows.
-    private static let nibSource: [(Double, Double)] = [
-        (4, 5), (14, 6), (20, 14), (16, 19), (8, 14)
+    /// Fountain-pen nib. Both edges leave the tip toward the lower right, so the
+    /// tip pixel stays the unique upper-left point. No offset outline.
+    private static let nib: [(Double, Double)] = [
+        (1.05, 1.05),
+        (5.4, 3.2),
+        (11.8, 6.0),
+        (16.6, 11.4),
+        (16.2, 16.2),
+        (8.4, 16.8),
+        (4.6, 12.6)
     ]
-    private static let nibOutline = 1.35
-    private static let caretSource: [(Double, Double)] = [
-        (0, 0), (9.0, 3.4), (4.4, 9.6)
+
+    /// Convert-point caret. Same tip pixel as the nib.
+    private static let caret: [(Double, Double)] = [
+        (1.0, 1.0),
+        (11.2, 4.4),
+        (5.2, 11.4)
     ]
-    private static let caretOutline = 1.15
 
-    private struct Shape {
-        var black: [(Double, Double)]
-        var outer: [(Double, Double)]
-    }
-
-    private static func placed(_ source: [(Double, Double)], outline: Double) -> Shape {
-        let outer = offset(source, by: outline)
-        let tip = outer.min { lhs, rhs in
-            let ls = lhs.0 + lhs.1
-            let rs = rhs.0 + rhs.1
-            if abs(ls - rs) > 1e-9 { return ls < rs }
-            if abs(lhs.1 - rhs.1) > 1e-9 { return lhs.1 < rhs.1 }
-            return lhs.0 < rhs.0
-        } ?? (tipX, tipY)
-        let dx = tipX - tip.0
-        let dy = tipY - tip.1
-        return Shape(
-            black: source.map { ($0.0 + dx, $0.1 + dy) },
-            outer: outer.map { ($0.0 + dx, $0.1 + dy) }
-        )
-    }
-
-    /// White slit from just behind the tip toward the middle of the nib.
+    /// White slit behind the tip, stopping before the middle so the body stays black.
     private static func nibSlit(_ black: [(Double, Double)]) -> ((Double, Double), (Double, Double)) {
-        let tip = black.min { $0.0 + $0.1 < $1.0 + $1.1 } ?? black[0]
+        let tip = black[0]
         let cx = black.reduce(0) { $0 + $1.0 } / Double(black.count)
         let cy = black.reduce(0) { $0 + $1.1 } / Double(black.count)
-        let a = (tip.0 + (cx - tip.0) * 0.22, tip.1 + (cy - tip.1) * 0.22)
-        let b = (tip.0 + (cx - tip.0) * 0.72, tip.1 + (cy - tip.1) * 0.72)
+        let a = (tip.0 + (cx - tip.0) * 0.34, tip.1 + (cy - tip.1) * 0.34)
+        let b = (tip.0 + (cx - tip.0) * 0.78, tip.1 + (cy - tip.1) * 0.78)
         return (a, b)
-    }
-
-    private static func offset(_ poly: [(Double, Double)], by dist: Double) -> [(Double, Double)] {
-        func build(_ sign: Double) -> [(Double, Double)] {
-            let n = poly.count
-            var lines: [(Double, Double, Double, Double)] = []
-            lines.reserveCapacity(n)
-            for index in 0..<n {
-                let a = poly[index]
-                let b = poly[(index + 1) % n]
-                let dx = b.0 - a.0
-                let dy = b.1 - a.1
-                let length = max(1e-9, hypot(dx, dy))
-                let nx = sign * dy / length
-                let ny = sign * (-dx) / length
-                lines.append((a.0 + nx * dist, a.1 + ny * dist, b.0 + nx * dist, b.1 + ny * dist))
-            }
-            var out: [(Double, Double)] = []
-            out.reserveCapacity(n)
-            for index in 0..<n {
-                let previous = lines[(index - 1 + n) % n]
-                let current = lines[index]
-                let den = (previous.2 - previous.0) * (current.3 - current.1) - (previous.3 - previous.1) * (current.2 - current.0)
-                if abs(den) < 1e-8 {
-                    out.append(poly[index])
-                    continue
-                }
-                let t = ((current.0 - previous.0) * (current.3 - current.1) - (current.1 - previous.1) * (current.2 - current.0)) / den
-                out.append((previous.0 + t * (previous.2 - previous.0), previous.1 + t * (previous.3 - previous.1)))
-            }
-            return out
-        }
-        func area(_ poly: [(Double, Double)]) -> Double {
-            let xs = poly.map(\.0)
-            let ys = poly.map(\.1)
-            return ((xs.max() ?? 0) - (xs.min() ?? 0)) * ((ys.max() ?? 0) - (ys.min() ?? 0))
-        }
-        let positive = build(1)
-        let negative = build(-1)
-        return area(positive) >= area(negative) ? positive : negative
     }
 
     // MARK: - Raster
 
-    private static func fill(_ shape: Shape, into buffer: inout [UInt8], scale: Int, slit: ((Double, Double), (Double, Double))?) {
-        let samples = 4
-        let count = samples * samples
+    private static func fill(
+        _ shape: [(Double, Double)],
+        into buffer: inout [UInt8],
+        scale: Int,
+        slit: ((Double, Double), (Double, Double))?
+    ) {
         let pixels = width * scale
-        let step = 1.0 / Double(samples)
         for y in 0..<pixels {
             for x in 0..<pixels {
-                var red = 0
-                var green = 0
-                var blue = 0
-                var alpha = 0
-                for sy in 0..<samples {
-                    for sx in 0..<samples {
-                        let px = (Double(x) + (Double(sx) + 0.5) * step) / Double(scale)
-                        let py = (Double(y) + (Double(sy) + 0.5) * step) / Double(scale)
-                        guard contains(shape.outer, px, py) else { continue }
-                        let inside = contains(shape.black, px, py)
-                        let onSlit = inside && slit.map { distance(px, py, $0.0, $0.1) < 0.55 } == true
-                        if inside && !onSlit {
-                            alpha += 255
-                        } else {
-                            red += 255
-                            green += 255
-                            blue += 255
-                            alpha += 255
-                        }
-                    }
-                }
+                let px = (Double(x) + 0.5) / Double(scale)
+                let py = (Double(y) + 0.5) / Double(scale)
+                guard contains(shape, px, py) else { continue }
+                let onSlit = slit.map { distance(px, py, $0.0, $0.1) <= 0.72 } == true
                 let offset = (y * pixels + x) * 4
-                buffer[offset] = UInt8(red / count)
-                buffer[offset + 1] = UInt8(green / count)
-                buffer[offset + 2] = UInt8(blue / count)
-                buffer[offset + 3] = UInt8(alpha / count)
-            }
-        }
-    }
-
-    /// The tip vertex sits on ink at every scale, including the 2× pixel boundary.
-    private static func reinforceTip(_ buffer: inout [UInt8], scale: Int) {
-        let pixels = width * scale
-        for y in 0..<pixels {
-            for x in 0..<pixels {
-                let cx = (Double(x) + 0.5) / Double(scale)
-                let cy = (Double(y) + 0.5) / Double(scale)
-                if hypot(cx - tipX, cy - tipY) <= 0.55 {
-                    let offset = (y * pixels + x) * 4
+                if onSlit {
                     buffer[offset] = 255
                     buffer[offset + 1] = 255
                     buffer[offset + 2] = 255
                     buffer[offset + 3] = 255
+                } else {
+                    buffer[offset] = 0
+                    buffer[offset + 1] = 0
+                    buffer[offset + 2] = 0
+                    buffer[offset + 3] = 255
                 }
+            }
+        }
+    }
+
+    /// Drop anything above or left of the tip, then paint the tip pixel black.
+    /// At 2× the logical tip is the 2×2 block whose upper-left is the hotspot.
+    private static func protectTip(_ buffer: inout [UInt8], scale: Int) {
+        let pixels = width * scale
+        let originX = tipPixel.x * scale
+        let originY = tipPixel.y * scale
+        for y in 0..<pixels {
+            for x in 0..<pixels where x < originX || y < originY {
+                let offset = (y * pixels + x) * 4
+                buffer[offset] = 0
+                buffer[offset + 1] = 0
+                buffer[offset + 2] = 0
+                buffer[offset + 3] = 0
+            }
+        }
+        for dy in 0..<scale {
+            for dx in 0..<scale {
+                let offset = ((originY + dy) * pixels + originX + dx) * 4
+                buffer[offset] = 0
+                buffer[offset + 1] = 0
+                buffer[offset + 2] = 0
+                buffer[offset + 3] = 255
             }
         }
     }
@@ -323,4 +305,15 @@ public enum PenCursorBitmap {
             buffer[offset + 3] = 255
         }
     }
+}
+
+/// Tip upper-left against the hotspot, in logical points. `absolute` is
+/// `max(|dx|, |dy|)`, the same reading as the Mac crop (`|tip − hotspot|`).
+public struct PenTipMeasure: Equatable, Sendable {
+    public var scale: Int
+    public var ulX: Double
+    public var ulY: Double
+    public var dx: Double
+    public var dy: Double
+    public var absolute: Double
 }

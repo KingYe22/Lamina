@@ -75,45 +75,49 @@ final class UXLockTests: XCTestCase {
     func testPenHotSpotIsTheNibTipNotTheCenter() {
         XCTAssertEqual(PenHotSpot.width, 32)
         XCTAssertEqual(PenHotSpot.height, 32)
-        XCTAssertEqual(PenCursorBitmap.tipX, 3.5, accuracy: 1e-9)
-        XCTAssertEqual(PenCursorBitmap.tipY, 5.5, accuracy: 1e-9)
-        XCTAssertEqual(PenHotSpot.x, 3)
-        XCTAssertEqual(PenHotSpot.y, 5)
+        XCTAssertEqual(PenCursorBitmap.tipX, 1, accuracy: 1e-9)
+        XCTAssertEqual(PenCursorBitmap.tipY, 1, accuracy: 1e-9)
+        XCTAssertEqual(PenHotSpot.x, 1)
+        XCTAssertEqual(PenHotSpot.y, 1)
         XCTAssertFalse(PenHotSpot.isCenter)
-        XCTAssertEqual(PenHotSpot.cursorX, 3.5, accuracy: 1e-9)
-        XCTAssertEqual(PenHotSpot.cursorY, 26.5, accuracy: 1e-9)
+        XCTAssertEqual(PenHotSpot.cursorX, PenCursorBitmap.tipX, accuracy: 1e-9)
+        XCTAssertEqual(PenHotSpot.cursorY, PenCursorBitmap.tipY, accuracy: 1e-9)
+        let one = PenCursorBitmap.measureTip(scale: 1)
+        let two = PenCursorBitmap.measureTip(scale: 2)
+        print("tipError_logical 1x=\(one.absolute) dx=\(one.dx) dy=\(one.dy) 2x=\(two.absolute) dx=\(two.dx) dy=\(two.dy)")
+        XCTAssertLessThanOrEqual(one.absolute, 1.5)
+        XCTAssertLessThanOrEqual(two.absolute, 1.5)
+        XCTAssertEqual(one.absolute, 0, accuracy: 1e-9)
+        XCTAssertEqual(two.absolute, 0, accuracy: 1e-9)
         XCTAssertEqual(PenHotSpot.tipError, 0, accuracy: 1e-9)
-        let backX = PenHotSpot.cursorX
-        let backY = Double(PenHotSpot.height) - PenHotSpot.cursorY
-        XCTAssertEqual(backX, PenCursorBitmap.tipX, accuracy: 1e-9)
-        XCTAssertEqual(backY, PenCursorBitmap.tipY, accuracy: 1e-9)
+        XCTAssertEqual(one.ulX, PenHotSpot.cursorX, accuracy: 1e-9)
+        XCTAssertEqual(one.ulY, PenHotSpot.cursorY, accuracy: 1e-9)
+        XCTAssertEqual(two.ulX, PenHotSpot.cursorX, accuracy: 1e-9)
+        XCTAssertEqual(two.ulY, PenHotSpot.cursorY, accuracy: 1e-9)
         XCTAssertNotEqual(PenHotSpot.x, PenHotSpot.width / 2)
         XCTAssertNotEqual(PenHotSpot.y, PenHotSpot.height / 2)
     }
 
-    func testPenBitmapIsBlackNibWithWhiteTipAndNewPathMark() {
+    func testPenBitmapIsSolidBlackNibWithSlitAndNewPathMark() {
         let plain = PenCursorBitmap.rgba(state: .pen, newPath: false)
         let starred = PenCursorBitmap.rgba(state: .pen, newPath: true)
         let caret = PenCursorBitmap.rgba(state: .convert, newPath: false)
         XCTAssertEqual(plain.count, 32 * 32 * 4)
         XCTAssertEqual(PenCursorBitmap.rgba(state: .pen, newPath: false, scale: 2).count, 64 * 64 * 4)
 
-        let tip = pixel(plain, 3, 5)
+        let tip = pixel(plain, PenHotSpot.x, PenHotSpot.y)
         XCTAssertGreaterThan(tip.a, 200, cursorGrid(plain))
-        XCTAssertGreaterThan(tip.r, 200)
-        XCTAssertEqual(foremost(plain).map { $0.x + $0.y }, 3 + 5, cursorGrid(plain))
-        XCTAssertEqual(foremost(plain)?.x, 3)
-        XCTAssertEqual(foremost(plain)?.y, 5)
-        XCTAssertLessThan(pixel(plain, 2, 4).a, 16, cursorGrid(plain))
+        XCTAssertLessThan(tip.r, 48, "tip pixel is black ink, got \(tip)\n\(cursorGrid(plain))")
+        XCTAssertEqual(foremost(plain)?.x, PenHotSpot.x, cursorGrid(plain))
+        XCTAssertEqual(foremost(plain)?.y, PenHotSpot.y, cursorGrid(plain))
+        XCTAssertLessThan(pixel(plain, PenHotSpot.x - 1, PenHotSpot.y - 1).a, 16, cursorGrid(plain))
         XCTAssertEqual(foremost(caret)?.x, PenHotSpot.x, cursorGrid(caret))
         XCTAssertEqual(foremost(caret)?.y, PenHotSpot.y, cursorGrid(caret))
 
-        let body = blackCentroid(plain)
-        let sample = pixel(plain, body.x, body.y)
-        XCTAssertGreaterThan(sample.a, 200, cursorGrid(plain))
-        XCTAssertLessThan(sample.r, 48, "body should be black, got \(sample) at \(body)")
-        let spread = outlineSpread(plain)
-        XCTAssertGreaterThan(spread.white, spread.black, "white outline \(spread.white) should sit outside black \(spread.black)\n\(cursorGrid(plain))")
+        XCTAssertGreaterThan(blackCount(plain), 40, cursorGrid(plain))
+        let slit = interiorWhite(plain)
+        XCTAssertGreaterThanOrEqual(slit, 4, "white slit inside the nib\n\(cursorGrid(plain))")
+        XCTAssertLessThan(exteriorWhite(plain), 8, "no sticker outline\n\(cursorGrid(plain))")
 
         XCTAssertGreaterThan(cornerOpaque(starred), cornerOpaque(plain) + 10, cursorGrid(starred))
         XCTAssertLessThan(cornerOpaque(plain), 8, cursorGrid(plain))
@@ -134,6 +138,8 @@ final class UXLockTests: XCTestCase {
             frame: near, others: [], host: host, shoulder: shoulder, dragStartMaxX: near.maxX - 3
         )
         XCTAssertEqual(moving.frame.maxX, shoulder.maxX, accuracy: 0.001)
+        XCTAssertEqual(moving.frame.x, shoulder.minX, accuracy: 0.001)
+        XCTAssertEqual(moving.frame.width, shoulder.width, accuracy: 0.001)
         XCTAssertEqual(moving.frame.y, 0, accuracy: 0.001)
         XCTAssertGreaterThan(abs(moving.frame.x - near.x), DockSnap.threshold)
         XCTAssertTrue(moving.guides.contains { guide in
@@ -177,6 +183,143 @@ final class UXLockTests: XCTestCase {
             pointer: Vec2(shoulder.minX - 9, 100), dragStartMaxX: distant.maxX
         )
         XCTAssertEqual(outside.frame.x, distant.x, accuracy: 0.001)
+    }
+
+    /// Drag 外观 and 对齐 into the blue-guide zone, then release at the raw
+    /// (unsnapped) origin. The panel must join the shoulder column.
+    func testAppearanceAndAlignReleaseIntoTheRightShoulder() {
+        let host = DockFrame(x: 0, y: 0, width: 952, height: 800)
+        let shoulder = DockFrame(x: 640, y: 0, width: 312, height: 800)
+
+        let appearance = DockFrame(x: 19, y: 520, width: 302, height: 243)
+        let approachX = shoulder.minX - 6 - appearance.width
+        var appearanceDrag = DockGesture(floating: appearance)
+        let approach = DockFrame(x: approachX, y: appearance.y, width: appearance.width, height: appearance.height)
+        let hold = appearanceDrag.step(
+            proposed: approach, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(approach.x + 40, approach.y + 10),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        XCTAssertTrue(appearanceDrag.shoulderArmed)
+        XCTAssertEqual(hold.frame.x, shoulder.minX, accuracy: 0.001)
+        XCTAssertEqual(hold.frame.width, shoulder.width, accuracy: 0.001)
+        XCTAssertEqual(hold.frame.maxX, shoulder.maxX, accuracy: 0.001)
+        XCTAssertTrue(hold.guides.contains { guide in
+            if case .vertical(let x) = guide.axis { return abs(x - shoulder.maxX) < 0.001 }
+            return false
+        })
+        let released = appearanceDrag.step(
+            proposed: approach, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(approach.x + 40, approach.y + 10),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertTrue(released.docked)
+        XCTAssertTrue(released.guides.isEmpty)
+        XCTAssertEqual(released.frame.x, shoulder.minX, accuracy: 0.001)
+        XCTAssertEqual(released.frame.width, shoulder.width, accuracy: 0.001)
+        XCTAssertEqual(released.frame.maxX, host.maxX, accuracy: 0.001)
+
+        // Pointer is already in the column while the panel is still hundreds of
+        // points short of the edge — the guide is on, so mouse-up joins the dock.
+        let center = DockFrame(x: 200, y: 400, width: appearance.width, height: appearance.height)
+        XCTAssertGreaterThan(shoulder.maxX - center.maxX, 200)
+        var pointerDrag = DockGesture(floating: appearance)
+        let aimed = pointerDrag.step(
+            proposed: center, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(shoulder.minX + 24, 420),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        XCTAssertTrue(pointerDrag.shoulderArmed)
+        XCTAssertEqual(aimed.frame.x, shoulder.minX, accuracy: 0.001)
+        let dropped = pointerDrag.step(
+            proposed: center, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(shoulder.minX + 24, 420),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertTrue(dropped.docked)
+        XCTAssertEqual(dropped.frame.x, shoulder.minX, accuracy: 0.001)
+        XCTAssertEqual(dropped.frame.width, shoulder.width, accuracy: 0.001)
+
+        let align = DockFrame(x: 280, y: 480, width: 313, height: 283)
+        var alignDrag = DockGesture(floating: align)
+        let alignNear = DockFrame(x: shoulder.minX - 4 - align.width, y: align.y, width: align.width, height: align.height)
+        _ = alignDrag.step(
+            proposed: alignNear, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(alignNear.maxX - 8, alignNear.y + 12),
+            dragStartMaxX: align.maxX, up: false
+        )
+        let alignUp = alignDrag.step(
+            proposed: alignNear, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(alignNear.maxX - 8, alignNear.y + 12),
+            dragStartMaxX: align.maxX, up: true
+        )
+        XCTAssertTrue(alignUp.docked)
+        XCTAssertEqual(alignUp.frame.x, shoulder.minX, accuracy: 0.001)
+        XCTAssertEqual(alignUp.frame.width, shoulder.width, accuracy: 0.001)
+        XCTAssertEqual(alignUp.frame.maxX, shoulder.maxX, accuracy: 0.001)
+
+        // Leaving the zone turns the guide off; mouse-up keeps the floating frame.
+        var leave = DockGesture(floating: appearance)
+        _ = leave.step(
+            proposed: approach, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(approach.x + 20, approach.y + 10),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        XCTAssertTrue(leave.shoulderArmed)
+        let away = DockFrame(x: 30, y: 400, width: appearance.width, height: appearance.height)
+        let backedOut = leave.step(
+            proposed: away, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(80, 420),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        XCTAssertFalse(leave.shoulderArmed)
+        XCTAssertFalse(backedOut.docked)
+        XCTAssertEqual(backedOut.frame.width, appearance.width, accuracy: 0.001)
+        let left = leave.step(
+            proposed: away, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(80, 420),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertFalse(leave.shoulderArmed)
+        XCTAssertFalse(left.docked)
+        XCTAssertEqual(left.frame.x, away.x, accuracy: 0.001)
+        XCTAssertEqual(left.frame.width, appearance.width, accuracy: 0.001)
+
+        // Mouse-up itself is far outside the column: do not dock on a stale latch.
+        var releaseFar = DockGesture(floating: appearance)
+        _ = releaseFar.step(
+            proposed: approach, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(approach.x + 20, approach.y + 10),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        let jumped = releaseFar.step(
+            proposed: away, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(80, 420),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertFalse(releaseFar.shoulderArmed)
+        XCTAssertFalse(jumped.docked)
+        XCTAssertEqual(jumped.frame.x, away.x, accuracy: 0.001)
+
+        // Release a few points outside the 8 pt zone still joins, because the guide was lit.
+        var flicker = DockGesture(floating: appearance)
+        _ = flicker.step(
+            proposed: approach, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(approach.x + 20, approach.y + 10),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        let almost = DockFrame(
+            x: shoulder.minX - 12 - appearance.width, y: appearance.y,
+            width: appearance.width, height: appearance.height
+        )
+        let flickUp = flicker.step(
+            proposed: almost, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(almost.x + 24, almost.y + 8),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertTrue(flickUp.docked)
+        XCTAssertEqual(flickUp.frame.x, shoulder.minX, accuracy: 0.001)
+        XCTAssertEqual(flickUp.frame.width, shoulder.width, accuracy: 0.001)
     }
 
     func testPenHoverCursorFollowsThePointerWithoutClobberingTheClickCursor() {
@@ -246,70 +389,50 @@ final class UXLockTests: XCTestCase {
         return best.map { ($0.x, $0.y) }
     }
 
-    private func blackCentroid(_ bytes: [UInt8]) -> (x: Int, y: Int) {
-        var sx = 0
-        var sy = 0
+    private func blackCount(_ bytes: [UInt8]) -> Int {
         var count = 0
         for y in 0..<32 {
             for x in 0..<32 {
                 let sample = pixel(bytes, x, y)
-                if sample.a > 200, sample.r < 48 {
-                    sx += x
-                    sy += y
-                    count += 1
-                }
+                if sample.a > 200, sample.r < 48 { count += 1 }
             }
         }
-        guard count > 0 else { return (0, 0) }
-        return (sx / count, sy / count)
+        return count
     }
 
-    private func outlineSpread(_ bytes: [UInt8]) -> (black: Double, white: Double) {
-        var bx: [Double] = []
-        var by: [Double] = []
-        var wx: [Double] = []
-        var wy: [Double] = []
-        for y in 0..<32 {
-            for x in 0..<32 {
+    /// White pixels whose four neighbors are opaque: the nib slit, not an outline.
+    private func interiorWhite(_ bytes: [UInt8]) -> Int {
+        var count = 0
+        for y in 1..<31 {
+            for x in 1..<31 {
                 let sample = pixel(bytes, x, y)
-                if sample.a > 200, sample.r < 48 {
-                    bx.append(Double(x))
-                    by.append(Double(y))
-                }
+                guard sample.a > 200, sample.r > 200 else { continue }
+                let around = [pixel(bytes, x - 1, y), pixel(bytes, x + 1, y), pixel(bytes, x, y - 1), pixel(bytes, x, y + 1)]
+                if around.allSatisfy({ $0.a > 200 }) { count += 1 }
             }
         }
-        let cx = bx.reduce(0, +) / Double(max(bx.count, 1))
-        let cy = by.reduce(0, +) / Double(max(by.count, 1))
+        return count
+    }
+
+    /// White pixels that touch transparency. A sticker outline lives here.
+    private func exteriorWhite(_ bytes: [UInt8]) -> Int {
+        var count = 0
         for y in 0..<32 {
             for x in 0..<32 {
                 let sample = pixel(bytes, x, y)
                 guard sample.a > 200, sample.r > 200 else { continue }
-                let clear = neighborClear(bytes, x, y)
-                if clear {
-                    wx.append(Double(x))
-                    wy.append(Double(y))
+                var exposed = false
+                for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+                    let nx = x + dx
+                    let ny = y + dy
+                    if nx < 0 || ny < 0 || nx >= 32 || ny >= 32 || pixel(bytes, nx, ny).a < 16 {
+                        exposed = true
+                    }
                 }
+                if exposed { count += 1 }
             }
         }
-        func mean(_ xs: [Double], _ ys: [Double]) -> Double {
-            guard !xs.isEmpty else { return 0 }
-            return zip(xs, ys).reduce(0.0) { partial, point in
-                let dx = point.0 - cx
-                let dy = point.1 - cy
-                return partial + (dx * dx + dy * dy).squareRoot()
-            } / Double(xs.count)
-        }
-        return (mean(bx, by), mean(wx, wy))
-    }
-
-    private func neighborClear(_ bytes: [UInt8], _ x: Int, _ y: Int) -> Bool {
-        for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
-            let nx = x + dx
-            let ny = y + dy
-            if nx < 0 || ny < 0 || nx >= 32 || ny >= 32 { return true }
-            if pixel(bytes, nx, ny).a < 16 { return true }
-        }
-        return false
+        return count
     }
 
     private func cornerOpaque(_ bytes: [UInt8]) -> Int {

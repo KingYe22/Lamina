@@ -13,8 +13,8 @@ settings:
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGN_IDENTITY: ""
     ENABLE_HARDENED_RUNTIME: NO
-    MARKETING_VERSION: "0.4.1"
-    CURRENT_PROJECT_VERSION: "17"
+    MARKETING_VERSION: "0.4.2"
+    CURRENT_PROJECT_VERSION: "18"
 targets:
   LaminaCore:
     type: library.static

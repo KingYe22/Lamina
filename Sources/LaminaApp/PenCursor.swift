@@ -3,9 +3,10 @@ import LaminaCore
 
 /// Pen cursors rasterized by `PenCursorBitmap`.
 ///
-/// Row 0 of the buffer is the top of the image. NSCursor's hotspot is the nib
-/// tip in points from the lower-left (`PenHotSpot.cursorX`, `PenHotSpot.cursorY`),
-/// so the click lands on the tip rather than the body of the nib.
+/// Row 0 of the buffer is the top of the image. The hotspot is the nib tip in
+/// that same top-left space (`PenHotSpot.cursorX`, `PenHotSpot.cursorY`). v0.4.1
+/// flipped Y for a lower-left hotspot; on the Mac that value was measured from
+/// the top, so the tip sat ~19.5 pt above the click.
 enum PenCursorArt {
     private static var cache: [String: NSCursor] = [:]
 

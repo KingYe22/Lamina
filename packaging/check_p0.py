@@ -11,9 +11,10 @@ inbox references before this script was written:
 - ux-v039/01-ai-workspace.png has no #606060 strip between the title chrome and
   the toolbar body. The right column reaches the window edge (x 4340–4967 of 4968).
 - ux-v039/06-dock-blue-line.jpg mode near the guide is (0, 114, 239), #0072EF.
-- pen hotspot is the nib tip. p0-report penTip maps to penCursor from the
-  lower-left with error 0. The tip pixel is opaque white, not the center.
-  pen-cursor-new.png adds the new-path asterisk in the lower-right.
+- pen hotspot is the nib tip in the same top-left space as the bitmap.
+  p0-report penCursor equals penTip; penTipError is max(|dx|, |dy|) at 1× and
+  2× and must be ≤ 1.5. The tip pixel is opaque black. The nib has an interior
+  white slit and no sticker outline. pen-cursor-new.png adds the asterisk.
 """
 
 import sys
@@ -262,15 +263,17 @@ def check_pen(path):
     pixel = [int(part) for part in fields["penPixel"].split(",")]
     pix_x, pix_y = pixel
     ok &= require(abs(cursor[0] - tip[0]) < 0.01, f"hotspot x {cursor[0]} is the tip x {tip[0]}")
-    ok &= require(abs((32 - cursor[1]) - tip[1]) < 0.01, f"hotspot y {cursor[1]} maps back to tip y {tip[1]}")
+    ok &= require(abs(cursor[1] - tip[1]) < 0.01, f"hotspot y {cursor[1]} is the tip y {tip[1]}")
     ok &= require(fields.get("penCenter") == "false", "hotspot is not the center")
-    ok &= require(abs(float(fields["penTipError"])) < 0.001, f"tip error {fields.get('penTipError')}")
+    ok &= require(abs(float(fields["penTipError"])) <= 1.5, f"tip error {fields.get('penTipError')}")
+    for key in ("penTipError1", "penTipError2"):
+        ok &= require(abs(float(fields[key])) <= 1.5, f"{key} {fields.get(key)}")
     ok &= require(pix_x == int(tip[0]) and pix_y == int(tip[1]), f"pixel {pixel} is the tip {tip}")
     ok &= require(abs(pix_x - 16) > 6 and abs(pix_y - 16) > 6, f"tip {pixel} is not the center")
 
     tip_px = pixels[pix_y, pix_x]
     print(f"tip pixel {tip_px.tolist()} at {pixel}")
-    ok &= require(int(tip_px[3]) > 200 and int(tip_px[:3].min()) > 200, f"tip pixel is opaque white {tip_px.tolist()}")
+    ok &= require(int(tip_px[3]) > 200 and int(tip_px[:3].max()) < 48, f"tip pixel is opaque black {tip_px.tolist()}")
     if pix_x > 0 and pix_y > 0:
         neighbor = pixels[pix_y - 1, pix_x - 1]
         ok &= require(int(neighbor[3]) < 16, f"up-left of the tip is empty {neighbor.tolist()}")
@@ -280,6 +283,10 @@ def check_pen(path):
     score = xs.astype(int) + ys.astype(int)
     min_score = int(score.min())
     at_tip = score == min_score
+    ul_x = float(xs[at_tip].min())
+    ul_y = float(ys[at_tip].min())
+    print(f"measured tip UL {ul_x},{ul_y} hotspot {cursor[0]},{cursor[1]}")
+    ok &= require(max(abs(ul_x - cursor[0]), abs(ul_y - cursor[1])) <= 1.5, "png tip UL is the hotspot")
     ok &= require(min_score == pix_x + pix_y, f"foremost ink score {min_score} tip {pix_x + pix_y}")
     ok &= require(bool(np.all(xs[at_tip] == pix_x) and np.all(ys[at_tip] == pix_y)), "foremost opaque pixel is the tip")
 
@@ -287,19 +294,28 @@ def check_pen(path):
     black = (alpha > 200) & (rgb.max(axis=2) < 48)
     white = (alpha > 200) & (rgb.min(axis=2) > 200)
     print(f"black {int(black.sum())} white {int(white.sum())}")
-    ok &= require(int(black.sum()) > 30 and int(white.sum()) > 20, "black nib with a white outline")
-    by, bx = np.where(black)
-    cx, cy = float(bx.mean()), float(by.mean())
-    body = pixels[int(round(cy)), int(round(cx))]
-    ok &= require(int(body[3]) > 200 and int(body[:3].max()) < 48, f"body pixel is black {body.tolist()} at {cx:.1f},{cy:.1f}")
-    low = np.pad(alpha < 16, 1, constant_values=True)
-    neighbor_clear = low[:-2, 1:-1] | low[2:, 1:-1] | low[1:-1, :-2] | low[1:-1, 2:]
-    outline = white & neighbor_clear
-    oy, ox = np.where(outline)
-    black_d = float(np.hypot(bx - cx, by - cy).mean())
-    white_d = float(np.hypot(ox - cx, oy - cy).mean())
-    print(f"outline distance {white_d:.2f} black distance {black_d:.2f}")
-    ok &= require(white_d > black_d, "white outline sits outside the black nib")
+    ok &= require(int(black.sum()) > 40, "solid black nib")
+    interior = np.zeros(alpha.shape, dtype=bool)
+    interior[1:-1, 1:-1] = (
+        white[1:-1, 1:-1]
+        & (alpha[:-2, 1:-1] > 200)
+        & (alpha[2:, 1:-1] > 200)
+        & (alpha[1:-1, :-2] > 200)
+        & (alpha[1:-1, 2:] > 200)
+    )
+    exposed = np.zeros(alpha.shape, dtype=bool)
+    exposed[1:-1, 1:-1] = (
+        white[1:-1, 1:-1]
+        & (
+            (alpha[:-2, 1:-1] < 16)
+            | (alpha[2:, 1:-1] < 16)
+            | (alpha[1:-1, :-2] < 16)
+            | (alpha[1:-1, 2:] < 16)
+        )
+    )
+    print(f"interior white {int(interior.sum())} exterior white {int(exposed.sum())}")
+    ok &= require(int(interior.sum()) >= 4, "white slit inside the black nib")
+    ok &= require(int(exposed.sum()) < 8, "no sticker outline around the nib")
 
     star = np.asarray(Image.open(path.with_name("pen-cursor-new.png")).convert("RGBA"))
     ok &= require(star.shape[:2] == (32, 32), f"new-path cursor {star.shape}")

@@ -33,6 +33,9 @@ public struct DockGuide: Equatable, Sendable {
 
 /// Magnetic edges for a floating panel. The guide is shown while an edge is
 /// inside the threshold; the returned frame is what mouse-up should apply.
+///
+/// A shoulder hit does not only slide `maxX` to the window edge. The panel
+/// takes the shoulder's `x` and `width`, so it joins the column.
 public enum DockSnap {
     /// Lock range is 6–8 pt. 8 is the inclusive end of that range.
     public static let threshold: Double = 8
@@ -59,7 +62,8 @@ public enum DockSnap {
             shouldDock(frame: frame, shoulder: $0, pointer: pointer, dragStartMaxX: dragStartMaxX, threshold: threshold)
         } ?? false
         if intoShoulder, let shoulder {
-            next.x += shoulder.maxX - frame.maxX
+            next.x = shoulder.minX
+            next.width = shoulder.width
             guides.append(DockGuide(.vertical(shoulder.maxX)))
         } else if let x = best(frame: frame, others: others, host: host, threshold: threshold, vertical: false) {
             next.x += x.delta
@@ -137,8 +141,127 @@ public enum DockSnap {
         return winner
     }
 
+    /// Drop a panel into the shoulder column. `occupied` are panels already in
+    /// that column; a vertical overlap is pushed below them (smaller y).
+    public static func commitShoulder(
+        proposed: DockFrame,
+        shoulder: DockFrame,
+        host: DockFrame,
+        occupied: [DockFrame] = []
+    ) -> DockFrame {
+        var next = proposed
+        next.x = shoulder.minX
+        next.width = shoulder.width
+        next.y = stackedY(y: proposed.y, height: proposed.height, occupied: occupied)
+        next.y = clamp(next.y, low: host.minY, room: host.height - next.height)
+        return next
+    }
+
+    /// True once the pointer or the panel has left the shoulder by more than
+    /// two thresholds. Inside that margin a lit guide stays lit through mouse-up.
+    static func clearOfShoulder(frame: DockFrame, shoulder: DockFrame, pointer: Vec2?) -> Bool {
+        let margin = threshold * 2
+        let overlaps = frame.maxX > shoulder.minX - margin && frame.minX < shoulder.maxX + margin
+            && frame.maxY > shoulder.minY - margin && frame.minY < shoulder.maxY + margin
+        if overlaps { return false }
+        if let pointer,
+           pointer.x >= shoulder.minX - margin, pointer.x <= shoulder.maxX + margin,
+           pointer.y >= shoulder.minY - margin, pointer.y <= shoulder.maxY + margin {
+            return false
+        }
+        let gap = shoulder.minX - frame.maxX
+        return gap > margin
+    }
+
+    static func guideFires(_ guides: [DockGuide], at shoulder: DockFrame) -> Bool {
+        guides.contains { guide in
+            if case .vertical(let x) = guide.axis { return abs(x - shoulder.maxX) < 0.5 }
+            return false
+        }
+    }
+
+    private static func stackedY(y: Double, height: Double, occupied: [DockFrame]) -> Double {
+        var y = y
+        for _ in 0..<(occupied.count + 1) {
+            var pushed = false
+            for other in occupied {
+                let overlaps = y < other.maxY - 0.5 && y + height > other.minY + 0.5
+                if overlaps {
+                    y = other.minY - height
+                    pushed = true
+                    break
+                }
+            }
+            if !pushed { break }
+        }
+        return y
+    }
+
     private static func clamp(_ origin: Double, low: Double, room: Double) -> Double {
         if room <= 0 { return low }
         return min(max(origin, low), low + room)
+    }
+}
+
+/// One title-bar drag. The shoulder guide latches: while it is lit, mouse-up
+/// joins the column even if that event's raw origin is still the unsnapped
+/// point (the v0.4.1 failure, hundreds of points short of the right edge).
+public struct DockGesture: Equatable, Sendable {
+    public private(set) var shoulderArmed = false
+    public let floatingWidth: Double
+    public let floatingHeight: Double
+
+    public init(floating: DockFrame) {
+        floatingWidth = floating.width
+        floatingHeight = floating.height
+    }
+
+    public mutating func step(
+        proposed: DockFrame,
+        others: [DockFrame],
+        host: DockFrame,
+        shoulder: DockFrame?,
+        pointer: Vec2?,
+        dragStartMaxX: Double,
+        occupied: [DockFrame] = [],
+        up: Bool
+    ) -> (frame: DockFrame, guides: [DockGuide], docked: Bool) {
+        var sample = proposed
+        sample.width = floatingWidth
+        sample.height = floatingHeight
+        let magnet = DockSnap.magnet(
+            frame: sample,
+            others: others,
+            host: host,
+            shoulder: shoulder,
+            pointer: pointer,
+            dragStartMaxX: dragStartMaxX
+        )
+        let engaged = shoulder.map { DockSnap.guideFires(magnet.guides, at: $0) } ?? false
+        if up {
+            // A release a couple of points outside the 8 pt zone still docks.
+            // A release that has clearly left the column does not.
+            if let shoulder, DockSnap.clearOfShoulder(frame: sample, shoulder: shoulder, pointer: pointer) {
+                shoulderArmed = false
+            } else if engaged {
+                shoulderArmed = true
+            }
+        } else {
+            shoulderArmed = engaged
+        }
+        if shoulderArmed, let shoulder {
+            let dropped = DockSnap.commitShoulder(
+                proposed: magnet.frame, shoulder: shoulder, host: host, occupied: occupied
+            )
+            var guides = magnet.guides
+            if !DockSnap.guideFires(guides, at: shoulder) {
+                guides.append(DockGuide(.vertical(shoulder.maxX)))
+            }
+            return (dropped, up ? [] : guides, true)
+        }
+        var free = magnet.frame
+        free.width = floatingWidth
+        free.height = floatingHeight
+        return (free, up ? [] : magnet.guides, false)
     }
 }

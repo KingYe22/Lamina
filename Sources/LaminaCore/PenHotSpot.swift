@@ -2,9 +2,10 @@ import Foundation
 
 /// Pen-tool cursor tip, measured on `PenCursorBitmap`.
 ///
-/// `x` and `y` are the tip pixel from the bitmap's top-left. NSCursor's hotspot
-/// is that same point from the lower-left (`cursorX`, `cursorY`). It is the nib
-/// tip, not the center of the 32×32 image.
+/// `x` and `y` are the tip pixel. `cursorX` and `cursorY` are the NSCursor hotspot
+/// in the same top-left, y-down space (the nib corner, not the image center, and
+/// not `height - y`). v0.4.1's lower-left conversion put the drawn tip ~19.5 pt
+/// above the click on a Retina Mac.
 public enum PenHotSpot {
     public static let width = PenCursorBitmap.width
     public static let height = PenCursorBitmap.height

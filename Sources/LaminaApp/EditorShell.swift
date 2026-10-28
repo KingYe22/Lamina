@@ -59,8 +59,8 @@ final class EditorShell: NSView {
         dock.frame = NSRect(x: bounds.width - dockWidth, y: bodyY, width: dockWidth, height: columnH + lift)
         canvas.frame = NSRect(x: toolWidth, y: bodyY, width: max(0, bounds.width - toolWidth - dockWidth), height: columnH)
         // Host reaches the window's right client edge. The properties dock stays underneath.
+        // Shoulder is published before the frame change so a nested layout seats into this column.
         let floaterWidth = max(0, bounds.width - toolWidth)
-        floaters.frame = NSRect(x: toolWidth, y: bodyY, width: floaterWidth, height: columnH)
         let shoulderWidth = min(dockWidth, floaterWidth)
         floaters.rightShoulder = DockFrame(
             x: Double(max(0, floaterWidth - shoulderWidth)),
@@ -68,6 +68,7 @@ final class EditorShell: NSView {
             width: Double(shoulderWidth),
             height: Double(columnH)
         )
+        floaters.frame = NSRect(x: toolWidth, y: bodyY, width: floaterWidth, height: columnH)
         contextBar.frame = NSRect(x: canvas.frame.midX - 210, y: canvas.frame.maxY - 46, width: 420, height: 32)
         contextBar.isHidden = workspace.active.model.selection.isEmpty
     }
