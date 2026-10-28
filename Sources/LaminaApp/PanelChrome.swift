@@ -100,6 +100,8 @@ final class FloatingPanels: NSView {
     }
     private var panels: [FloatPanel] = []
     private var placed = false
+    /// Properties column, in this view. The shell fills it in during layout.
+    var rightShoulder: DockFrame?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -205,6 +207,8 @@ final class FloatingPanels: NSView {
 
     func showGuides(_ guides: [DockGuide]) {
         guideOverlay.guides = guides
+        guideOverlay.frame = bounds
+        addSubview(guideOverlay, positioned: .above, relativeTo: nil)
         guideOverlay.needsDisplay = true
     }
 
@@ -823,23 +827,9 @@ final class FloatPanel: NSView {
             showMenu()
             return
         }
-        if !collapsed, tabs.count > 1, point.y < titleHeight, point.x < bounds.width - 74 {
-            let measured = tabs == [.transform, .align, .pathfinder]
-            let spots: [CGFloat] = measured ? [12, 69.5, 118.5, bounds.width] : []
-            var x: CGFloat = 8
-            for (index, tab) in tabs.enumerated() {
-                let font = Theme.ui(13, weight: .semibold)
-                let width = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
-                let start = measured && spots.indices.contains(index) ? spots[index] : x
-                let end = measured && spots.indices.contains(index + 1) ? spots[index + 1] : start + width
-                if point.x >= start && point.x < end {
-                    active = tab
-                    needsLayout = true
-                    needsDisplay = true
-                    return
-                }
-                x = end
-            }
+        if !collapsed, tabs.count > 1, point.y < titleHeight, point.x < bounds.width - 74, let tab = tab(at: point) {
+            trackTab(tab, from: event)
+            return
         }
         if point.y < titleHeight {
             dragMove(event)
@@ -881,42 +871,101 @@ final class FloatPanel: NSView {
         host?.merge(self, into: other)
     }
 
+    /// A short click switches tabs. Moving the pointer starts a panel drag, so a
+    /// grouped panel such as 路径查找器 can still be pulled into the shoulder.
+    private func trackTab(_ tab: PanelKind, from event: NSEvent) {
+        let start = event.locationInWindow
+        let origin = frame.origin
+        let startMaxX = Double(origin.x + frame.width)
+        var moving = false
+        while true {
+            guard let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
+            let dx = next.locationInWindow.x - start.x
+            let dy = next.locationInWindow.y - start.y
+            if !moving {
+                if hypot(dx, dy) < 3 {
+                    if next.type == .leftMouseUp {
+                        active = tab
+                        needsLayout = true
+                        needsDisplay = true
+                        return
+                    }
+                    continue
+                }
+                moving = true
+                dragging = true
+                host?.bringToFront(self)
+            }
+            applyDrag(next, origin: origin, start: start, startMaxX: startMaxX)
+            if next.type == .leftMouseUp { break }
+        }
+        dragging = false
+        host?.showGuides([])
+    }
+
+    private func tab(at point: NSPoint) -> PanelKind? {
+        let measured = tabs == [.transform, .align, .pathfinder]
+        let spots: [CGFloat] = measured ? [12, 69.5, 118.5, bounds.width] : []
+        var x: CGFloat = 8
+        for (index, tab) in tabs.enumerated() {
+            let font = Theme.ui(13, weight: .semibold)
+            let width = (tab.rawValue as NSString).size(withAttributes: [.font: font]).width + 12
+            let start = measured && spots.indices.contains(index) ? spots[index] : x
+            let end = measured && spots.indices.contains(index + 1) ? spots[index + 1] : start + width
+            if point.x >= start && point.x < end { return tab }
+            x = end
+        }
+        return nil
+    }
+
     private func dragMove(_ event: NSEvent) {
         guard !dragging else { return }
         dragging = true
         host?.bringToFront(self)
         let start = event.locationInWindow
         let origin = frame.origin
+        let startMaxX = Double(origin.x + frame.width)
         while true {
             guard let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
-            var proposed = NSPoint(
-                x: origin.x + next.locationInWindow.x - start.x,
-                y: origin.y + next.locationInWindow.y - start.y
-            )
-            if let host {
-                let maxX = max(0, host.bounds.width - frame.width)
-                let maxY = max(0, host.bounds.height - frame.height)
-                proposed.x = min(max(proposed.x, 0), maxX)
-                proposed.y = min(max(proposed.y, 0), maxY)
-                frame.origin = proposed
-                let magnet = DockSnap.magnet(
-                    frame: Self.dockBox(frame),
-                    others: host.dockTargets(excluding: self),
-                    host: Self.dockBox(host.bounds)
-                )
-                if next.type == .leftMouseUp {
-                    frame.origin = NSPoint(x: magnet.frame.x, y: magnet.frame.y)
-                    host.showGuides([])
-                    break
-                }
-                host.showGuides(magnet.guides)
-            } else {
-                frame.origin = proposed
-                if next.type == .leftMouseUp { break }
-            }
+            applyDrag(next, origin: origin, start: start, startMaxX: startMaxX)
+            if next.type == .leftMouseUp { break }
         }
         dragging = false
         host?.showGuides([])
+    }
+
+    /// Magnet uses the unsnapped pointer delta. The snapped frame is what the
+    /// user sees during the drag, including the jump into the right shoulder.
+    private func applyDrag(_ next: NSEvent, origin: NSPoint, start: NSPoint, startMaxX: Double) {
+        var proposed = NSPoint(
+            x: origin.x + next.locationInWindow.x - start.x,
+            y: origin.y + next.locationInWindow.y - start.y
+        )
+        guard let host else {
+            frame.origin = proposed
+            return
+        }
+        let limitX = max(0, host.bounds.width - frame.width)
+        let limitY = max(0, host.bounds.height - frame.height)
+        proposed.x = min(max(proposed.x, 0), limitX)
+        proposed.y = min(max(proposed.y, 0), limitY)
+        let local = host.convert(next.locationInWindow, from: nil)
+        let magnet = DockSnap.magnet(
+            frame: Self.dockBox(NSRect(origin: proposed, size: frame.size)),
+            others: host.dockTargets(excluding: self),
+            host: Self.dockBox(host.bounds),
+            shoulder: host.rightShoulder,
+            pointer: Vec2(Double(local.x), Double(local.y)),
+            dragStartMaxX: startMaxX
+        )
+        frame.origin = NSPoint(x: CGFloat(magnet.frame.x), y: CGFloat(magnet.frame.y))
+        if next.type == .leftMouseUp {
+            host.showGuides([])
+        } else {
+            host.showGuides(magnet.guides)
+        }
+        needsDisplay = true
+        window?.displayIfNeeded()
     }
 
     private static func dockBox(_ rect: NSRect) -> DockFrame {

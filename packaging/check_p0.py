@@ -11,7 +11,9 @@ inbox references before this script was written:
 - ux-v039/01-ai-workspace.png has no #606060 strip between the title chrome and
   the toolbar body. The right column reaches the window edge (x 4340–4967 of 4968).
 - ux-v039/06-dock-blue-line.jpg mode near the guide is (0, 114, 239), #0072EF.
-- lock pen hotspot: 32×32 bitmap, tip at top-left pixel (0, 25), never the center.
+- pen hotspot is the nib tip. p0-report penTip maps to penCursor from the
+  lower-left with error 0. The tip pixel is opaque white, not the center.
+  pen-cursor-new.png adds the new-path asterisk in the lower-right.
 """
 
 import sys
@@ -236,23 +238,79 @@ def check_generative(before, after):
     return ok
 
 
+def report_fields(path):
+    fields = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        fields[key.strip()] = value.strip()
+    return fields
+
+
 def check_pen(path):
     image = Image.open(path).convert("RGBA")
     print(f"pen cursor {image.size} {image.mode}")
     ok = require(image.size == (32, 32), f"pen cursor size {image.size}")
     pixels = np.asarray(image)
-    tip = pixels[25, 0]
-    print(f"tip pixel {tip.tolist()}")
-    ok &= require(tip[3] > 200 and tip[:3].max() < 40, f"tip at (0, 25) is opaque black {tip.tolist()}")
-    column = pixels[:, 0]
-    dark_rows = [index for index, pixel in enumerate(column) if pixel[3] > 200 and pixel[:3].max() < 40]
-    print(f"dark rows in column 0: {dark_rows}")
-    ok &= require(dark_rows == [25], f"only the tip pixel is dark in column 0 {dark_rows}")
-    center = pixels[16, 16]
-    ok &= require(not (center[3] > 200 and center[:3].max() < 40 and dark_rows == [16]), "hotspot is not the center")
-    report = path.with_name("p0-report.txt").read_text(encoding="utf-8")
+    report_path = path.with_name("p0-report.txt")
+    report = report_path.read_text(encoding="utf-8")
     print(report)
-    ok &= require("penTL=0,25" in report and "penCenter=false" in report and "penCursor=0,7" in report, "report records the nib hotspot")
+    fields = report_fields(report_path)
+    tip = [float(part) for part in fields["penTip"].split(",")]
+    cursor = [float(part) for part in fields["penCursor"].split(",")]
+    pixel = [int(part) for part in fields["penPixel"].split(",")]
+    pix_x, pix_y = pixel
+    ok &= require(abs(cursor[0] - tip[0]) < 0.01, f"hotspot x {cursor[0]} is the tip x {tip[0]}")
+    ok &= require(abs((32 - cursor[1]) - tip[1]) < 0.01, f"hotspot y {cursor[1]} maps back to tip y {tip[1]}")
+    ok &= require(fields.get("penCenter") == "false", "hotspot is not the center")
+    ok &= require(abs(float(fields["penTipError"])) < 0.001, f"tip error {fields.get('penTipError')}")
+    ok &= require(pix_x == int(tip[0]) and pix_y == int(tip[1]), f"pixel {pixel} is the tip {tip}")
+    ok &= require(abs(pix_x - 16) > 6 and abs(pix_y - 16) > 6, f"tip {pixel} is not the center")
+
+    tip_px = pixels[pix_y, pix_x]
+    print(f"tip pixel {tip_px.tolist()} at {pixel}")
+    ok &= require(int(tip_px[3]) > 200 and int(tip_px[:3].min()) > 200, f"tip pixel is opaque white {tip_px.tolist()}")
+    if pix_x > 0 and pix_y > 0:
+        neighbor = pixels[pix_y - 1, pix_x - 1]
+        ok &= require(int(neighbor[3]) < 16, f"up-left of the tip is empty {neighbor.tolist()}")
+
+    alpha = pixels[:, :, 3]
+    ys, xs = np.where(alpha > 16)
+    score = xs.astype(int) + ys.astype(int)
+    min_score = int(score.min())
+    at_tip = score == min_score
+    ok &= require(min_score == pix_x + pix_y, f"foremost ink score {min_score} tip {pix_x + pix_y}")
+    ok &= require(bool(np.all(xs[at_tip] == pix_x) and np.all(ys[at_tip] == pix_y)), "foremost opaque pixel is the tip")
+
+    rgb = pixels[:, :, :3].astype(np.int16)
+    black = (alpha > 200) & (rgb.max(axis=2) < 48)
+    white = (alpha > 200) & (rgb.min(axis=2) > 200)
+    print(f"black {int(black.sum())} white {int(white.sum())}")
+    ok &= require(int(black.sum()) > 30 and int(white.sum()) > 20, "black nib with a white outline")
+    by, bx = np.where(black)
+    cx, cy = float(bx.mean()), float(by.mean())
+    body = pixels[int(round(cy)), int(round(cx))]
+    ok &= require(int(body[3]) > 200 and int(body[:3].max()) < 48, f"body pixel is black {body.tolist()} at {cx:.1f},{cy:.1f}")
+    low = np.pad(alpha < 16, 1, constant_values=True)
+    neighbor_clear = low[:-2, 1:-1] | low[2:, 1:-1] | low[1:-1, :-2] | low[1:-1, 2:]
+    outline = white & neighbor_clear
+    oy, ox = np.where(outline)
+    black_d = float(np.hypot(bx - cx, by - cy).mean())
+    white_d = float(np.hypot(ox - cx, oy - cy).mean())
+    print(f"outline distance {white_d:.2f} black distance {black_d:.2f}")
+    ok &= require(white_d > black_d, "white outline sits outside the black nib")
+
+    star = np.asarray(Image.open(path.with_name("pen-cursor-new.png")).convert("RGBA"))
+    ok &= require(star.shape[:2] == (32, 32), f"new-path cursor {star.shape}")
+
+    def corner(image):
+        return int((image[22:, 22:, 3] > 16).sum())
+
+    plain_corner = corner(pixels)
+    star_corner = corner(star)
+    print(f"lower-right opaque plain {plain_corner} new-path {star_corner}")
+    ok &= require(star_corner > plain_corner + 10, "new-path cursor carries the asterisk")
     return ok
 
 

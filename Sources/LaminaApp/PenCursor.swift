@@ -1,72 +1,71 @@
 import AppKit
 import LaminaCore
 
-/// 32×32 pen cursor. The nib tip is bitmap pixel (0, 25) from the top-left.
-/// NSCursor's hotspot is that same pixel measured from the lower-left.
-enum PenCursor {
-    static let image: NSImage = {
-        let rep = makeRep()
-        let image = NSImage(size: rep.size)
-        image.addRepresentation(rep)
-        return image
-    }()
+/// Pen cursors rasterized by `PenCursorBitmap`.
+///
+/// Row 0 of the buffer is the top of the image. NSCursor's hotspot is the nib
+/// tip in points from the lower-left (`PenHotSpot.cursorX`, `PenHotSpot.cursorY`),
+/// so the click lands on the tip rather than the body of the nib.
+enum PenCursorArt {
+    private static var cache: [String: NSCursor] = [:]
 
-    static let cursor = NSCursor(
-        image: image,
-        hotSpot: NSPoint(x: PenHotSpot.cursorX, y: PenHotSpot.cursorY)
-    )
-
-    static func writePNG(to url: URL) {
-        guard let data = makeRep().representation(using: .png, properties: [:]) else { return }
-        try? data.write(to: url)
+    static func cursor(state: PenCursor, newPath: Bool) -> NSCursor {
+        let key = "\(state.rawValue)|\(newPath)"
+        if let cached = cache[key] { return cached }
+        let cursor = NSCursor(
+            image: image(state: state, newPath: newPath),
+            hotSpot: NSPoint(x: PenHotSpot.cursorX, y: PenHotSpot.cursorY)
+        )
+        cache[key] = cursor
+        return cursor
     }
 
-    static func makeRep() -> NSBitmapImageRep {
-        let width = PenHotSpot.width
-        let height = PenHotSpot.height
-        let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: width,
-            pixelsHigh: height,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        )!
-        rep.size = NSSize(width: width, height: height)
-        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return rep }
-        let previous = NSGraphicsContext.current
-        NSGraphicsContext.current = context
-        context.shouldAntialias = true
-        NSColor.clear.setFill()
-        NSRect(x: 0, y: 0, width: width, height: height).fill()
-        // y grows up. The tip pixel is stamped after the body so column 0 stays the tip.
-        let nib = NSBezierPath()
-        nib.move(to: NSPoint(x: 2, y: 9))
-        nib.line(to: NSPoint(x: 10, y: 16))
-        nib.line(to: NSPoint(x: 22, y: 28))
-        nib.line(to: NSPoint(x: 28, y: 22))
-        nib.line(to: NSPoint(x: 14, y: 8))
-        nib.close()
-        NSColor.white.setFill()
-        nib.fill()
-        NSColor.black.setStroke()
-        nib.lineWidth = 1
-        nib.stroke()
-        let slit = NSBezierPath()
-        slit.move(to: NSPoint(x: 4, y: 10))
-        slit.line(to: NSPoint(x: 16, y: 22))
-        slit.lineWidth = 0.8
-        NSColor.black.setStroke()
-        slit.stroke()
-        context.shouldAntialias = false
-        NSColor.black.setFill()
-        // PNG row 25 from the top is y = 6 in this bottom-left buffer (31 - 25 = 6).
-        NSRect(x: 0, y: CGFloat(height - 1 - PenHotSpot.y), width: 1, height: 1).fill()
-        NSGraphicsContext.current = previous
-        return rep
+    static func writePNG(to url: URL) {
+        write(state: .pen, newPath: false, to: url)
+    }
+
+    static func writeNewPathPNG(to url: URL) {
+        write(state: .pen, newPath: true, to: url)
+    }
+
+    private static func write(state: PenCursor, newPath: Bool, to url: URL) {
+        let bytes = PenCursorBitmap.rgba(state: state, newPath: newPath, scale: 1)
+        let image = PNGImage(width: PenCursorBitmap.width, height: PenCursorBitmap.height, rgba: bytes)
+        try? PNGCodec.encode(image).write(to: url)
+    }
+
+    private static func image(state: PenCursor, newPath: Bool) -> NSImage {
+        let points = NSSize(width: PenCursorBitmap.width, height: PenCursorBitmap.height)
+        let image = NSImage(size: points)
+        for scale in [1, 2] {
+            let pixels = PenCursorBitmap.width * scale
+            let bytes = PenCursorBitmap.rgba(state: state, newPath: newPath, scale: scale)
+            guard let cg = cgImage(bytes: bytes, pixels: pixels) else { continue }
+            let rep = NSBitmapImageRep(cgImage: cg)
+            rep.size = points
+            image.addRepresentation(rep)
+        }
+        return image
+    }
+
+    /// Straight RGBA, top row first. `byteOrder32Big` with alpha last keeps the
+    /// bytes in R, G, B, A order, matching `PenCursorBitmap`.
+    private static func cgImage(bytes: [UInt8], pixels: Int) -> CGImage? {
+        let data = Data(bytes) as CFData
+        guard let provider = CGDataProvider(data: data) else { return nil }
+        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue | CGBitmapInfo.byteOrder32Big.rawValue)
+        return CGImage(
+            width: pixels,
+            height: pixels,
+            bitsPerComponent: 8,
+            bitsPerPixel: 32,
+            bytesPerRow: pixels * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: info,
+            provider: provider,
+            decode: nil,
+            shouldInterpolate: false,
+            intent: .defaultIntent
+        )
     }
 }

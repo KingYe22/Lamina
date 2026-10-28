@@ -9,7 +9,11 @@ public final class EditorModel {
     public var document: LaminaDocument
     public var selection: [UUID] = []
     public var selectedAnchors: Set<UUID> = []
-    public var tool: Tool = .selection
+    public var tool: Tool = .selection {
+        didSet {
+            if tool != oldValue { refreshPenChrome() }
+        }
+    }
     public var activeAttrIsFill = true
     public var currentFill: Paint? = .solid(.white)
     public var currentStroke: StrokeStyle? = StrokeStyle()
@@ -74,6 +78,8 @@ public final class EditorModel {
     public var symbolDiameter = 48.0
     public var puppetPins: [Vec2] = []
     public var penCursor: PenCursor = .pen
+    /// Cursor under the pointer. Updated on hover. `penCursor` stays the click result.
+    public var penHoverCursor: PenCursor = .pen
     public var rubberBand = true
     public var showAnchors = true
     public var showHandles = true
@@ -602,14 +608,22 @@ public final class EditorModel {
     private func refreshPenChrome() {
         let penLike = tool == .pen || tool == .curvature
         penNewPathMark = tool == .pen && penNodes.isEmpty && drag == nil
-        if penLike {
-            penAnchorLabel = penNearExistingAnchor(hover)
-        } else {
+        guard penLike else {
             penAnchorLabel = false
             penNewPathMark = false
             penDistance = ""
+            penHoverCursor = .pen
             return
         }
+        penAnchorLabel = penNearExistingAnchor(hover)
+        penHoverCursor = ToolBehaviors.penCursor(
+            nodes: penNodes,
+            hover: hover,
+            zoom: zoom,
+            nearAnchor: penNearSelectionAnchor(hover),
+            nearSegment: penNearSegment(hover),
+            nearForeignEnd: openEndpoint(near: hover, excluding: penSource) != nil
+        )
         guard let last = penNodes.last else {
             penDistance = ""
             return
@@ -628,6 +642,19 @@ public final class EditorModel {
         } else {
             penDistance = ""
         }
+    }
+
+    /// Selected path, within the same slop `editAnchorUnderPen` uses to insert a point.
+    private func penNearSegment(_ point: Vec2) -> Bool {
+        guard autoAddDelete, penNodes.isEmpty,
+              let id = selection.first, case .path(let object) = document.item(id: id),
+              let hit = Bezier.project(object.path, point: point) else { return false }
+        return hit.point.distance(to: point) < 6 / max(zoom, 0.05)
+    }
+
+    private func penNearSelectionAnchor(_ point: Vec2) -> Bool {
+        guard autoAddDelete, penNodes.isEmpty, let hit = hitAnchor(point) else { return false }
+        return hit.item == selection.first
     }
 
     private func penNearExistingAnchor(_ point: Vec2) -> Bool {

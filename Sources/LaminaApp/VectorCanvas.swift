@@ -76,6 +76,7 @@ final class VectorCanvas: NSView {
         didSet { registerForDraggedTypes([.fileURL]) }
     }
     private var panAtDown = Vec2.zero
+    private var cursorToken = ""
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -226,7 +227,8 @@ final class VectorCanvas: NSView {
         ])
     }
 
-    /// Pen nib extras: magenta 「锚点」, new-path `*`, and the dark `D:` pill.
+    /// Pen nib extras: magenta 「锚点」 and the dark `D:` pill.
+    /// The new-path `*` is part of the cursor, not a canvas mark.
     private func drawPenFeedback(_ model: EditorModel) {
         let penLike: Set<Tool> = [.pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor]
         guard penLike.contains(model.tool) else { return }
@@ -236,19 +238,6 @@ final class VectorCanvas: NSView {
             label.draw(at: NSPoint(x: cursor.x + 12, y: cursor.y + 6), withAttributes: [
                 .font: Theme.ui(11, weight: .medium),
                 .foregroundColor: Theme.color(0xFF2BD6)
-            ])
-        }
-        if model.penNewPathMark {
-            let star = "*" as NSString
-            let font = NSFont.systemFont(ofSize: 14, weight: .bold)
-            let origin = NSPoint(x: cursor.x + 11, y: cursor.y - 16)
-            for shift in [NSPoint(x: -1, y: 0), NSPoint(x: 1, y: 0), NSPoint(x: 0, y: -1), NSPoint(x: 0, y: 1)] {
-                star.draw(at: NSPoint(x: origin.x + shift.x, y: origin.y + shift.y), withAttributes: [
-                    .font: font, .foregroundColor: NSColor.white
-                ])
-            }
-            star.draw(at: origin, withAttributes: [
-                .font: font, .foregroundColor: NSColor.black
             ])
         }
         guard !model.penDistance.isEmpty else { return }
@@ -307,13 +296,29 @@ final class VectorCanvas: NSView {
     }
 
     private var cursor: NSCursor {
-        switch workspace?.active.model.tool {
+        guard let model = workspace?.active.model else { return .arrow }
+        switch model.tool {
         case .hand: return .openHand
         case .zoom: return .crosshair
         case .text, .areaText, .verticalText, .pathText, .touchType: return .iBeam
-        case .pen, .curvature, .addAnchor, .deleteAnchor, .convertAnchor: return PenCursor.cursor
+        case .addAnchor: return PenCursorArt.cursor(state: .add, newPath: false)
+        case .deleteAnchor: return PenCursorArt.cursor(state: .delete, newPath: false)
+        case .convertAnchor: return PenCursorArt.cursor(state: .convert, newPath: false)
+        case .curvature: return PenCursorArt.cursor(state: model.penHoverCursor, newPath: false)
+        case .pen:
+            let star = model.penNewPathMark && model.penHoverCursor == .pen
+            return PenCursorArt.cursor(state: model.penHoverCursor, newPath: star)
         default: return .arrow
         }
+    }
+
+    private func refreshCursor() {
+        guard let model = workspace?.active.model else { return }
+        let star = model.penNewPathMark && model.penHoverCursor == .pen
+        let token = "\(model.tool.rawValue)|\(model.penHoverCursor.rawValue)|\(star)"
+        if token == cursorToken { return }
+        cursorToken = token
+        window?.invalidateCursorRects(for: self)
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -333,6 +338,7 @@ final class VectorCanvas: NSView {
             )
         }
         needsDisplay = true
+        refreshCursor()
         workspace?.touch()
         KeyProbe.bump(workspace)
     }
@@ -344,6 +350,7 @@ final class VectorCanvas: NSView {
         if penLike.contains(model.tool) || model.penAnchorLabel || model.penNewPathMark || !model.penDistance.isEmpty {
             needsDisplay = true
         }
+        refreshCursor()
     }
 
     override func mouseDragged(with event: NSEvent) {
@@ -352,6 +359,7 @@ final class VectorCanvas: NSView {
         let point = documentPoint(event, pan: pan)
         model.pointerDrag(to: point, shift: event.modifierFlags.contains(.shift), option: event.modifierFlags.contains(.option), command: event.modifierFlags.contains(.command), space: model.spaceHeld, stylus: stylus(event))
         needsDisplay = true
+        refreshCursor()
         KeyProbe.bump(workspace)
     }
 
@@ -369,6 +377,7 @@ final class VectorCanvas: NSView {
             )
         }
         needsDisplay = true
+        refreshCursor()
         workspace?.touch()
         KeyProbe.bump(workspace)
     }

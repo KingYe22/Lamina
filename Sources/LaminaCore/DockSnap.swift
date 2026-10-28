@@ -39,15 +39,29 @@ public enum DockSnap {
     /// Snap guide. RGB(0, 114, 239).
     public static let guideHex = 0x0072EF
 
+    /// `shoulder` is the properties column in the same space as `host`.
+    /// A panel docks to that column's outer edge when it overlaps the column,
+    /// the pointer is inside the column (outset by `threshold`), or a rightward
+    /// drag brings the panel's right edge within `threshold` of the column.
+    /// Resting beside the column does not dock. The guide is the outer edge.
     public static func magnet(
         frame: DockFrame,
         others: [DockFrame],
         host: DockFrame,
-        threshold: Double = DockSnap.threshold
+        threshold: Double = DockSnap.threshold,
+        shoulder: DockFrame? = nil,
+        pointer: Vec2? = nil,
+        dragStartMaxX: Double? = nil
     ) -> (frame: DockFrame, guides: [DockGuide]) {
         var next = frame
         var guides: [DockGuide] = []
-        if let x = best(frame: frame, others: others, host: host, threshold: threshold, vertical: false) {
+        let intoShoulder = shoulder.map {
+            shouldDock(frame: frame, shoulder: $0, pointer: pointer, dragStartMaxX: dragStartMaxX, threshold: threshold)
+        } ?? false
+        if intoShoulder, let shoulder {
+            next.x += shoulder.maxX - frame.maxX
+            guides.append(DockGuide(.vertical(shoulder.maxX)))
+        } else if let x = best(frame: frame, others: others, host: host, threshold: threshold, vertical: false) {
             next.x += x.delta
             guides.append(DockGuide(.vertical(x.guide)))
         }
@@ -58,6 +72,27 @@ public enum DockSnap {
         next.x = clamp(next.x, low: host.minX, room: host.width - next.width)
         next.y = clamp(next.y, low: host.minY, room: host.height - next.height)
         return (next, guides)
+    }
+
+    private static func shouldDock(
+        frame: DockFrame,
+        shoulder: DockFrame,
+        pointer: Vec2?,
+        dragStartMaxX: Double?,
+        threshold: Double
+    ) -> Bool {
+        let overlaps = frame.maxX > shoulder.minX + 1e-6 && frame.minX < shoulder.maxX - 1e-6
+            && frame.maxY > shoulder.minY + 1e-6 && frame.minY < shoulder.maxY - 1e-6
+        if overlaps { return true }
+        if let pointer,
+           pointer.x >= shoulder.minX - threshold, pointer.x <= shoulder.maxX + threshold,
+           pointer.y >= shoulder.minY - threshold, pointer.y <= shoulder.maxY + threshold {
+            return true
+        }
+        let stacked = frame.maxY > shoulder.minY + 1e-6 && frame.minY < shoulder.maxY - 1e-6
+        let gap = shoulder.minX - frame.maxX
+        let movingRight = dragStartMaxX.map { frame.maxX > $0 + 1 } ?? false
+        return stacked && movingRight && gap >= -1e-9 && gap <= threshold + 1e-9
     }
 
     private struct Candidate {

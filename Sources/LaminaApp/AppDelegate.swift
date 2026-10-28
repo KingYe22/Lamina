@@ -298,7 +298,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         exit(0)
     }
 
-    /// Window captures for the five v0.4.0 checks. The artboard stays parked.
+    /// Window captures for the P0 checks. The artboard stays parked.
     private func captureP0Proofs(in dir: URL, model: EditorModel) {
         workspace.presentGenerative()
         root.editor.sync()
@@ -322,7 +322,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         root.layoutSubtreeIfNeeded()
         root.displayIfNeeded()
 
-        PenCursor.writePNG(to: dir.appendingPathComponent("pen-cursor.png"))
+        PenCursorArt.writePNG(to: dir.appendingPathComponent("pen-cursor.png"))
+        PenCursorArt.writeNewPathPNG(to: dir.appendingPathComponent("pen-cursor-new.png"))
         let report = """
         titlePt=\(Int(WorkspaceMetrics.panelTitleHeight))
         borderPt=1
@@ -330,9 +331,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         toolWidth=\(Int(WorkspaceMetrics.toolWidth))
         dockThreshold=\(DockSnap.threshold)
         guideHex=\(String(format: "%06X", DockSnap.guideHex))
-        penTL=\(PenHotSpot.x),\(PenHotSpot.y)
-        penCursor=\(Int(PenHotSpot.cursorX)),\(Int(PenHotSpot.cursorY))
+        penPixel=\(PenHotSpot.x),\(PenHotSpot.y)
+        penTip=\(String(format: "%.1f", PenCursorBitmap.tipX)),\(String(format: "%.1f", PenCursorBitmap.tipY))
+        penCursor=\(String(format: "%.1f", PenHotSpot.cursorX)),\(String(format: "%.1f", PenHotSpot.cursorY))
         penCenter=\(PenHotSpot.isCenter)
+        penTipError=\(String(format: "%.3f", PenHotSpot.tipError))
         generative=opens-only
         """
         try? report.write(to: dir.appendingPathComponent("p0-report.txt"), atomically: true, encoding: .utf8)
