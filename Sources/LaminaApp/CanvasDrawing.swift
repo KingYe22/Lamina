@@ -220,10 +220,13 @@ enum CanvasDrawing {
             return
         }
         if stroke.brush != nil {
-            for item in BrushEngine.expand(path: source, stroke: stroke) {
-                drawItem(item, outline: false, zoom: 1, showEdges: false, overprint: overprint, in: context)
+            let ink = BrushEngine.expand(path: source, stroke: stroke)
+            if !ink.isEmpty {
+                for item in ink {
+                    drawItem(item, outline: false, zoom: 1, showEdges: false, overprint: overprint, in: context)
+                }
+                return
             }
-            return
         }
         let outline = WidthStroke.outline(path: source, widths: widths, profile: stroke.profile, base: stroke.width)
         let cg = cgPath(outline)
@@ -563,18 +566,23 @@ enum CanvasDrawing {
     }
 
     /// Blue centerline and end anchors over brush ink. The ink itself is the thickness.
+    /// Width stays at most 1 pt. `1/zoom` is one screen pixel, and at the default
+    /// zoom (1/3) that is ~3 pt — enough to hide the whole ribbon and leave only
+    /// this hairline plus the white end squares.
     private static func drawBrushGuide(_ options: DrawOptions, in context: CGContext) {
         guard let path = options.livePaths.first, path.nodes.count >= 2 else { return }
+        let zoom = max(options.zoom, 0.01)
+        let hairline = min(1 / zoom, 1)
         context.saveGState()
         context.beginPath()
         context.addPath(cgPath(path))
         context.setStrokeColor(Theme.accent.cgColor)
-        context.setLineWidth(1 / max(options.zoom, 0.01))
+        context.setLineWidth(hairline)
         context.setLineCap(.round)
         context.setLineJoin(.round)
         context.strokePath()
-        let side = 5 / max(options.zoom, 0.01)
-        context.setLineWidth(1 / max(options.zoom, 0.01))
+        let side = min(5 / zoom, 4)
+        context.setLineWidth(hairline)
         for node in [path.nodes[0], path.nodes[path.nodes.count - 1]] {
             let box = CGRect(x: node.anchor.x - side / 2, y: node.anchor.y - side / 2, width: side, height: side)
             context.setFillColor(NSColor.white.cgColor)

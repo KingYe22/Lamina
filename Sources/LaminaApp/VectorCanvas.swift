@@ -371,6 +371,11 @@ final class VectorCanvas: NSView {
         let point = documentPoint(event, pan: pan)
         model.pointerDrag(to: point, shift: event.modifierFlags.contains(.shift), option: event.modifierFlags.contains(.option), command: event.modifierFlags.contains(.command), space: model.spaceHeld, stylus: stylus(event))
         needsDisplay = true
+        // Paint the ribbon before this drag event returns. A later mouse-up
+        // redraw is too late for a mid-drag hold.
+        if model.tool == .brush, !model.liveInk.isEmpty {
+            displayIfNeeded()
+        }
         refreshCursor()
         KeyProbe.bump(workspace)
     }

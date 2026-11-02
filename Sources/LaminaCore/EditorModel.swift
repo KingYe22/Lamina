@@ -63,7 +63,9 @@ public final class EditorModel {
     public var blendSteps = 6
     public var perspectivePlane = 1
     public var chartKind: ChartKind = .column
-    public var brush: BrushDefinition? = .calligraphic(angle: 0.4, roundness: 0.35)
+    /// Round 8 pt nib. A flat roundness (0.35) drew about 3 pt across a typical drag,
+    /// which the blue guide then covered completely.
+    public var brush: BrushDefinition? = .calligraphic(angle: 0.4, roundness: 1, diameter: 8)
     public var brushLibrary: [BrushPreset] = BrushLibrary.defaults
     public var widthProfile: WidthProfile = .uniform
     public var fidelity = 2.5
@@ -1306,8 +1308,8 @@ public final class EditorModel {
     private func brushLiveInk(_ nodes: [PathNode]) -> [ArtItem] {
         guard nodes.count >= 2 else { return [] }
         var stroke = currentStroke ?? StrokeStyle()
-        stroke.width = max(4, stroke.width)
-        stroke.brush = brush ?? .calligraphic(angle: 0.4, roundness: 0.35, diameter: max(8, stroke.width))
+        stroke.width = max(8, stroke.width)
+        stroke.brush = brush ?? .calligraphic(angle: 0.4, roundness: 1, diameter: max(8, stroke.width))
         stroke.profile = widthProfile
         stroke.samples = strokeSamples
         let path = PathItem(nodes: nodes, closed: false, shape: .free)
@@ -1501,7 +1503,7 @@ public final class EditorModel {
         }
         var appearance = Appearance(fill: nil, stroke: currentStroke ?? StrokeStyle())
         if tool == .brush, var stroke = appearance.stroke {
-            stroke.width = max(4, stroke.width)
+            stroke.width = max(8, stroke.width)
             stroke.brush = brush
             stroke.profile = widthProfile
             stroke.samples = strokeSamples
