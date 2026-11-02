@@ -259,7 +259,7 @@ struct DockRoot: View {
         }
     }
 
-    private func strokeWidth(_ stroke: StrokeStyle?) -> String {
+    private func strokeWidth(_ stroke: LaminaCore.StrokeStyle?) -> String {
         guard let stroke else { return "" }
         return String(format: "  %.1f pt", stroke.width)
     }
