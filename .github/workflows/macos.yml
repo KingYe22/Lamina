@@ -318,6 +318,8 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
+            0.4.5（build 21）：外观面板和工具栏填色/描边色板共用同一套绘制色。空选是白色填色加 1 pt 黑色描边；选中对象时两边都显示该对象的填色和描边。D 和 Shift+X 会同时更新色板和外观。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
+
             0.4.4（build 20）：拖动画笔时，预览是约 8 pt 的黑色书法笔墨，蓝色中线只是笔墨上的细参考线，不再盖住笔墨。松手后的路径仍是这支 8 pt 圆笔，不是 1 pt 细线。矩形拖移仍是蓝色几何橡皮筋。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
 
             0.4.3（build 19）：缩放光标是放大镜，加号在镜片中心，按住 Option 为减号。矩形等形状工具是中心留空的精密十字。画笔光标的热点在笔尖，新笔迹右下角带 *。悬停提示是白底卡片，含标题、快捷键、说明和预览。拖动画笔时预览是有粗细的笔墨，矩形拖移仍是蓝色几何橡皮筋。新建文档的填色是白色、描边是 1 pt 黑色，工具栏底栏色板与此一致。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。

@@ -605,6 +605,100 @@ final class UXLockTests: XCTestCase {
         XCTAssertEqual(model.currentStroke?.width, 1)
     }
 
+    /// Appearance, toolbar wells, and the selection share one paint store.
+    /// The old split left Appearance on black fill / no stroke while the wells followed D and Shift+X.
+    func testAppearanceMatchesWellsAndSelectionAfterDefaultAndSwap() {
+        let model = EditorModel()
+        let defaults = Appearance.documentDefault
+        assertSharedPaint(model, fill: defaults.fill, stroke: defaults.stroke, name: "未选择对象")
+        let stale = Appearance(fill: .solid(.black), stroke: nil)
+        XCTAssertNotEqual(model.appearanceAttributes.fill, stale.fill)
+        XCTAssertNotEqual(model.appearanceAttributes.stroke, stale.stroke)
+
+        let rect = PathObject(
+            name: "矩形",
+            path: PathBuilder.rectangle(Rect2(x: 10, y: 12, width: 80, height: 40)),
+            appearance: Appearance(fill: .solid(.white), stroke: StrokeStyle(paint: .solid(.black), width: 1))
+        )
+        model.document.insert(.path(rect))
+        model.selection = [rect.id]
+        assertSharedPaint(model, fill: .solid(.white), stroke: StrokeStyle(paint: .solid(.black), width: 1), name: "矩形")
+        guard case .path(let drawn) = model.document.item(id: rect.id) else {
+            return XCTFail("矩形")
+        }
+        XCTAssertEqual(drawn.appearance.fill, model.appearanceAttributes.fill)
+        XCTAssertEqual(drawn.appearance.stroke, model.appearanceAttributes.stroke)
+        XCTAssertNotEqual(drawn.appearance.fill, .solid(.black))
+        XCTAssertNotNil(drawn.appearance.stroke)
+
+        let stalePath = PathObject(
+            name: "路径",
+            path: PathBuilder.rectangle(Rect2(x: 120, y: 12, width: 40, height: 30)),
+            appearance: stale
+        )
+        model.document.insert(.path(stalePath))
+        model.selection = [stalePath.id]
+        XCTAssertEqual(model.appearanceAttributes.targetName, "路径")
+        XCTAssertEqual(model.appearanceAttributes.fill, stale.fill)
+        XCTAssertEqual(model.appearanceAttributes.stroke, stale.stroke)
+        XCTAssertEqual(model.currentFill, model.appearanceAttributes.fill)
+        XCTAssertEqual(model.currentStroke, model.appearanceAttributes.stroke)
+
+        XCTAssertTrue(model.perform("把填色和描边设置为默认"))
+        assertSharedPaint(model, fill: defaults.fill, stroke: defaults.stroke, name: "路径")
+        guard case .path(let reset) = model.document.item(id: stalePath.id) else {
+            return XCTFail("默认")
+        }
+        XCTAssertEqual(reset.appearance.fill, model.appearanceAttributes.fill)
+        XCTAssertEqual(reset.appearance.stroke, model.appearanceAttributes.stroke)
+
+        XCTAssertTrue(model.perform("互换填色和描边"))
+        guard case .path(let swapped) = model.document.item(id: stalePath.id) else {
+            return XCTFail("互换")
+        }
+        XCTAssertEqual(model.appearanceAttributes.fill, .solid(.black))
+        XCTAssertEqual(model.appearanceAttributes.stroke?.paint, .solid(.white))
+        XCTAssertEqual(model.appearanceAttributes.stroke?.width, 1)
+        XCTAssertEqual(swapped.appearance.fill, model.appearanceAttributes.fill)
+        XCTAssertEqual(swapped.appearance.stroke, model.appearanceAttributes.stroke)
+        XCTAssertEqual(model.currentFill, model.appearanceAttributes.fill)
+        XCTAssertEqual(model.currentStroke, model.appearanceAttributes.stroke)
+
+        model.selection = []
+        XCTAssertEqual(model.appearanceAttributes.targetName, "未选择对象")
+        XCTAssertEqual(model.appearanceAttributes.fill, .solid(.black))
+        XCTAssertEqual(model.appearanceAttributes.stroke?.paint, .solid(.white))
+        XCTAssertEqual(model.currentFill, model.appearanceAttributes.fill)
+        XCTAssertEqual(model.currentStroke, model.appearanceAttributes.stroke)
+
+        model.tool = .rectangle
+        model.pointerDown(at: Vec2(200, 40), shift: false, option: false, command: false)
+        model.pointerDrag(to: Vec2(260, 90), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(260, 90), shift: false, option: false, command: false)
+        guard let freshID = model.selection.first, case .path(let fresh) = model.document.item(id: freshID) else {
+            return XCTFail("新矩形")
+        }
+        XCTAssertEqual(fresh.name, "矩形")
+        XCTAssertEqual(fresh.appearance.fill, model.appearanceAttributes.fill)
+        XCTAssertEqual(fresh.appearance.stroke, model.appearanceAttributes.stroke)
+        XCTAssertEqual(fresh.appearance.fill, .solid(.black))
+        XCTAssertEqual(fresh.appearance.stroke?.paint, .solid(.white))
+        XCTAssertEqual(model.currentFill, model.appearanceAttributes.fill)
+        XCTAssertEqual(model.currentStroke, model.appearanceAttributes.stroke)
+    }
+
+    private func assertSharedPaint(_ model: EditorModel, fill: Paint?, stroke: StrokeStyle?, name: String, file: StaticString = #filePath, line: UInt = #line) {
+        let shown = model.appearanceAttributes
+        XCTAssertEqual(shown.targetName, name, file: file, line: line)
+        XCTAssertEqual(shown.fill, fill, file: file, line: line)
+        XCTAssertEqual(shown.stroke, stroke, file: file, line: line)
+        XCTAssertEqual(model.currentFill, shown.fill, file: file, line: line)
+        XCTAssertEqual(model.currentStroke, shown.stroke, file: file, line: line)
+        guard let id = model.selection.first, let appearance = model.document.item(id: id)?.paintAppearance else { return }
+        XCTAssertEqual(appearance.fill, shown.fill, file: file, line: line)
+        XCTAssertEqual(appearance.stroke, shown.stroke, file: file, line: line)
+    }
+
     func testBrushDragPreviewsInkWhileRectangleStaysGeometric() {
         let model = EditorModel()
         model.tool = .brush

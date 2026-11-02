@@ -220,9 +220,14 @@ struct DockRoot: View {
     }
 
     private var appearanceSummary: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let shown = model.appearanceAttributes
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(shown.targetName)
+                .font(.callout)
             Text(model.activeAttrIsFill ? "当前目标：填色" : "当前目标：描边")
                 .font(.callout)
+            Text("填色 \(paintName(shown.fill))")
+            Text("描边 \(paintName(shown.stroke?.paint))\(strokeWidth(shown.stroke))")
             Text(appearanceDetail).font(.caption).foregroundStyle(Color(nsColor: Theme.dim))
             HStack {
                 Button("再加填色") { model.addFillLayer(); workspace.touch() }
@@ -241,6 +246,22 @@ struct DockRoot: View {
                 Button("叠印描边") { model.toggleOverprint(fill: false); workspace.touch() }
             }
         }
+    }
+
+    private func paintName(_ paint: Paint?) -> String {
+        guard let paint else { return "无" }
+        switch paint {
+        case .solid(let color) where color == .white: return "白色"
+        case .solid(let color) where color == .black: return "黑色"
+        case .solid(let color): return color.hex
+        case .linear: return "线性渐变"
+        case .radial: return "径向渐变"
+        }
+    }
+
+    private func strokeWidth(_ stroke: LaminaCore.StrokeStyle?) -> String {
+        guard let stroke else { return "" }
+        return String(format: "  %.1f pt", stroke.width)
     }
 
     private var appearanceDetail: String {
