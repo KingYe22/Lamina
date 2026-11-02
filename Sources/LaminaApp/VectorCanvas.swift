@@ -135,6 +135,7 @@ final class VectorCanvas: NSView {
             option: event.modifierFlags.contains(.option)
         )
         needsDisplay = true
+        refreshCursor()
     }
 
     override func layout() {
@@ -178,6 +179,7 @@ final class VectorCanvas: NSView {
         options.showHandles = model.showHandles
         options.rubberBand = model.penRubberLive
         options.livePaths = model.livePaths
+        options.liveInk = model.liveInk
         options.liveOutline = model.liveOutline
         options.perspective = model.perspectiveGrid
         options.glyphNudge = model.glyphNudge
@@ -299,7 +301,9 @@ final class VectorCanvas: NSView {
         guard let model = workspace?.active.model else { return .arrow }
         switch model.tool {
         case .hand: return .openHand
-        case .zoom: return .crosshair
+        case .zoom:
+            let zoomOut = NSEvent.modifierFlags.contains(.option)
+            return ToolCursorArt.cursor(kind: zoomOut ? .zoomOut : .zoomIn)
         case .text, .areaText, .verticalText, .pathText, .touchType: return .iBeam
         case .addAnchor: return PenCursorArt.cursor(state: .add, newPath: false)
         case .deleteAnchor: return PenCursorArt.cursor(state: .delete, newPath: false)
@@ -308,14 +312,22 @@ final class VectorCanvas: NSView {
         case .pen:
             let star = model.penNewPathMark && model.penHoverCursor == .pen
             return PenCursorArt.cursor(state: model.penHoverCursor, newPath: star)
-        default: return .arrow
+        case .brush:
+            return ToolCursorArt.cursor(kind: .brush, mark: model.penNodes.isEmpty)
+        default:
+            if ToolCursors.kind(for: model.tool) == .precision {
+                return ToolCursorArt.cursor(kind: .precision)
+            }
+            return .arrow
         }
     }
 
     private func refreshCursor() {
         guard let model = workspace?.active.model else { return }
         let star = model.penNewPathMark && model.penHoverCursor == .pen
-        let token = "\(model.tool.rawValue)|\(model.penHoverCursor.rawValue)|\(star)"
+        let brushMark = model.tool == .brush && model.penNodes.isEmpty
+        let zoomOut = model.tool == .zoom && NSEvent.modifierFlags.contains(.option)
+        let token = "\(model.tool.rawValue)|\(model.penHoverCursor.rawValue)|\(star)|\(brushMark)|\(zoomOut)"
         if token == cursorToken { return }
         cursorToken = token
         window?.invalidateCursorRects(for: self)

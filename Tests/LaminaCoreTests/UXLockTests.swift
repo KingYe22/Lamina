@@ -510,4 +510,144 @@ final class UXLockTests: XCTestCase {
         XCTAssertEqual(model.moveDX, "")
         XCTAssertEqual(model.moveDY, "")
     }
+
+    func testZoomRectAndBrushCursorsMatchIllustratorArtwork() {
+        XCTAssertEqual(ToolCursors.kind(for: .zoom), .zoomIn)
+        XCTAssertEqual(ToolCursors.kind(for: .rectangle), .precision)
+        XCTAssertEqual(ToolCursors.kind(for: .ellipse), .precision)
+        XCTAssertEqual(ToolCursors.kind(for: .line), .precision)
+        XCTAssertEqual(ToolCursors.kind(for: .brush), .brush)
+        XCTAssertNil(ToolCursors.kind(for: .selection))
+        XCTAssertNil(ToolCursors.kind(for: .pen))
+        XCTAssertEqual(ToolCursorBitmap.zoomHotspot, ToolCursorHotspot(x: 11.5, y: 11.5))
+        XCTAssertEqual(ToolCursorBitmap.precisionHotspot, ToolCursorHotspot(x: 16, y: 16))
+        XCTAssertEqual(ToolCursorBitmap.brushHotspot, ToolCursorHotspot(x: 5, y: 23))
+
+        let zoom = ToolCursorBitmap.rgba(kind: .zoomIn)
+        let zoomOut = ToolCursorBitmap.rgba(kind: .zoomOut)
+        XCTAssertEqual(zoom.count, 32 * 32 * 4)
+        XCTAssertEqual(ToolCursorBitmap.rgba(kind: .zoomIn, scale: 2).count, 64 * 64 * 4)
+        XCTAssertNotEqual(zoom, zoomOut)
+        let plus = pixel(zoom, 11, 11)
+        XCTAssertGreaterThan(plus.a, 200, cursorGrid(zoom))
+        XCTAssertLessThan(plus.r, 48, cursorGrid(zoom))
+        let stem = pixel(zoom, 11, 8)
+        XCTAssertLessThan(stem.r, 48, "plus stem\n\(cursorGrid(zoom))")
+        let minus = pixel(zoomOut, 11, 8)
+        XCTAssertGreaterThan(minus.r, 200, "minus leaves the stem white\n\(cursorGrid(zoomOut))")
+        let lens = pixel(zoom, 14, 14)
+        XCTAssertGreaterThan(lens.r, 200, "white lens\n\(cursorGrid(zoom))")
+        let ring = pixel(zoom, 17, 11)
+        XCTAssertLessThan(ring.r, 48, "black rim\n\(cursorGrid(zoom))")
+        let rim = pixel(zoom, 19, 11)
+        XCTAssertGreaterThan(rim.r, 200, "white outer edge\n\(cursorGrid(zoom))")
+        let handle = pixel(zoom, 22, 22)
+        XCTAssertLessThan(handle.r, 48, "handle\n\(cursorGrid(zoom))")
+        XCTAssertLessThan(pixel(zoom, 2, 11).a, 16, "not a full-span cross\n\(cursorGrid(zoom))")
+        XCTAssertLessThan(pixel(zoom, 11, 2).a, 16, cursorGrid(zoom))
+        XCTAssertLessThan(pixel(zoom, 0, 0).a, 16, cursorGrid(zoom))
+        XCTAssertLessThan(pixel(zoom, 31, 31).a, 16, cursorGrid(zoom))
+        XCTAssertGreaterThan(exteriorWhite(zoom), 8, "magnifier has a white outline\n\(cursorGrid(zoom))")
+
+        let cross = ToolCursorBitmap.rgba(kind: .precision)
+        XCTAssertLessThan(pixel(cross, 16, 16).a, 16, "center gap\n\(cursorGrid(cross))")
+        XCTAssertLessThan(pixel(cross, 15, 16).a, 16, cursorGrid(cross))
+        XCTAssertLessThan(pixel(cross, 16, 15).a, 16, cursorGrid(cross))
+        XCTAssertLessThan(pixel(cross, 15, 15).a, 16, cursorGrid(cross))
+        for point in [(7, 16), (24, 16), (16, 7), (16, 24)] {
+            let sample = pixel(cross, point.0, point.1)
+            XCTAssertGreaterThan(sample.a, 200, "arm \(point)\n\(cursorGrid(cross))")
+            XCTAssertLessThan(sample.r, 48, cursorGrid(cross))
+        }
+        XCTAssertEqual(pixel(cross, 7, 16).a, pixel(cross, 24, 16).a)
+        XCTAssertEqual(pixel(cross, 16, 7).a, pixel(cross, 16, 24).a)
+        XCTAssertLessThan(pixel(cross, 1, 1).a, 16, "not an arrow\n\(cursorGrid(cross))")
+        XCTAssertLessThan(pixel(cross, 0, 0).a, 16, cursorGrid(cross))
+        XCTAssertGreaterThan(exteriorWhite(cross), 8, "cross has a white outline\n\(cursorGrid(cross))")
+
+        let brush = ToolCursorBitmap.rgba(kind: .brush, mark: false)
+        let marked = ToolCursorBitmap.rgba(kind: .brush, mark: true)
+        let tip = pixel(brush, 5, 23)
+        XCTAssertGreaterThan(tip.a, 200, cursorGrid(brush))
+        XCTAssertLessThan(tip.r, 48, "tip is black\n\(cursorGrid(brush))")
+        let body = pixel(brush, 20, 10)
+        XCTAssertGreaterThan(body.a, 200, "brush body\n\(cursorGrid(brush))")
+        XCTAssertLessThan(body.r, 48, cursorGrid(brush))
+        XCTAssertEqual(opaque(brush, x: 22..<32, y: 22..<32), 0, "plain brush has no corner mark\n\(cursorGrid(brush))")
+        XCTAssertGreaterThan(opaque(marked, x: 22..<32, y: 22..<32), 10, "new stroke asterisk\n\(cursorGrid(marked))")
+        XCTAssertGreaterThan(exteriorWhite(brush), 8, "brush has a white outline\n\(cursorGrid(brush))")
+    }
+
+    func testEmptyDocumentPaintIsWhiteFillAndBlackStroke() {
+        let model = EditorModel()
+        XCTAssertEqual(model.currentFill, .solid(.white))
+        XCTAssertEqual(model.currentStroke?.paint, .solid(.black))
+        XCTAssertEqual(model.currentStroke?.width, 1)
+        XCTAssertEqual(Appearance.documentDefault, LaminaDocument.defaultAppearance)
+        XCTAssertEqual(Appearance.default.fill, .solid(.white))
+        XCTAssertEqual(Appearance.default.stroke?.paint, .solid(.black))
+        XCTAssertTrue(model.activeAttrIsFill)
+
+        model.currentFill = nil
+        model.currentStroke = nil
+        model.activeAttrIsFill = false
+        model.newDocument(size: Vec2(200, 200))
+        XCTAssertEqual(model.currentFill, .solid(.white))
+        XCTAssertEqual(model.currentStroke?.paint, .solid(.black))
+        XCTAssertEqual(model.currentStroke?.width, 1)
+        XCTAssertTrue(model.activeAttrIsFill)
+
+        model.currentFill = .solid(.black)
+        model.currentStroke = nil
+        XCTAssertTrue(model.perform("把填色和描边设置为默认"))
+        XCTAssertEqual(model.currentFill, .solid(.white))
+        XCTAssertEqual(model.currentStroke?.paint, .solid(.black))
+        XCTAssertEqual(model.currentStroke?.width, 1)
+    }
+
+    func testBrushDragPreviewsInkWhileRectangleStaysGeometric() {
+        let model = EditorModel()
+        model.tool = .brush
+        model.pointerDown(at: Vec2(10, 40), shift: false, option: false, command: false)
+        model.pointerDrag(to: Vec2(160, 70), shift: false, option: false, command: false)
+        XCTAssertEqual(model.livePaths.count, 1)
+        XCTAssertFalse(model.livePaths[0].closed)
+        XCTAssertGreaterThanOrEqual(model.livePaths[0].nodes.count, 2)
+        XCTAssertFalse(model.liveInk.isEmpty)
+        guard case .path(let ink) = model.liveInk[0] else {
+            return XCTFail("brush preview is a filled path")
+        }
+        XCTAssertTrue(ink.path.closed)
+        XCTAssertNil(ink.appearance.stroke)
+        XCTAssertEqual(ink.appearance.fill, .solid(.black))
+        XCTAssertGreaterThan(ink.path.nodes.count, model.livePaths[0].nodes.count + 4)
+        let spine = Bezier.bounds(model.livePaths[0])
+        let ribbon = ItemGeometry.bounds(model.liveInk[0])
+        let growth = (ribbon.width - spine.width) + (ribbon.height - spine.height)
+        XCTAssertGreaterThan(growth, 2, "ink is thicker than the centerline, growth \(growth)")
+        model.pointerUp(at: Vec2(160, 70), shift: false, option: false, command: false)
+        XCTAssertTrue(model.liveInk.isEmpty)
+        XCTAssertTrue(model.livePaths.isEmpty)
+
+        model.tool = .rectangle
+        model.pointerDown(at: Vec2(12, 18), shift: false, option: false, command: false)
+        model.pointerDrag(to: Vec2(90, 60), shift: false, option: false, command: false)
+        XCTAssertTrue(model.liveInk.isEmpty)
+        XCTAssertEqual(model.livePaths.count, 1)
+        XCTAssertTrue(model.livePaths[0].closed)
+        XCTAssertEqual(model.livePaths[0].nodes.count, 4)
+        model.pointerUp(at: Vec2(90, 60), shift: false, option: false, command: false)
+        XCTAssertTrue(model.livePaths.isEmpty)
+        XCTAssertTrue(model.liveInk.isEmpty)
+    }
+
+    private func opaque(_ bytes: [UInt8], x: Range<Int>, y: Range<Int>) -> Int {
+        var count = 0
+        for yy in y {
+            for xx in x where pixel(bytes, xx, yy).a > 16 {
+                count += 1
+            }
+        }
+        return count
+    }
 }

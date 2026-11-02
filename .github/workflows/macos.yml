@@ -3,6 +3,8 @@ name: macOS
 on:
   push:
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -18,6 +20,9 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A published release checks out its tag. Push and pull_request keep github.sha.
+          ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
 
       # macos-14 defaults to Xcode 15.4 (Swift 5.10). Package.swift requires Swift 6.
       - name: Select Xcode 16.2
@@ -87,7 +92,10 @@ jobs:
           xattr -cr "dist/dmg/打开 Lamina.command" || true
           ditto -c -k --keepParent dist/dmg/Lamina.app dist/Lamina.app.zip
           hdiutil create -volname Lamina -srcfolder dist/dmg -ov -format UDZO dist/Lamina.dmg
-          du -sh dist/dmg/Lamina.app dist/Lamina.dmg
+          test -s dist/Lamina.app.zip
+          test -s dist/Lamina.dmg
+          echo "shippable packages: dist/Lamina.app.zip dist/Lamina.dmg"
+          du -sh dist/dmg/Lamina.app dist/Lamina.app.zip dist/Lamina.dmg
 
       - name: Install shipped app from the disk image
         id: install
@@ -269,7 +277,7 @@ jobs:
 
       - name: Resolve release tag
         id: release
-        if: success() && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+        if: success() && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' || github.event_name == 'release')
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
@@ -277,14 +285,17 @@ jobs:
             if [ -z "$TAG" ]; then
               TAG="dispatch-${GITHUB_RUN_NUMBER}"
             fi
+          elif [ "${GITHUB_EVENT_NAME}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
           else
             TAG="${GITHUB_REF_NAME}"
           fi
           if [ "${GITHUB_EVENT_NAME}" != "workflow_dispatch" ]; then
             git fetch origin "refs/tags/${TAG}" --force
             current="$(git rev-parse "refs/tags/${TAG}^{}")"
-            if [ "$current" != "$GITHUB_SHA" ]; then
-              echo "tag ${TAG} points at ${current}, this run built ${GITHUB_SHA}; refusing to publish a stale tag"
+            built="$(git rev-parse HEAD)"
+            if [ "$current" != "$built" ]; then
+              echo "tag ${TAG} points at ${current}, this run built ${built}; refusing to publish a stale tag"
               exit 1
             fi
           fi
@@ -295,7 +306,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release.outputs.tag }}
-          target_commitish: ${{ github.sha }}
+          target_commitish: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
           name: ${{ steps.release.outputs.tag }}
           body: |
             从浏览器下载或从磁盘映像拷出的 Lamina.app 会带隔离标记（com.apple.quarantine）。这个包是 ad-hoc 签名（`codesign --sign -`），不是 Apple 开发者证书，系统可能拒绝直接双击。
@@ -305,6 +316,8 @@ jobs:
             1. 在 Finder 里右键 Lamina.app，选择「打开」，再点对话框里的「打开」。
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
+
+            0.4.3（build 19）：缩放光标是放大镜，加号在镜片中心，按住 Option 为减号。矩形等形状工具是中心留空的精密十字。画笔光标的热点在笔尖，新笔迹右下角带 *。悬停提示是白底卡片，含标题、快捷键、说明和预览。拖动画笔时预览是有粗细的笔墨，矩形拖移仍是蓝色几何橡皮筋。新建文档的填色是白色、描边是 1 pt 黑色，工具栏底栏色板与此一致。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
 
             Dock 和窗口标题显示为 Lamina。0.4.2 仍只用 NSBezierPath 和真实控件，参考图不进 app。新建文档的下拉箭头向下，纵向选中和输入聚焦是 #54A3F6，创建按钮是 #0267E0。描边面板含端点、边角、限制、对齐描边、六格虚线、箭头、双缩放和配置文件。外观有眼睛列、红斜线无色板、黑色填色和底栏图标。键盘增量显示 0.3528 mm。工具栏选中槽是 #303030，绘图组有 #2D8CEB 蓝点。左工具栏贴窗口左缘，顶边贴标题栏底，中间没有画布色缝。浮动面板外框和标题分隔都是 1 逻辑像素，标题条高 22 pt。画布裁在工具栏和右侧栏之间。浮动面板可以盖住右侧栏。拖外观或对齐进入右侧属性肩、蓝色 #0072EF 导轨亮起后松开，面板并入右肩停靠列（左缘贴肩左缘，宽度与肩相同，右缘贴窗口右缘），不会停在离右缘几百点的浮动位置。导轨一旦亮起，松手就进停靠列；拖离激活区后导轨熄灭，松手保持浮动。只是停在肩旁、没有进入激活区时不会被吸进去。拖到窗口右缘 8 pt 内同样出现吸附线，松手后右缘缝为 0。底状态栏高 20 pt，填色 #4B4B4B，钉在工具栏与右栏之间，点击不会把它拖出窗口。左栏蓝色生成按钮只打开生成面板，不清空外观、对齐或描边。钢笔光标 32×32，实心黑笔、白色开缝，没有厚白描边。热点与笔尖像素同一点（左上角坐标，1× 和 2× 的 tipError 绝对值都不超过 1.5，见 p0-report 的 penTip、penCursor、penTipError），不是图标中心。空白画布上开始新路径时，光标右下角有 *，继续绘制时没有。闭合、连接、添加、删除、转换各有自己的光标。钢笔用方锚点、圆方向手柄和橡皮筋；距离提示是 D: xx.xx mm，吸附到已有锚点时显示洋红「锚点」。0.4.2 复测：选钢笔，笔尖对准点击位置（tipError 绝对值 ≤ 1.5）；空白画布光标带 *，落下第一个锚点后 * 消失。拖外观或对齐到右缘，蓝线出现后松手，面板进入右肩停靠列。工具栏仍贴标题栏，面板描边仍是 1 逻辑像素 #6A6A6A，星形按钮只打开生成面板。安装包是本工作流产物 dist/Lamina.dmg 与 dist/Lamina.app.zip。拖移对象时另有 81×30 pt 的 #CCCCCC dX/dY 提示。标题栏到画布顶的空白处可以拖动窗口。钢笔拖拽只添加锚点和方向手柄，不再带动窗口。对比图从运行中的窗口按 2 倍像素截取。这一版的平均绝对差是：工具栏 3.49（掩膜 15.60，区域最大 36.49），新建文档 3.83（掩膜 42.08，区域最大 46.85），面板 6.63（掩膜 33.23，区域最大 66.13）。三处平均都低于 8。面板比 0.3.9 的 6.24 高，是因为三块浮动面板的标题条都改成了 22 pt。数字来自这次构建的对比日志，没有改过。应用图标使用提供的原稿，只套 macOS 圆角蒙版。快捷键表仍编译在程序里。画布获得焦点时绕开输入法，按物理 keyCode 接收快捷键；面板里的数值框只有点击后才获得焦点，Return、Esc 或 Tab 会把焦点还给画布。首次打开若被拦截，右键「打开」，或运行 `xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`。
           files: |
