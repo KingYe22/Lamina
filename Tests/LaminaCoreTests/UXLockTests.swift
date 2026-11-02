@@ -625,8 +625,29 @@ final class UXLockTests: XCTestCase {
         let ribbon = ItemGeometry.bounds(model.liveInk[0])
         let growth = (ribbon.width - spine.width) + (ribbon.height - spine.height)
         XCTAssertGreaterThan(growth, 2, "ink is thicker than the centerline, growth \(growth)")
-        model.pointerUp(at: Vec2(160, 70), shift: false, option: false, command: false)
+        let length = polylineLength(model.livePaths[0].nodes)
+        let area = polygonArea(ink.path.nodes.map(\.anchor))
+        XCTAssertGreaterThan(length, 1)
+        XCTAssertGreaterThan(area / length, 7, "default brush ribbon is about 8 pt, area/length \(area / length)")
+        guard case .calligraphic(let nib) = model.brush else {
+            return XCTFail("default brush is calligraphic")
+        }
+        XCTAssertGreaterThanOrEqual(nib.diameter.minimum, 8)
+        XCTAssertGreaterThanOrEqual(nib.roundness.minimum, 0.95)
+        model.pointerDrag(to: Vec2(200, 90), shift: false, option: false, command: false)
+        XCTAssertFalse(model.liveInk.isEmpty, "ink stays up through the middle of the drag")
+        model.pointerUp(at: Vec2(200, 90), shift: false, option: false, command: false)
         XCTAssertTrue(model.liveInk.isEmpty)
+        guard case .path(let painted) = model.document.layers.flatMap(\.items).last else {
+            return XCTFail("committed brush")
+        }
+        guard case .calligraphic(let committed) = painted.appearance.stroke?.brush else {
+            return XCTFail("committed stroke keeps the brush")
+        }
+        XCTAssertGreaterThanOrEqual(committed.diameter.minimum, 8)
+        XCTAssertGreaterThanOrEqual(committed.roundness.minimum, 0.95)
+        XCTAssertGreaterThanOrEqual(painted.appearance.stroke?.width ?? 0, 8)
+        XCTAssertNil(painted.appearance.fill)
         XCTAssertTrue(model.livePaths.isEmpty)
 
         model.tool = .rectangle
@@ -639,6 +660,26 @@ final class UXLockTests: XCTestCase {
         model.pointerUp(at: Vec2(90, 60), shift: false, option: false, command: false)
         XCTAssertTrue(model.livePaths.isEmpty)
         XCTAssertTrue(model.liveInk.isEmpty)
+    }
+
+    private func polylineLength(_ nodes: [PathNode]) -> Double {
+        guard nodes.count >= 2 else { return 0 }
+        var length = 0.0
+        for index in 1..<nodes.count {
+            length += nodes[index].anchor.distance(to: nodes[index - 1].anchor)
+        }
+        return length
+    }
+
+    private func polygonArea(_ points: [Vec2]) -> Double {
+        guard points.count >= 3 else { return 0 }
+        var sum = 0.0
+        for i in points.indices {
+            let a = points[i]
+            let b = points[(i + 1) % points.count]
+            sum += a.x * b.y - b.x * a.y
+        }
+        return abs(sum) * 0.5
     }
 
     private func opaque(_ bytes: [UInt8], x: Range<Int>, y: Range<Int>) -> Int {
