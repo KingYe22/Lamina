@@ -417,9 +417,14 @@ final class FloatPanel: NSView {
         _ = rect
         let ink = Theme.color(0xF3F3F3)
         let dim = Theme.color(0xD1D1D1)
-        appearanceRow(top: 168.5, title: "描边", swatch: .slash, ink: ink, dim: dim)
+        let shown = workspace?.active.model.appearanceAttributes
+            ?? AppearanceAttributes(targetName: "未选择对象", fill: Appearance.documentDefault.fill, stroke: Appearance.documentDefault.stroke)
+        (shown.targetName as NSString).draw(at: place(33.5, 150), withAttributes: [
+            .font: Theme.ui(13, weight: .semibold), .foregroundColor: ink
+        ])
+        appearanceRow(top: 168.5, title: "描边", paint: shown.stroke?.paint, detail: strokeDetail(shown.stroke), ink: ink, dim: dim)
         opacityLine(top: 198, indented: true, ink: dim)
-        appearanceRow(top: 230, title: "填色", swatch: .black, ink: ink, dim: dim)
+        appearanceRow(top: 230, title: "填色", paint: shown.fill, detail: "", ink: ink, dim: dim)
         opacityLine(top: 260.5, indented: true, ink: dim)
         let centers: [CGFloat] = [41.75, 74.25, 108.5, 212.75, 247, 278]
         for (index, center) in centers.enumerated() {
@@ -428,22 +433,51 @@ final class FloatPanel: NSView {
         }
     }
 
-    private enum SwatchKind { case slash, black }
+    private func strokeDetail(_ stroke: StrokeStyle?) -> String {
+        guard let stroke else { return "" }
+        if abs(stroke.width - stroke.width.rounded()) < 0.05 {
+            return "\(Int(stroke.width.rounded())) pt"
+        }
+        return String(format: "%.1f pt", stroke.width)
+    }
 
-    private func appearanceRow(top: CGFloat, title: String, swatch: SwatchKind?, ink: NSColor, dim: NSColor) {
+    private func appearanceRow(top: CGFloat, title: String, paint: Paint?, detail: String, ink: NSColor, dim: NSColor) {
         let eye = place(33.5, top)
         PanelIcons.eye(in: NSRect(x: eye.x, y: eye.y + 1, width: 16, height: 12), open: true)
         disclosure(at: place(67, top + 3), open: true, color: dim)
         (title as NSString).draw(at: place(90.5, top), withAttributes: [
             .font: Theme.ui(13), .foregroundColor: ink
         ])
-        guard let swatch else { return }
         let origin = place(145.5, top - 1.5)
         let chip = NSRect(x: origin.x, y: origin.y, width: 13, height: 12)
-        if swatch == .black {
-            PanelIcons.swatch(in: chip, color: .black)
-        } else {
-            noneSwatch(chip)
+        paintChip(chip, paint: paint)
+        if !detail.isEmpty {
+            (detail as NSString).draw(at: place(164, top), withAttributes: [
+                .font: Theme.ui(13), .foregroundColor: dim
+            ])
+        }
+    }
+
+    /// Same paint the toolbar wells draw. Nil is the red none slash, not a stand-in black.
+    private func paintChip(_ rect: NSRect, paint: Paint?) {
+        guard let paint else {
+            noneSwatch(rect)
+            return
+        }
+        switch paint {
+        case .solid(let color):
+            PanelIcons.swatch(in: rect, color: color.nsColor)
+        case .linear(let gradient), .radial(let gradient):
+            let stops = gradient.stops.map(\.color.nsColor)
+            let colors = stops.count >= 2 ? [stops[0], stops[stops.count - 1]] : [NSColor.white, NSColor.black]
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: rect).addClip()
+            NSGradient(colors: colors)?.draw(in: rect, angle: 0)
+            NSGraphicsContext.restoreGraphicsState()
+            NSColor.black.withAlphaComponent(0.65).setStroke()
+            let border = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+            border.lineWidth = 1
+            border.stroke()
         }
     }
 

@@ -450,8 +450,9 @@ final class ToolbarFooter: NSView {
 
     func sync(_ model: EditorModel?) {
         guard let model else { return }
-        fillPaint = model.currentFill
-        strokePaint = model.currentStroke?.paint
+        let paint = model.appearanceAttributes
+        fillPaint = paint.fill
+        strokePaint = paint.stroke?.paint
         needsDisplay = true
     }
 

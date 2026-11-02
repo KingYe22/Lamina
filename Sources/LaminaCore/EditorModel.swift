@@ -5,9 +5,31 @@ import Darwin
 import Glibc
 #endif
 
+/// What the Appearance panel and the toolbar wells show.
+/// `fill` and `stroke` are the document drawing paint (`currentFill` / `currentStroke`).
+public struct AppearanceAttributes: Equatable, Sendable {
+    public var targetName: String
+    public var fill: Paint?
+    public var stroke: StrokeStyle?
+
+    public init(targetName: String, fill: Paint?, stroke: StrokeStyle?) {
+        self.targetName = targetName
+        self.fill = fill
+        self.stroke = stroke
+    }
+}
+
 public final class EditorModel {
     public var document: LaminaDocument
-    public var selection: [UUID] = []
+    public var selection: [UUID] = [] {
+        didSet {
+            guard !paintPullSuppressed, selection != oldValue else { return }
+            pullPaintFromSelection()
+        }
+    }
+    /// Selecting an object copies its paint into the drawing style. Commands that
+    /// apply a style suppress the copy so they can write the style they already hold.
+    private var paintPullSuppressed = false
     public var selectedAnchors: Set<UUID> = []
     public var tool: Tool = .selection {
         didSet {
@@ -15,9 +37,25 @@ public final class EditorModel {
         }
     }
     public var activeAttrIsFill = true
-    /// New documents start at white fill and a 1 pt black stroke, not black fill and no stroke.
+    /// Single paint store for the toolbar wells, the Appearance panel, and new shapes.
+    /// A new document is white fill and a 1 pt black stroke, not black fill and no stroke.
+    /// Selecting an object copies that object's fill and stroke here. `D` and Shift+X write it back.
     public var currentFill: Paint? = Appearance.documentDefault.fill
     public var currentStroke: StrokeStyle? = Appearance.documentDefault.stroke
+
+    /// Appearance target plus the drawing paint. Empty selection names「未选择对象」and shows this paint.
+    /// A selection names the object; after select, `D`, or Shift+X the paint equals that object's fill and stroke.
+    public var appearanceAttributes: AppearanceAttributes {
+        let name: String
+        if selection.isEmpty {
+            name = "未选择对象"
+        } else if selection.count == 1, let item = document.item(id: selection[0]) {
+            name = item.name
+        } else {
+            name = "多个对象"
+        }
+        return AppearanceAttributes(targetName: name, fill: currentFill, stroke: currentStroke)
+    }
     public var zoom: Double = 1
     public var pan: Vec2 = .zero
     public var viewportSize = Vec2(1200, 800)
@@ -206,6 +244,7 @@ public final class EditorModel {
         if let current = try? JSONEncoder.lamina.encode(document) { redoStack.append(current) }
         document = doc
         selection = selection.filter { document.containsItem($0) }
+        pullPaintFromSelection()
         canUndo = !undoStack.isEmpty
         canRedo = true
         status = "还原"
@@ -218,6 +257,7 @@ public final class EditorModel {
         }
         if let current = try? JSONEncoder.lamina.encode(document) { undoStack.append(current) }
         document = doc
+        pullPaintFromSelection()
         canRedo = !redoStack.isEmpty
         canUndo = true
         status = "重做"
@@ -1051,10 +1091,12 @@ public final class EditorModel {
     }
 
     /// Illustrator empty-file paint: white fill in front, 1 pt black stroke behind.
+    /// The same values are written onto the selection so Appearance and the wells stay together.
     public func resetPaintToDocumentDefault() {
         currentFill = Appearance.documentDefault.fill
         currentStroke = Appearance.documentDefault.stroke
         activeAttrIsFill = true
+        writePaintToSelection(fill: true, stroke: true)
     }
 
     public func replaceDocument(_ doc: LaminaDocument) {
@@ -1151,6 +1193,7 @@ public final class EditorModel {
                 item = .path(object)
             }
         }
+        pullPaintFromSelection()
         status = "画笔"
     }
 
@@ -1166,6 +1209,7 @@ public final class EditorModel {
                 item = .path(object)
             }
         }
+        pullPaintFromSelection()
         status = "宽度配置"
     }
 
@@ -1415,7 +1459,13 @@ public final class EditorModel {
     private func styled(_ object: PathObject) -> PathObject {
         var object = object
         object.appearance.fill = currentFill
-        object.appearance.stroke = currentStroke
+        if var stroke = currentStroke {
+            // Pressure samples belong to the stroke that recorded them, not the next shape.
+            stroke.samples = []
+            object.appearance.stroke = stroke
+        } else {
+            object.appearance.stroke = nil
+        }
         return object
     }
 
@@ -2035,23 +2085,32 @@ public final class EditorModel {
     }
 
     private func applyPaintToSelection() {
-        guard !selection.isEmpty else { return }
+        writePaintToSelection(fill: activeAttrIsFill, stroke: !activeAttrIsFill)
+    }
+
+    /// Copies `currentFill` and/or `currentStroke` onto every selected path, text, and compound.
+    private func writePaintToSelection(fill: Bool, stroke: Bool) {
+        let ids = selection.filter { document.item(id: $0)?.paintAppearance != nil }
+        guard !ids.isEmpty else { return }
         beginChange()
-        for id in selection {
+        for id in ids {
             document.updateItem(id) { item in
-                switch item {
-                case .path(var o):
-                    if activeAttrIsFill { o.appearance.fill = currentFill } else { o.appearance.stroke = currentStroke }
-                    item = .path(o)
-                case .text(var o):
-                    if activeAttrIsFill { o.appearance.fill = currentFill } else { o.appearance.stroke = currentStroke }
-                    item = .text(o)
-                case .compound(var o):
-                    if activeAttrIsFill { o.appearance.fill = currentFill } else { o.appearance.stroke = currentStroke }
-                    item = .compound(o)
-                default: break
-                }
+                guard var appearance = item.paintAppearance else { return }
+                if fill { appearance.fill = currentFill }
+                if stroke { appearance.stroke = currentStroke }
+                item.setPaintAppearance(appearance)
             }
+        }
+    }
+
+    /// First selected path, text, or compound becomes the drawing paint.
+    /// Empty selection leaves the drawing paint alone, which is what the next shape uses.
+    private func pullPaintFromSelection() {
+        for id in selection {
+            guard let appearance = document.item(id: id)?.paintAppearance else { continue }
+            currentFill = appearance.fill
+            currentStroke = appearance.stroke
+            return
         }
     }
 
@@ -2065,7 +2124,7 @@ public final class EditorModel {
         } else {
             currentStroke = nil
         }
-        applyPaintToSelection()
+        writePaintToSelection(fill: true, stroke: true)
     }
 
     private func isGradient(_ paint: Paint?) -> Bool {
@@ -2094,6 +2153,7 @@ public final class EditorModel {
                 }
             }
         }
+        pullPaintFromSelection()
     }
 
     private func copySelection() {
@@ -2581,9 +2641,13 @@ public final class EditorModel {
     private func eyedrop(at p: Vec2, style: Bool) {
         guard let id = ItemGeometryHit.leaf(in: document, at: p), let item = document.item(id: id) else { return }
         if style {
+            let fill = currentFill
+            let stroke = currentStroke
+            paintPullSuppressed = true
             selection = [id]
-            applyFill(currentFill)
-            if let stroke = currentStroke { applyStroke(stroke) }
+            paintPullSuppressed = false
+            applyFill(fill)
+            if let stroke { applyStroke(stroke) }
             status = "吸管应用"
             return
         }
@@ -2754,7 +2818,11 @@ public final class EditorModel {
             }
         }
         guard let id = ItemGeometryHit.leaf(in: document, at: p) else { return }
+        let color = currentFill ?? .solid(.black)
+        paintPullSuppressed = true
         selection = [id]
+        paintPullSuppressed = false
+        currentFill = color
         activeAttrIsFill = true
         applyPaintToSelection()
     }

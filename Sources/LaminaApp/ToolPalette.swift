@@ -301,8 +301,9 @@ final class ToolPalette: NSView {
             button.isCurrent = group.contains(model.tool)
             button.needsDisplay = true
         }
-        fillControl.fill = model.currentFill
-        fillControl.stroke = model.currentStroke?.paint
+        let paint = model.appearanceAttributes
+        fillControl.fill = paint.fill
+        fillControl.stroke = paint.stroke?.paint
         fillControl.fillActive = model.activeAttrIsFill
         fillControl.needsDisplay = true
         needsLayout = true

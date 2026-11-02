@@ -479,6 +479,25 @@ public indirect enum ArtItem: Codable, Equatable, Hashable, Identifiable, Sendab
         default: return []
         }
     }
+
+    /// Fill and stroke carried by a path, text, or compound. Groups have none of their own.
+    public var paintAppearance: Appearance? {
+        switch self {
+        case .path(let o): return o.appearance
+        case .text(let o): return o.appearance
+        case .compound(let o): return o.appearance
+        default: return nil
+        }
+    }
+
+    public mutating func setPaintAppearance(_ appearance: Appearance) {
+        switch self {
+        case .path(var o): o.appearance = appearance; self = .path(o)
+        case .text(var o): o.appearance = appearance; self = .text(o)
+        case .compound(var o): o.appearance = appearance; self = .compound(o)
+        default: break
+        }
+    }
 }
 
 public struct Layer: Codable, Equatable, Hashable, Identifiable, Sendable {
