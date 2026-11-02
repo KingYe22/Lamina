@@ -332,7 +332,7 @@ final class ContextBar: NSView {
         let point = convert(event.locationInWindow, from: nil)
         let tool = workspace?.active.model.tool ?? .selection
         if point.x < 90 {
-            RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(tool), body: ToolTips.body(tool))
+            RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(tool), body: ToolTips.body(tool), tool: tool)
         } else if point.x < 170 {
             RichTooltip.shared.show(from: self, localPoint: point, title: "属性", body: "打开属性面板，查看当前选择的选项。")
         } else if point.x < 230 {

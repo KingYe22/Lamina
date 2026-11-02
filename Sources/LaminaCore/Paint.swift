@@ -611,7 +611,12 @@ public struct Appearance: Equatable, Hashable, Sendable {
         self.overprintStroke = overprintStroke
     }
 
-    public static var `default`: Appearance { Appearance() }
+    /// Empty-document paint. Illustrator starts a new file at white fill and a 1 pt black stroke.
+    public static var documentDefault: Appearance {
+        Appearance(fill: .solid(.white), stroke: StrokeStyle(paint: .solid(.black), width: 1))
+    }
+
+    public static var `default`: Appearance { documentDefault }
     public static var none: Appearance { Appearance(fill: nil, stroke: nil) }
 
     public var allFills: [Paint] {

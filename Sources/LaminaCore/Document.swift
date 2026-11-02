@@ -567,6 +567,9 @@ public struct LaminaDocument: Codable, Equatable, Sendable {
         self.rulerOrigin = rulerOrigin
     }
 
+    /// Paint a brand-new file uses. Same values as `Appearance.documentDefault`.
+    public static var defaultAppearance: Appearance { .documentDefault }
+
     public static func blank(title: String = "未标题-1", size: Vec2 = Vec2(800, 600)) -> LaminaDocument {
         let board = Artboard(name: "画板 1", rect: Rect2(x: 0, y: 0, width: size.x, height: size.y))
         let layer = Layer(name: "图层 1")

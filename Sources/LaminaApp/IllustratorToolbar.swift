@@ -125,7 +125,7 @@ final class IllustratorToolbar: NSView {
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if let slot = slots.first(where: { $0.frame.contains(point) }) {
-            RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(slot.tool), body: ToolTips.body(slot.tool))
+            RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(slot.tool), body: ToolTips.body(slot.tool), tool: slot.tool)
             return
         }
         if footer.frame.contains(point) {
@@ -234,7 +234,7 @@ final class IllustratorToolbar: NSView {
         layoutSubtreeIfNeeded()
         guard let slot = slots.first(where: { $0.tools.contains(.rectangle) }) else { return }
         let point = NSPoint(x: slot.frame.midX, y: slot.frame.midY)
-        RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(.rectangle), body: ToolTips.body(.rectangle))
+        RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(.rectangle), body: ToolTips.body(.rectangle), tool: .rectangle)
     }
 
     func revealFlyoutForShot() {
@@ -436,34 +436,28 @@ final class FlyoutShield: NSView {
 
 final class ToolbarFooter: NSView {
     var onAction: ((String) -> Void)?
-    var fill: NSColor = .white
-    var strokeColor: NSColor = .black
+    /// Front well. Nil draws the red none slash. A new document is white.
+    var fillPaint: Paint? = Appearance.documentDefault.fill
+    /// Back well. Nil draws the red none slash. A new document is black.
+    var strokePaint: Paint? = Appearance.documentDefault.stroke?.paint
 
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
 
+    /// Stroke sits up-left, behind. Fill sits down-right, in front. Same stack as Illustrator.
+    private var strokeWell: NSRect { NSRect(x: 0, y: 1, width: 44, height: 44) }
+    private var fillWell: NSRect { NSRect(x: 22, y: 23, width: 44.5, height: 44.5) }
+
     func sync(_ model: EditorModel?) {
         guard let model else { return }
-        fill = model.currentFill?.solidColor?.nsColor ?? .white
-        strokeColor = model.currentStroke?.paint.solidColor?.nsColor ?? .black
+        fillPaint = model.currentFill
+        strokePaint = model.currentStroke?.paint
         needsDisplay = true
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        let fillOuter = NSRect(x: 22, y: 23, width: 44.5, height: 44.5)
-        Theme.color(0x2E2E2E).setFill()
-        NSBezierPath(rect: fillOuter).fill()
-        fill.setFill()
-        NSBezierPath(rect: fillOuter.insetBy(dx: 1, dy: 1)).fill()
-        NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1).setFill()
-        TracedChrome.fillSlash().fill()
-
-        Theme.color(0x2E2E2E).setFill()
-        NSBezierPath(rect: NSRect(x: 0, y: 1, width: 44, height: 44)).fill()
-        NSColor.white.setFill()
-        NSBezierPath(rect: NSRect(x: 0.5, y: 1.5, width: 43, height: 43)).fill()
-        strokeColor.setFill()
-        NSBezierPath(rect: NSRect(x: 1.5, y: 2.5, width: 41, height: 41)).fill()
+        paintWell(strokeWell, paint: strokePaint)
+        paintWell(fillWell, paint: fillPaint)
 
         Theme.color(0xC2C2C2).setFill()
         TracedChrome.swapArrows().fill()
@@ -514,15 +508,47 @@ final class ToolbarFooter: NSView {
         TracedChrome.aiStars().fill()
     }
 
+    /// Color well. A missing paint is the red none slash, not a stand-in black or white.
+    private func paintWell(_ rect: NSRect, paint: Paint?) {
+        Theme.color(0x2E2E2E).setFill()
+        NSBezierPath(rect: rect).fill()
+        let inner = rect.insetBy(dx: 1.5, dy: 1.5)
+        guard let paint else {
+            NSColor.white.setFill()
+            NSBezierPath(rect: inner).fill()
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: inner).addClip()
+            NSColor(srgbRed: 1, green: 0, blue: 0, alpha: 1).setStroke()
+            let slash = NSBezierPath()
+            slash.move(to: NSPoint(x: inner.minX + 3, y: inner.minY + 3))
+            slash.line(to: NSPoint(x: inner.maxX - 3, y: inner.maxY - 3))
+            slash.lineWidth = 2
+            slash.stroke()
+            NSGraphicsContext.restoreGraphicsState()
+            return
+        }
+        switch paint {
+        case .solid(let color):
+            color.nsColor.setFill()
+            NSBezierPath(rect: inner).fill()
+        case .linear, .radial:
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: inner).addClip()
+            NSGradient(colors: [NSColor.white, Theme.color(0x2D2D2D)])?.draw(in: inner, angle: 0)
+            NSGraphicsContext.restoreGraphicsState()
+        }
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if NSRect(x: 50, y: 1, width: 24, height: 18).contains(point) {
             onAction?("互换填色和描边")
         } else if NSRect(x: 0, y: 50, width: 18, height: 18).contains(point) {
             onAction?("把填色和描边设置为默认")
-        } else if NSRect(x: 0, y: 1, width: 67, height: 67).contains(point) {
-            let onFront = NSRect(x: 0, y: 1, width: 44, height: 44).contains(point)
-            onAction?(onFront ? "描边" : "填色")
+        } else if fillWell.contains(point) {
+            onAction?("填色")
+        } else if strokeWell.contains(point) {
+            onAction?("描边")
         } else if NSRect(x: 0.5, y: 77, width: 22, height: 23).contains(point) {
             onAction?("选择颜色填充模式")
         } else if NSRect(x: 28, y: 77, width: 18, height: 22).contains(point) {

@@ -15,8 +15,9 @@ public final class EditorModel {
         }
     }
     public var activeAttrIsFill = true
-    public var currentFill: Paint? = .solid(.white)
-    public var currentStroke: StrokeStyle? = StrokeStyle()
+    /// New documents start at white fill and a 1 pt black stroke, not black fill and no stroke.
+    public var currentFill: Paint? = Appearance.documentDefault.fill
+    public var currentStroke: StrokeStyle? = Appearance.documentDefault.stroke
     public var zoom: Double = 1
     public var pan: Vec2 = .zero
     public var viewportSize = Vec2(1200, 800)
@@ -117,6 +118,8 @@ public final class EditorModel {
     public private(set) var interactionHint: InteractionHint = .none
     /// Shape under the cursor while a tool is dragging. Cleared on mouse up.
     public var livePaths: [PathItem] = []
+    /// Brush ink for the drag in progress. Empty for geometric tools such as the rectangle.
+    public var liveInk: [ArtItem] = []
     public var liveLabel = ""
     public var liveAnchor = Vec2.zero
     public var liveOutline = false
@@ -509,6 +512,7 @@ public final class EditorModel {
         hover = p
         bakeCreateShift()
         livePaths = []
+        liveInk = []
         liveLabel = ""
         moveDX = ""
         moveDY = ""
@@ -815,7 +819,7 @@ public final class EditorModel {
         case "在填色和描边之间转换":
             activeAttrIsFill.toggle(); status = activeAttrIsFill ? "填色" : "描边"
         case "把填色和描边设置为默认":
-            currentFill = .solid(.white); currentStroke = StrokeStyle(); activeAttrIsFill = true
+            resetPaintToDocumentDefault()
         case "互换填色和描边": swapFillStroke()
         case "选择渐变填色模式":
             currentFill = .linear(.blackWhite); activeAttrIsFill = true; applyPaintToSelection()
@@ -1035,12 +1039,20 @@ public final class EditorModel {
         canRedo = false
         fileURL = nil
         savedSnapshot = try? JSONEncoder.lamina.encode(document)
+        resetPaintToDocumentDefault()
         if let zoomTo {
             zoom = zoomTo
             let board = document.currentArtboard.rect
             pan = Vec2(board.midX - viewportSize.x / zoom / 2, board.midY - viewportSize.y / zoom / 2)
         }
         status = "新建文档"
+    }
+
+    /// Illustrator empty-file paint: white fill in front, 1 pt black stroke behind.
+    public func resetPaintToDocumentDefault() {
+        currentFill = Appearance.documentDefault.fill
+        currentStroke = Appearance.documentDefault.stroke
+        activeAttrIsFill = true
     }
 
     public func replaceDocument(_ doc: LaminaDocument) {
@@ -1233,12 +1245,14 @@ public final class EditorModel {
                 nodes.append(.corner(p))
             }
             livePaths = nodes.count >= 2 ? [PathItem(nodes: nodes, closed: tool == .blobBrush, shape: .free)] : []
+            liveInk = tool == .brush ? brushLiveInk(nodes) : []
             let box = Rect2.enclosing(nodes.map(\.anchor))
             liveLabel = sizeLabel(width: max(box.width, 0), height: max(box.height, 0))
             liveAnchor = p
             liveOutline = false
             return
         }
+        liveInk = []
         let geo = createGeometry(to: p, shift: shift, option: option)
         livePaths = previewPaths(a: geo.a, b: geo.b, rect: geo.rect, shift: shift)
         liveLabel = sizeLabel(width: geo.rect.width, height: geo.rect.height)
@@ -1285,6 +1299,22 @@ public final class EditorModel {
         liveAnchor = hover
         liveOutline = true
         livePaths = []
+        liveInk = []
+    }
+
+    /// Ink ribbon for the brush drag. The centerline stays in `livePaths`.
+    private func brushLiveInk(_ nodes: [PathNode]) -> [ArtItem] {
+        guard nodes.count >= 2 else { return [] }
+        var stroke = currentStroke ?? StrokeStyle()
+        stroke.width = max(4, stroke.width)
+        stroke.brush = brush ?? .calligraphic(angle: 0.4, roundness: 0.35, diameter: max(8, stroke.width))
+        stroke.profile = widthProfile
+        stroke.samples = strokeSamples
+        let path = PathItem(nodes: nodes, closed: false, shape: .free)
+        let ink = BrushEngine.expand(path: path, stroke: stroke)
+        if !ink.isEmpty { return ink }
+        let ribbon = WidthStroke.outline(path: path, widths: [], profile: .uniform, base: stroke.width)
+        return [.path(PathObject(name: "画笔", path: ribbon, appearance: Appearance(fill: stroke.paint, stroke: nil)))]
     }
 
     private func sizeLabel(width: Double, height: Double) -> String {

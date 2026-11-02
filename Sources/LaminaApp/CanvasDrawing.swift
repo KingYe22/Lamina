@@ -26,6 +26,8 @@ struct DrawOptions {
     var showHandles = true
     var rubberBand = true
     var livePaths: [PathItem] = []
+    /// Brush ink for the drag. When this is set, the blue centerline is a guide on top of the ink.
+    var liveInk: [ArtItem] = []
     var liveOutline = false
     var perspective: PerspectiveGrid?
     var glyphNudge: [UUID: Vec2] = [:]
@@ -543,7 +545,12 @@ enum CanvasDrawing {
             }
             for item in document.layers.flatMap(\.items) { walk(item) }
         }
-        if !options.livePaths.isEmpty {
+        if !options.liveInk.isEmpty {
+            for item in options.liveInk {
+                drawItem(item, outline: false, zoom: options.zoom, showEdges: false, overprint: false, in: context)
+            }
+            drawBrushGuide(options, in: context)
+        } else if !options.livePaths.isEmpty {
             for path in options.livePaths {
                 let cg = cgPath(path)
                 context.addPath(cg)
@@ -551,6 +558,29 @@ enum CanvasDrawing {
                 context.addPath(cg)
             }
             context.strokePath()
+        }
+        context.restoreGState()
+    }
+
+    /// Blue centerline and end anchors over brush ink. The ink itself is the thickness.
+    private static func drawBrushGuide(_ options: DrawOptions, in context: CGContext) {
+        guard let path = options.livePaths.first, path.nodes.count >= 2 else { return }
+        context.saveGState()
+        context.beginPath()
+        context.addPath(cgPath(path))
+        context.setStrokeColor(Theme.accent.cgColor)
+        context.setLineWidth(1 / max(options.zoom, 0.01))
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        context.strokePath()
+        let side = 5 / max(options.zoom, 0.01)
+        context.setLineWidth(1 / max(options.zoom, 0.01))
+        for node in [path.nodes[0], path.nodes[path.nodes.count - 1]] {
+            let box = CGRect(x: node.anchor.x - side / 2, y: node.anchor.y - side / 2, width: side, height: side)
+            context.setFillColor(NSColor.white.cgColor)
+            context.fill(box)
+            context.setStrokeColor(Theme.accent.cgColor)
+            context.stroke(box)
         }
         context.restoreGState()
     }

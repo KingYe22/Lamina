@@ -324,6 +324,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         PenCursorArt.writePNG(to: dir.appendingPathComponent("pen-cursor.png"))
         PenCursorArt.writeNewPathPNG(to: dir.appendingPathComponent("pen-cursor-new.png"))
+        ToolCursorArt.writePNG(kind: .zoomIn, to: dir.appendingPathComponent("cursor-zoom.png"))
+        ToolCursorArt.writePNG(kind: .precision, to: dir.appendingPathComponent("cursor-precision.png"))
+        ToolCursorArt.writePNG(kind: .brush, mark: true, to: dir.appendingPathComponent("cursor-brush.png"))
         let report = """
         titlePt=\(Int(WorkspaceMetrics.panelTitleHeight))
         borderPt=1
@@ -338,6 +341,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         penTipError=\(String(format: "%.3f", PenHotSpot.tipError))
         penTipError1=\(String(format: "%.3f", PenCursorBitmap.measureTip(scale: 1).absolute))
         penTipError2=\(String(format: "%.3f", PenCursorBitmap.measureTip(scale: 2).absolute))
+        zoomHotspot=\(ToolCursorBitmap.zoomHotspot.x),\(ToolCursorBitmap.zoomHotspot.y)
+        precisionHotspot=\(ToolCursorBitmap.precisionHotspot.x),\(ToolCursorBitmap.precisionHotspot.y)
+        brushHotspot=\(ToolCursorBitmap.brushHotspot.x),\(ToolCursorBitmap.brushHotspot.y)
+        fill=\(model.currentFill?.solidColor?.hex ?? "none")
+        stroke=\(model.currentStroke?.paint.solidColor?.hex ?? "none")
         generative=opens-only
         """
         try? report.write(to: dir.appendingPathComponent("p0-report.txt"), atomically: true, encoding: .utf8)
