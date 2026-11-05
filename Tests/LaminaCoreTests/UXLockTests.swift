@@ -756,6 +756,217 @@ final class UXLockTests: XCTestCase {
         XCTAssertTrue(model.liveInk.isEmpty)
     }
 
+    func testToolbarContentInsetsAreEightAndMatched() {
+        XCTAssertEqual(ToolbarChrome.contentInset, 8)
+        XCTAssertEqual(ToolbarChrome.insetTolerance, 1)
+        for width in [70.0, 77.0, 81.0, 90.0] {
+            let insets = ToolbarChrome.insets(stripWidth: width)
+            XCTAssertEqual(insets.left, 8, accuracy: 0.001)
+            XCTAssertEqual(insets.right, 8, accuracy: 0.001)
+            XCTAssertLessThanOrEqual(abs(insets.left - insets.right), ToolbarChrome.insetTolerance)
+            XCTAssertEqual(ToolbarChrome.placedX(ToolbarChrome.tracedContentMinX, stripWidth: width), 8, accuracy: 0.001)
+            XCTAssertEqual(width - ToolbarChrome.placedX(ToolbarChrome.tracedContentMaxX, stripWidth: width), 8, accuracy: 0.001)
+        }
+    }
+
+    func testSelectedWellIs22AndCenteredInTheSlot() {
+        let slot = DockFrame(x: 10, y: 4, width: 30, height: 24)
+        let well = ToolbarChrome.selectedWell(slot: slot)
+        XCTAssertEqual(well.width, 22, accuracy: 0.001)
+        XCTAssertEqual(well.x + well.width / 2, slot.x + slot.width / 2, accuracy: 0.001)
+        XCTAssertEqual(well.y, slot.y, accuracy: 0.001)
+        XCTAssertEqual(well.height, slot.height, accuracy: 0.001)
+    }
+
+    func testGripHitIsAtLeast22PointsTallAndFullWidth() {
+        let hit = ToolbarChrome.gripHitRect(stripWidth: 81, gripCenterY: 67.5)
+        XCTAssertGreaterThanOrEqual(hit.height, 22)
+        XCTAssertEqual(hit.height, ToolbarChrome.gripHitHeight, accuracy: 0.001)
+        XCTAssertEqual(hit.x, 0, accuracy: 0.001)
+        XCTAssertEqual(hit.width, 81, accuracy: 0.001)
+        XCTAssertEqual(hit.y, 56.5, accuracy: 0.001)
+        XCTAssertEqual(ToolbarChrome.gripVisualHeight, 11, accuracy: 0.001)
+        XCTAssertEqual(ToolbarChrome.undockTravel, 12, accuracy: 0.001)
+    }
+
+    func testGripStaysDockedUnderTwelveAndUndocksAtTwelve() {
+        var drag = ToolbarGripDrag(start: .zero, docked: true)
+        XCTAssertFalse(drag.step(pointer: Vec2(11.9, 0)))
+        XCTAssertFalse(drag.floating)
+        XCTAssertTrue(drag.step(pointer: Vec2(12, 0)))
+        XCTAssertTrue(drag.floating)
+
+        var diagonal = ToolbarGripDrag(start: .zero, docked: true)
+        XCTAssertFalse(diagonal.step(pointer: Vec2(8, 8)))
+        XCTAssertTrue(diagonal.step(pointer: Vec2(9, 9)))
+
+        var floating = ToolbarGripDrag(start: Vec2(3, 3), docked: false)
+        XCTAssertTrue(floating.step(pointer: Vec2(3, 3)))
+    }
+
+    func testToolbarRedockUsesEightPointEdges() {
+        let hostMaxX = 1000.0
+        XCTAssertEqual(ToolbarSnap.edge(panelMinX: 8, panelMaxX: 89, hostMinX: 0, hostMaxX: hostMaxX), .left)
+        XCTAssertEqual(ToolbarSnap.edge(panelMinX: 9, panelMaxX: 90, hostMinX: 0, hostMaxX: hostMaxX), .none)
+        XCTAssertEqual(ToolbarSnap.edge(panelMinX: hostMaxX - 8 - 81, panelMaxX: hostMaxX - 8, hostMinX: 0, hostMaxX: hostMaxX), .right)
+        XCTAssertEqual(ToolbarSnap.edge(panelMinX: hostMaxX - 9 - 81, panelMaxX: hostMaxX - 9, hostMinX: 0, hostMaxX: hostMaxX), .none)
+        XCTAssertEqual(DockSnap.guideThickness, 2, accuracy: 0.001)
+    }
+
+    func testPanelTitleAndBottomGripBothDrag() {
+        let width = 302.0
+        let height = 243.0
+        XCTAssertEqual(PanelChromeHit.region(x: 40, y: 8, width: width, height: height, titleHeight: 22), .move)
+        XCTAssertEqual(PanelChromeHit.region(x: width / 2, y: height - 4, width: width, height: height, titleHeight: 22), .move)
+        XCTAssertEqual(PanelChromeHit.region(x: 10, y: height - 4, width: width, height: height, titleHeight: 22), .resize)
+        XCTAssertEqual(PanelChromeHit.region(x: width / 2, y: height / 2, width: width, height: height, titleHeight: 22), .content)
+    }
+
+    func testAppearanceAndAlignReleaseIntoTheLeftEdge() {
+        let host = DockFrame(x: 0, y: 0, width: 952, height: 800)
+        let shoulder = DockFrame(x: 640, y: 0, width: 312, height: 800)
+        let appearance = DockFrame(x: 19, y: 520, width: 302, height: 243)
+        let near = DockFrame(x: 6, y: appearance.y, width: appearance.width, height: appearance.height)
+        var drag = DockGesture(floating: appearance)
+        let hold = drag.step(
+            proposed: near, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(near.x + 40, near.y + 10),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        XCTAssertTrue(drag.leftArmed)
+        XCTAssertFalse(drag.shoulderArmed)
+        XCTAssertEqual(hold.anchor, .left)
+        XCTAssertTrue(hold.docked)
+        XCTAssertEqual(hold.frame.x, 0, accuracy: 0.001)
+        XCTAssertEqual(hold.frame.width, appearance.width, accuracy: 0.001)
+        XCTAssertEqual(host.minX - hold.frame.minX, 0, accuracy: 0.001)
+        XCTAssertTrue(hold.guides.contains { guide in
+            if case .vertical(let x) = guide.axis { return abs(x - host.minX) < 0.001 }
+            return false
+        })
+        let released = drag.step(
+            proposed: near, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(near.x + 40, near.y + 10),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertEqual(released.anchor, .left)
+        XCTAssertTrue(released.docked)
+        XCTAssertTrue(released.guides.isEmpty)
+        XCTAssertEqual(released.frame.x, 0, accuracy: 0.001)
+        XCTAssertEqual(released.frame.width, appearance.width, accuracy: 0.001)
+
+        let outside = DockFrame(x: 9, y: appearance.y, width: appearance.width, height: appearance.height)
+        var miss = DockGesture(floating: appearance)
+        let free = miss.step(
+            proposed: outside, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(outside.x + 20, outside.y + 8),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertEqual(free.anchor, .none)
+        XCTAssertFalse(free.docked)
+        XCTAssertEqual(free.frame.x, 9, accuracy: 0.001)
+
+        let align = DockFrame(x: 4, y: 500, width: 313, height: 283)
+        var stacked = DockGesture(floating: align)
+        let joined = stacked.step(
+            proposed: align, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(align.x + 30, align.y + 12),
+            dragStartMaxX: align.maxX,
+            leftOccupied: [released.frame],
+            up: true
+        )
+        XCTAssertEqual(joined.anchor, .left)
+        XCTAssertEqual(joined.frame.x, 0, accuracy: 0.001)
+        XCTAssertEqual(joined.frame.width, align.width, accuracy: 0.001)
+        XCTAssertLessThan(joined.frame.maxY, released.frame.minY + 0.001)
+
+        var flicker = DockGesture(floating: appearance)
+        _ = flicker.step(
+            proposed: near, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(near.x + 12, near.y + 8),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        let almost = DockFrame(x: 14, y: appearance.y, width: appearance.width, height: appearance.height)
+        let flickUp = flicker.step(
+            proposed: almost, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(almost.x + 16, almost.y + 8),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertEqual(flickUp.anchor, .left)
+        XCTAssertEqual(flickUp.frame.x, 0, accuracy: 0.001)
+
+        var jumped = DockGesture(floating: appearance)
+        _ = jumped.step(
+            proposed: near, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(near.x + 12, near.y + 8),
+            dragStartMaxX: appearance.maxX, up: false
+        )
+        let far = DockFrame(x: 20, y: appearance.y, width: appearance.width, height: appearance.height)
+        let cleared = jumped.step(
+            proposed: far, others: [], host: host, shoulder: shoulder,
+            pointer: Vec2(far.x + 16, far.y + 8),
+            dragStartMaxX: appearance.maxX, up: true
+        )
+        XCTAssertEqual(cleared.anchor, .none)
+        XCTAssertFalse(cleared.docked)
+        XCTAssertEqual(cleared.frame.x, 20, accuracy: 0.001)
+    }
+
+    func testTitlebarDoubleClickZoomsAndSingleClickDoesNot() {
+        XCTAssertTrue(TitlebarZoom.shouldZoom(clickCount: 2, inTitleChrome: true, onInteractiveControl: false))
+        XCTAssertFalse(TitlebarZoom.shouldZoom(clickCount: 1, inTitleChrome: true, onInteractiveControl: false))
+        XCTAssertFalse(TitlebarZoom.shouldZoom(clickCount: 2, inTitleChrome: true, onInteractiveControl: true))
+        XCTAssertFalse(TitlebarZoom.shouldZoom(clickCount: 2, inTitleChrome: false, onInteractiveControl: false))
+    }
+
+    func testClosedPenPathStaysEditable() {
+        let model = EditorModel()
+        model.smartGuides = false
+        model.tool = .pen
+        for point in [Vec2(0, 0), Vec2(40, 0), Vec2(20, 30), Vec2(0, 0)] {
+            model.pointerDown(at: point, shift: false, option: false, command: false)
+            model.pointerUp(at: point, shift: false, option: false, command: false)
+        }
+        let items = model.document.flatItems()
+        XCTAssertEqual(items.count, 1)
+        guard case .path(let closed) = items[0] else { return XCTFail("闭合后应是普通路径") }
+        XCTAssertTrue(closed.path.closed)
+        XCTAssertFalse(closed.locked)
+        XCTAssertEqual(closed.name, "路径")
+        XCTAssertEqual(model.selection, [closed.id])
+        XCTAssertFalse(items.contains {
+            if case .compound = $0 { return true }
+            return false
+        })
+
+        model.tool = .directSelection
+        let before = closed.path.nodes[1].anchor
+        model.pointerDown(at: before, shift: false, option: false, command: false)
+        let dragged = Vec2(before.x + 15, before.y - 10)
+        model.pointerDrag(to: dragged, shift: false, option: false, command: false)
+        model.pointerUp(at: dragged, shift: false, option: false, command: false)
+        guard case .path(let edited) = model.document.item(id: closed.id) else { return XCTFail("锚点") }
+        XCTAssertEqual(edited.path.nodes[1].anchor.x, before.x + 15, accuracy: 0.01)
+        XCTAssertEqual(edited.path.nodes[1].anchor.y, before.y - 10, accuracy: 0.01)
+        XCTAssertTrue(edited.path.closed)
+        XCTAssertFalse(edited.locked)
+
+        model.tool = .selection
+        guard let box = model.selectionBounds() else { return XCTFail("定界框") }
+        let se = Vec2(box.maxX, box.maxY)
+        XCTAssertEqual(model.hitHandle(at: se), .se)
+        let widthBefore = box.width
+        model.pointerDown(at: se, shift: false, option: false, command: false)
+        let scaledTo = Vec2(se.x + 20, se.y + 20)
+        model.pointerDrag(to: scaledTo, shift: false, option: false, command: false)
+        model.pointerUp(at: scaledTo, shift: false, option: false, command: false)
+        guard let scaled = model.selectionBounds() else { return XCTFail("缩放") }
+        XCTAssertGreaterThan(scaled.width, widthBefore + 5)
+        guard case .path(let still) = model.document.item(id: closed.id) else { return XCTFail("仍是路径") }
+        XCTAssertTrue(still.path.closed)
+        XCTAssertFalse(still.locked)
+    }
+
     private func polylineLength(_ nodes: [PathNode]) -> Double {
         guard nodes.count >= 2 else { return 0 }
         var length = 0.0

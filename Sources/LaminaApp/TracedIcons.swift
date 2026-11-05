@@ -9,22 +9,37 @@ enum TracedIcons {
     static func bounds(for tool: Tool) -> NSRect? { frames[tool] }
 
     static func draw(_ tool: Tool, toolbarOrigin: NSPoint) {
+        draw(tool, glyphOrigin: toolbarOrigin, scale: 1, xOffset: 0)
+    }
+
+    /// Draw a traced glyph so its box origin lands at `xOffset` and its width is scaled.
+    /// `x' = xOffset + (x - glyphOrigin.x) * scale`, `y' = y - glyphOrigin.y`.
+    static func draw(_ tool: Tool, glyphOrigin: NSPoint, scale: CGFloat, xOffset: CGFloat) {
         if tool == .gradient {
-            drawGradient(toolbarOrigin)
+            drawGradient(origin: glyphOrigin, scale: scale, xOffset: xOffset)
             return
         }
         guard let layers = catalog[tool] else { return }
+        var transform = AffineTransform()
+        transform.m11 = scale
+        transform.m12 = 0
+        transform.m21 = 0
+        transform.m22 = 1
+        transform.tX = xOffset - glyphOrigin.x * scale
+        transform.tY = -glyphOrigin.y
         for layer in layers {
             let path = layer.path.copy() as! NSBezierPath
-            path.transform(using: AffineTransform(translationByX: -toolbarOrigin.x, byY: -toolbarOrigin.y))
+            path.transform(using: transform)
             Theme.color(layer.hex).setFill()
             path.fill()
         }
     }
 
     /// The gradient tool is a left-to-right ramp inside a light rounded square.
-    private static func drawGradient(_ origin: NSPoint) {
-        let outer = NSRect(x: 8.0 - origin.x, y: 595.0 - origin.y, width: 20.5, height: 17.5)
+    private static func drawGradient(origin: NSPoint, scale: CGFloat, xOffset: CGFloat) {
+        func mapX(_ x: CGFloat) -> CGFloat { xOffset + (x - origin.x) * scale }
+        func mapY(_ y: CGFloat) -> CGFloat { y - origin.y }
+        let outer = NSRect(x: mapX(8.0), y: mapY(595.0), width: 20.5 * scale, height: 17.5)
         let plate = NSBezierPath(roundedRect: outer, xRadius: 1.2, yRadius: 1.2)
         let inner = outer.insetBy(dx: 1.05, dy: 1.05)
         NSGraphicsContext.saveGraphicsState()
@@ -35,10 +50,10 @@ enum TracedIcons {
         plate.lineWidth = 1
         plate.stroke()
         let tri = NSBezierPath()
-        let x = 30.5 - origin.x
-        let y = 612.0 - origin.y
-        tri.move(to: NSPoint(x: x + 3.0, y: y))
-        tri.line(to: NSPoint(x: x + 3.0, y: y + 3.5))
+        let x = mapX(30.5)
+        let y = mapY(612.0)
+        tri.move(to: NSPoint(x: x + 3.0 * scale, y: y))
+        tri.line(to: NSPoint(x: x + 3.0 * scale, y: y + 3.5))
         tri.line(to: NSPoint(x: x, y: y + 3.5))
         tri.close()
         Theme.color(0xC2C2C2).setFill()

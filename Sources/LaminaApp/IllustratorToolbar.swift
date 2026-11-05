@@ -1,10 +1,18 @@
 import AppKit
 import LaminaCore
 
+protocol ToolbarGripHost: AnyObject {
+    var toolbarIsDocked: Bool { get }
+    func toolbarGripDown()
+    func toolbarGripDragged(undocked: Bool, event: NSEvent, start: NSEvent)
+    func focusCanvasFromToolbar() -> Bool
+}
+
 final class IllustratorToolbar: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
     override var isOpaque: Bool { true }
     weak var workspace: Workspace?
+    weak var host: ToolbarGripHost?
     private var slots: [ToolSlotButton] = []
     private var sectionTitles: [(String, CGFloat)] = []
     private let footer = ToolbarFooter()
@@ -75,11 +83,43 @@ final class IllustratorToolbar: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    /// Empty space in the band above the canvas drags the window. Tool buttons keep the click.
+    /// The dashed grip under the collapse mark undocks the toolbar. The rest of the
+    /// empty band above the tools still drags the window. Tool buttons keep the click.
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if gripHitRect().contains(point) {
+            trackGrip(event)
+            return
+        }
         if point.y < WorkspaceMetrics.chromeInset + WorkspaceMetrics.toolbarLift {
             window?.performDrag(with: event)
+        }
+    }
+
+    private func gripHitRect() -> NSRect {
+        let strip = bounds.width > 1 ? Double(bounds.width) : ToolbarChrome.stripWidth
+        let box = ToolbarChrome.gripHitRect(
+            stripWidth: strip,
+            gripCenterY: 39.5 + Double(WorkspaceMetrics.toolbarLift)
+        )
+        return NSRect(x: box.x, y: box.y, width: box.width, height: box.height)
+    }
+
+    /// Events stay on the window that received mouse-down, so reparenting the
+    /// toolbar into a panel mid-drag does not drop the gesture.
+    private func trackGrip(_ event: NSEvent) {
+        host?.toolbarGripDown()
+        var drag = ToolbarGripDrag(
+            start: Vec2(Double(event.locationInWindow.x), Double(event.locationInWindow.y)),
+            docked: host?.toolbarIsDocked ?? true
+        )
+        let source = event.window
+        while true {
+            guard let next = source?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
+            let point = Vec2(Double(next.locationInWindow.x), Double(next.locationInWindow.y))
+            let undocked = drag.step(pointer: point)
+            host?.toolbarGripDragged(undocked: undocked, event: next, start: event)
+            if next.type == .leftMouseUp { break }
         }
     }
 
@@ -137,11 +177,27 @@ final class IllustratorToolbar: NSView {
 
     override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }
 
+    private var stripWidth: Double {
+        bounds.width > 1 ? Double(bounds.width) : ToolbarChrome.stripWidth
+    }
+
     private func slotFrame(for tool: Tool) -> NSRect? {
-        guard var rect = TracedIcons.bounds(for: tool) else { return nil }
-        rect = rect.insetBy(dx: -0.5, dy: -0.5)
-        rect.origin.y += WorkspaceMetrics.toolbarLift
-        return rect
+        guard let rect = TracedIcons.bounds(for: tool) else { return nil }
+        let scale = CGFloat(ToolbarChrome.xScale(stripWidth: stripWidth))
+        let mapped = rect.width * scale
+        var slot = NSRect(
+            x: CGFloat(ToolbarChrome.placedX(Double(rect.minX), stripWidth: stripWidth)),
+            y: rect.minY + WorkspaceMetrics.toolbarLift,
+            width: mapped,
+            height: rect.height
+        )
+        let well = CGFloat(ToolbarChrome.selectedWellWidth)
+        if slot.width < well {
+            let extra = well - slot.width
+            slot.origin.x -= extra / 2
+            slot.size.width = well
+        }
+        return slot
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -150,13 +206,8 @@ final class IllustratorToolbar: NSView {
         NSGraphicsContext.saveGraphicsState()
         NSAffineTransform(transform: AffineTransform(translationByX: 0, byY: WorkspaceMetrics.toolbarLift)).concat()
         drawHeader()
-        let current = workspace?.active.model.tool ?? .selection
-        if current == .selection {
-            Theme.color(0x303030).setFill()
-            NSBezierPath(roundedRect: NSRect(x: 0.5, y: 80, width: 35, height: 27), xRadius: 2, yRadius: 2).fill()
-        }
         Theme.color(0x2D8CEB).setFill()
-        NSBezierPath(ovalIn: NSRect(x: 4.5, y: 252.5, width: 9, height: 9)).fill()
+        NSBezierPath(ovalIn: NSRect(x: placed(4.5), y: 252.5, width: 9, height: 9)).fill()
         Theme.color(0x4B4B4B).setFill()
         for y in [141, 226, 341, 426, 481, 566, 621] as [CGFloat] {
             NSRect(x: 0, y: y, width: bounds.width, height: 0.5).fill()
@@ -168,7 +219,7 @@ final class IllustratorToolbar: NSView {
         for (title, y) in sectionTitles {
             let text = title as NSString
             let width = text.size(withAttributes: attrs).width
-            text.draw(at: NSPoint(x: 36.5 - width / 2, y: y), withAttributes: attrs)
+            text.draw(at: NSPoint(x: placed(36.5) - width / 2, y: y), withAttributes: attrs)
         }
         NSGraphicsContext.restoreGraphicsState()
     }
@@ -185,10 +236,17 @@ final class IllustratorToolbar: NSView {
         Theme.color(0xC8C8C8).setFill()
         TracedChrome.chevron().fill()
         Theme.color(0x383838).setFill()
+        let cluster: CGFloat = 9 * 2.5 + 1.5
+        let start = (bounds.width - cluster) / 2
+        let dashH = CGFloat(ToolbarChrome.gripVisualHeight)
         for index in 0..<10 {
-            let x = 24.25 + CGFloat(index) * 2.5
-            NSBezierPath(roundedRect: NSRect(x: x, y: 37, width: 1.5, height: 5), xRadius: 0.75, yRadius: 0.75).fill()
+            let x = start + CGFloat(index) * 2.5
+            NSBezierPath(roundedRect: NSRect(x: x, y: CGFloat(39.5) - dashH / 2, width: 1.5, height: dashH), xRadius: 0.75, yRadius: 0.75).fill()
         }
+    }
+
+    private func placed(_ traced: CGFloat) -> CGFloat {
+        CGFloat(ToolbarChrome.placedX(Double(traced), stripWidth: stripWidth))
     }
 
     private func footerAction(_ name: String) {
@@ -250,7 +308,9 @@ final class IllustratorToolbar: NSView {
         model.status = tool.title
         dismissFlyout()
         workspace?.touch()
-        window?.makeFirstResponder(findCanvas(window?.contentView))
+        if host?.focusCanvasFromToolbar() != true {
+            window?.makeFirstResponder(findCanvas(window?.contentView))
+        }
     }
 
     private func showFlyout(for slot: ToolSlotButton) {
@@ -332,15 +392,20 @@ final class ToolSlotButton: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         if TracedIcons.contains(tool) {
-            if isCurrent, tool != .selection {
+            if isCurrent {
+                let well = ToolbarChrome.selectedWell(slot: DockFrame(
+                    x: 0, y: 0, width: Double(bounds.width), height: Double(bounds.height)
+                ))
                 Theme.color(0x303030).setFill()
-                NSBezierPath(roundedRect: bounds.insetBy(dx: -1, dy: -1), xRadius: 3, yRadius: 3).fill()
+                NSBezierPath(roundedRect: NSRect(x: well.x, y: well.y, width: well.width, height: well.height), xRadius: 3, yRadius: 3).fill()
             }
-            // The glyph is stored in unshifted toolbar coordinates. The view grew
-            // upward by toolbarLift, so the slot moved down and the origin passed
-            // here stays on the traced point. That keeps the icon on the same window pixel.
-            let traced = NSPoint(x: frame.origin.x, y: frame.origin.y - WorkspaceMetrics.toolbarLift)
-            TracedIcons.draw(tool, toolbarOrigin: traced)
+            guard let glyph = TracedIcons.bounds(for: tool) else { return }
+            let rawStrip = superview?.bounds.width ?? 0
+            let strip = rawStrip > 1 ? rawStrip : CGFloat(ToolbarChrome.stripWidth)
+            let scale = CGFloat(ToolbarChrome.xScale(stripWidth: Double(strip)))
+            let mapped = glyph.width * scale
+            let xOffset = (bounds.width - mapped) / 2
+            TracedIcons.draw(tool, glyphOrigin: NSPoint(x: glyph.minX, y: glyph.minY), scale: scale, xOffset: xOffset)
             return
         }
         if isCurrent {
