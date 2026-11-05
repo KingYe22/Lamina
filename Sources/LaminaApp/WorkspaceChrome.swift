@@ -33,10 +33,17 @@ struct NewDocSpec {
 
 /// The only content that may drag the window. Tool surfaces return false
 /// from mouseDownCanMoveWindow, and the window itself is not movable by its background.
+/// A transparent title bar does not zoom on its own, so a double-click calls performZoom.
 final class TitleDragStrip: NSView {
-    /// Sits in the title-bar band. AppKit drags the window from here because
-    /// this view allows it; the canvas and the tools do not.
-    override var mouseDownCanMoveWindow: Bool { true }
+    override var mouseDownCanMoveWindow: Bool { false }
+
+    override func mouseDown(with event: NSEvent) {
+        if TitlebarZoom.shouldZoom(clickCount: event.clickCount, inTitleChrome: true, onInteractiveControl: false) {
+            window?.performZoom(nil)
+            return
+        }
+        window?.performDrag(with: event)
+    }
 }
 
 final class AppRoot: NSView {
@@ -209,6 +216,10 @@ final class DocumentTabBar: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        if TitlebarZoom.shouldZoom(clickCount: event.clickCount, inTitleChrome: true, onInteractiveControl: false) {
+            window?.performZoom(nil)
+            return
+        }
         let point = convert(event.locationInWindow, from: nil)
         if tabChipRect().contains(point) { return }
         window?.performDrag(with: event)

@@ -75,14 +75,15 @@ final class DockGuideOverlay: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         Theme.color(DockSnap.guideHex).setFill()
+        let thickness = CGFloat(DockSnap.guideThickness)
         for guide in guides {
             switch guide.axis {
             case .vertical(let x):
-                let origin = min(max(x - 1, 0), max(0, bounds.width - 2))
-                NSRect(x: origin, y: 0, width: 2, height: bounds.height).fill()
+                let origin = min(max(x - thickness / 2, 0), max(0, bounds.width - thickness))
+                NSRect(x: origin, y: 0, width: thickness, height: bounds.height).fill()
             case .horizontal(let y):
-                let origin = min(max(y - 1, 0), max(0, bounds.height - 2))
-                NSRect(x: 0, y: origin, width: bounds.width, height: 2).fill()
+                let origin = min(max(y - thickness / 2, 0), max(0, bounds.height - thickness))
+                NSRect(x: 0, y: origin, width: bounds.width, height: thickness).fill()
             }
         }
     }
@@ -144,7 +145,7 @@ final class FloatingPanels: NSView {
                 WorkspaceMetrics.align.rect(in: bounds.height),
                 WorkspaceMetrics.stroke.rect(in: bounds.height)
             ]
-            for (panel, rect) in zip(panels, metrics) where !panel.shoulderAnchored && !panel.dragging {
+            for (panel, rect) in zip(panels, metrics) where panel.columnSeat == .none && !panel.dragging {
                 panel.frame = rect
             }
         }
@@ -226,20 +227,49 @@ final class FloatingPanels: NSView {
     }
 
     func anchoredFrames(excluding panel: FloatPanel) -> [DockFrame] {
-        panels.filter { $0 !== panel && $0.shoulderAnchored && !$0.isHidden }.map { dockBox($0.frame) }
+        panels.filter { $0 !== panel && $0.columnSeat == .right && !$0.isHidden }.map { dockBox($0.frame) }
     }
 
-    /// Put every latched panel back in the shoulder. Layout and the drag loop
+    func leftFrames(excluding panel: FloatPanel) -> [DockFrame] {
+        panels.filter { $0 !== panel && $0.columnSeat == .left && !$0.isHidden }.map { dockBox($0.frame) }
+    }
+
+    /// Union of panels already in the left column, used as that column's inner edge.
+    func leftColumnFrame(excluding panel: FloatPanel? = nil) -> DockFrame? {
+        let frames = panels.filter { $0 !== panel && $0.columnSeat == .left && !$0.isHidden }.map { dockBox($0.frame) }
+        guard var union = frames.first else { return nil }
+        for frame in frames.dropFirst() {
+            let minX = min(union.minX, frame.minX)
+            let minY = min(union.minY, frame.minY)
+            let maxX = max(union.maxX, frame.maxX)
+            let maxY = max(union.maxY, frame.maxY)
+            union = DockFrame(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+        }
+        return union
+    }
+
+    /// Put every latched panel back in its column. Layout and the drag loop
     /// both call this, so a display pass cannot leave the raw drag frame behind.
     func seatAnchoredPanels() {
-        guard let shoulder = rightShoulder, bounds.width > 1, bounds.height > 1 else { return }
+        guard bounds.width > 1, bounds.height > 1 else { return }
         let host = dockBox(bounds)
-        for panel in panels where panel.shoulderAnchored {
-            let seated = DockSnap.commitShoulder(
+        if let shoulder = rightShoulder {
+            for panel in panels where panel.columnSeat == .right {
+                let seated = DockSnap.commitShoulder(
+                    proposed: dockBox(panel.frame),
+                    shoulder: shoulder,
+                    host: host,
+                    occupied: anchoredFrames(excluding: panel)
+                )
+                let rect = NSRect(x: seated.x, y: seated.y, width: seated.width, height: seated.height)
+                if panel.frame != rect { panel.frame = rect }
+            }
+        }
+        for panel in panels where panel.columnSeat == .left {
+            let seated = DockSnap.commitLeft(
                 proposed: dockBox(panel.frame),
-                shoulder: shoulder,
                 host: host,
-                occupied: anchoredFrames(excluding: panel)
+                occupied: leftFrames(excluding: panel)
             )
             let rect = NSRect(x: seated.x, y: seated.y, width: seated.width, height: seated.height)
             if panel.frame != rect { panel.frame = rect }
@@ -285,8 +315,8 @@ final class FloatPanel: NSView {
     private var scaleStrokes = false
     private var dashAlign = false
     var dragging = false
-    /// Mouse-up landed while the shoulder guide was lit. Layout keeps seating it.
-    var shoulderAnchored = false
+    /// Mouse-up landed while a dock guide was lit. Layout keeps seating it.
+    var columnSeat: DockAnchor = .none
     /// Width before the panel joined the column, so a later drag can undock.
     private var undockedWidth: CGFloat?
 
@@ -897,15 +927,23 @@ final class FloatPanel: NSView {
             trackTab(tab, from: event)
             return
         }
-        if point.y < titleHeight {
+        // Title bar and the bottom pill both move. A horizontal pill drag used to
+        // hit the resize band and leave the panel pixel-identical.
+        let region = PanelChromeHit.region(
+            x: Double(point.x),
+            y: Double(point.y),
+            width: Double(bounds.width),
+            height: Double(bounds.height),
+            titleHeight: Double(titleHeight)
+        )
+        switch region {
+        case .move:
             dragMove(event)
-            return
-        }
-        if point.y > bounds.height - 12 {
+        case .resize:
             dragResize(event)
-            return
+        case .content:
+            handleContent(point)
         }
-        handleContent(point)
     }
 
     private func showMenu() {
@@ -1008,7 +1046,7 @@ final class FloatPanel: NSView {
         }
         dragging = false
         host?.showGuides([])
-        if shoulderAnchored {
+        if columnSeat != .none {
             host?.seatAnchoredPanels()
         }
     }
@@ -1046,15 +1084,17 @@ final class FloatPanel: NSView {
             pointer: Vec2(Double(local.x), Double(local.y)),
             dragStartMaxX: startMaxX,
             occupied: host.anchoredFrames(excluding: self),
+            leftColumn: host.leftColumnFrame(excluding: self),
+            leftOccupied: host.leftFrames(excluding: self),
             up: next.type == .leftMouseUp
         )
-        if result.docked, undockedWidth == nil {
+        if result.anchor != .none, undockedWidth == nil {
             undockedWidth = floatSize.width
         }
-        if next.type == .leftMouseUp, !result.docked {
+        if next.type == .leftMouseUp, result.anchor == .none {
             undockedWidth = nil
         }
-        shoulderAnchored = result.docked
+        columnSeat = result.anchor
         frame = NSRect(x: result.frame.x, y: result.frame.y, width: result.frame.width, height: result.frame.height)
         if next.type == .leftMouseUp {
             host.showGuides([])

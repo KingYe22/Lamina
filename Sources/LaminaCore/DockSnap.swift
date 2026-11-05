@@ -41,6 +41,8 @@ public enum DockSnap {
     public static let threshold: Double = 8
     /// Snap guide. RGB(0, 114, 239).
     public static let guideHex = 0x0072EF
+    /// Guide thickness. The overlay draws this many points.
+    public static let guideThickness: Double = 2
 
     /// `shoulder` is the properties column in the same space as `host`.
     /// A panel docks to that column's outer edge when it overlaps the column,
@@ -201,13 +203,61 @@ public enum DockSnap {
         if room <= 0 { return low }
         return min(max(origin, low), low + room)
     }
+
+    /// Panel outer edge is within `threshold` of the host's left edge, or of the
+    /// inner edge of a column already parked there.
+    public static func nearLeft(frame: DockFrame, host: DockFrame, column: DockFrame? = nil, threshold: Double = DockSnap.threshold) -> Bool {
+        let gap = frame.minX - host.minX
+        if gap >= -threshold - 1e-9, gap <= threshold + 1e-9 { return true }
+        guard let column else { return false }
+        if abs(frame.minX - column.maxX) <= threshold + 1e-9 { return true }
+        if frame.minX < column.maxX, abs(frame.maxX - column.maxX) <= threshold + 1e-9 { return true }
+        return false
+    }
+
+    /// Farther than two thresholds from both the host's left edge and a left column.
+    public static func clearOfLeft(frame: DockFrame, host: DockFrame, column: DockFrame? = nil) -> Bool {
+        let margin = threshold * 2
+        if frame.minX <= host.minX + margin { return false }
+        if let column {
+            if abs(frame.minX - column.maxX) <= margin { return false }
+            if frame.minX < column.maxX, abs(frame.maxX - column.maxX) <= margin { return false }
+        }
+        return true
+    }
+
+    /// Park a panel in the left column: left edge flush with the host, width unchanged,
+    /// stacked under panels already in that column.
+    public static func commitLeft(
+        proposed: DockFrame,
+        host: DockFrame,
+        occupied: [DockFrame] = []
+    ) -> DockFrame {
+        var next = proposed
+        next.x = host.minX
+        next.y = stackedY(y: proposed.y, height: proposed.height, occupied: occupied)
+        next.y = clamp(next.y, low: host.minY, room: host.height - next.height)
+        return next
+    }
+
+    static func hasVertical(_ guides: [DockGuide], at x: Double) -> Bool {
+        guides.contains { guide in
+            if case .vertical(let guideX) = guide.axis { return abs(guideX - x) < 0.5 }
+            return false
+        }
+    }
 }
 
-/// One title-bar drag. The shoulder guide latches: while it is lit, mouse-up
-/// joins the column even if that event's raw origin is still the unsnapped
-/// point (the v0.4.1 failure, hundreds of points short of the right edge).
+/// One title-bar or bottom-pill drag.
+///
+/// The right-shoulder guide latches: while it is lit, mouse-up joins that
+/// column even if the raw origin is still short of the edge. The left edge
+/// uses the same 8 pt threshold and the same two-threshold release margin.
+/// Title-bar and bottom-pill drags both call this; the view only chooses which
+/// pointer events start the gesture.
 public struct DockGesture: Equatable, Sendable {
     public private(set) var shoulderArmed = false
+    public private(set) var leftArmed = false
     public let floatingWidth: Double
     public let floatingHeight: Double
 
@@ -224,8 +274,10 @@ public struct DockGesture: Equatable, Sendable {
         pointer: Vec2?,
         dragStartMaxX: Double,
         occupied: [DockFrame] = [],
+        leftColumn: DockFrame? = nil,
+        leftOccupied: [DockFrame] = [],
         up: Bool
-    ) -> (frame: DockFrame, guides: [DockGuide], docked: Bool) {
+    ) -> (frame: DockFrame, guides: [DockGuide], docked: Bool, anchor: DockAnchor) {
         var sample = proposed
         sample.width = floatingWidth
         sample.height = floatingHeight
@@ -250,6 +302,7 @@ public struct DockGesture: Equatable, Sendable {
             shoulderArmed = engaged
         }
         if shoulderArmed, let shoulder {
+            leftArmed = false
             let dropped = DockSnap.commitShoulder(
                 proposed: magnet.frame, shoulder: shoulder, host: host, occupied: occupied
             )
@@ -257,11 +310,29 @@ public struct DockGesture: Equatable, Sendable {
             if !DockSnap.guideFires(guides, at: shoulder) {
                 guides.append(DockGuide(.vertical(shoulder.maxX)))
             }
-            return (dropped, up ? [] : guides, true)
+            return (dropped, up ? [] : guides, true, .right)
+        }
+        let nearLeft = DockSnap.nearLeft(frame: sample, host: host, column: leftColumn)
+        if up {
+            if DockSnap.clearOfLeft(frame: sample, host: host, column: leftColumn) {
+                leftArmed = false
+            } else if nearLeft {
+                leftArmed = true
+            }
+        } else {
+            leftArmed = nearLeft
+        }
+        if leftArmed {
+            let dropped = DockSnap.commitLeft(proposed: magnet.frame, host: host, occupied: leftOccupied)
+            var guides = magnet.guides
+            if !DockSnap.hasVertical(guides, at: host.minX) {
+                guides.append(DockGuide(.vertical(host.minX)))
+            }
+            return (dropped, up ? [] : guides, true, .left)
         }
         var free = magnet.frame
         free.width = floatingWidth
         free.height = floatingHeight
-        return (free, up ? [] : magnet.guides, false)
+        return (free, up ? [] : magnet.guides, false, .none)
     }
 }
