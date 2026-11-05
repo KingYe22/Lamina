@@ -149,6 +149,9 @@ public final class EditorModel {
     public private(set) var canRedo = false
     public var penNodes: [PathNode] = []
     public var penClosed = false
+    /// Press landed in the close hotspot. Mouse-up commits a closed path.
+    /// A drag past a couple of points pulls handles on the first anchor first.
+    private var penClosing = false
     public var hover = Vec2.zero
     public enum InteractionHint: Equatable {
         case none
@@ -268,6 +271,7 @@ public final class EditorModel {
     public func pointerDown(at p: Vec2, shift: Bool, option: Bool, command: Bool, space: Bool = false, stylus: StylusSample = .mouse, clickCount: Int = 1) {
         defer { refreshPenChrome() }
         rawHover = p
+        penClosing = false
         hover = snapped(p)
         penPullingHandle = false
         moveDX = ""
@@ -319,6 +323,13 @@ public final class EditorModel {
         case .pen:
             if command {
                 directSelection(at: p, shift: shift)
+                return
+            }
+            // Close uses the pointer, before smart guides can walk it off the first anchor.
+            if !(space || spaceHeld), ToolBehaviors.hitsPenClose(nodes: penNodes, point: rawHover, zoom: zoom) {
+                hover = penNodes[0].anchor
+                gestureOrigin = rawHover
+                beginPenClose()
                 return
             }
             penDown(p, option: option, shift: shift)
@@ -552,6 +563,19 @@ public final class EditorModel {
         defer { refreshPenChrome() }
         rawHover = p
         hover = p
+        if penClosing {
+            commitPenClose()
+            livePaths = []
+            liveInk = []
+            liveLabel = ""
+            moveDX = ""
+            moveDY = ""
+            penPullingHandle = false
+            liveOutline = false
+            drag = nil
+            interactionHint = .none
+            return
+        }
         bakeCreateShift()
         livePaths = []
         liveInk = []
@@ -704,9 +728,15 @@ public final class EditorModel {
     }
 
     private func penNearExistingAnchor(_ point: Vec2) -> Bool {
+        if ToolBehaviors.hitsPenClose(nodes: penNodes, point: point, zoom: zoom) {
+            return true
+        }
         let slop = 8 / max(zoom, 0.05)
-        if penNodes.count >= 2 {
-            for node in penNodes.dropLast() where node.anchor.distance(to: point) <= slop {
+        if penNodes.count >= 3 {
+            // The first anchor uses the close hotspot only, so a label at 7 pt
+            // cannot advertise a click the pen will not close. The last anchor
+            // is the one being placed.
+            for node in penNodes.dropFirst().dropLast() where node.anchor.distance(to: point) <= slop {
                 return true
             }
         }
@@ -1569,20 +1599,43 @@ public final class EditorModel {
         penSource = nil
     }
 
+    /// Arm a close. The path stays open until mouse-up so a drag can pull the first anchor's handles.
+    private func beginPenClose() {
+        guard penNodes.count >= 2 else { return }
+        penClosing = true
+        penCursor = .close
+        penAnchorOrigin = penNodes[0].anchor
+        drag = .pen
+        status = "闭合路径"
+    }
+
+    /// Commit the pen session as one ordinary closed path. Not a compound, not a Pathfinder result.
+    private func commitPenClose() {
+        penClosing = false
+        guard penNodes.count >= 2 else {
+            penNodes = []
+            drag = nil
+            penSource = nil
+            return
+        }
+        beginChange()
+        let path = PathItem(nodes: penNodes, closed: true, shape: .free)
+        insertNew(.path(styled(PathObject(name: "路径", path: path))))
+        penNodes = []
+        penCursor = .close
+        penSource = nil
+        drag = nil
+        status = "路径"
+    }
+
     private func penDown(_ p: Vec2, option: Bool, shift: Bool) {
         var point = p
         if shift, let last = penNodes.last {
             point = ToolBehaviors.constrain45(point, from: last.anchor)
         }
-        let slop = 8 / zoom
-        if let first = penNodes.first, penNodes.count >= 3, first.anchor.distance(to: point) <= slop {
-            beginChange()
-            let path = PathItem(nodes: penNodes, closed: true, shape: .free)
-            insertNew(.path(styled(PathObject(name: "路径", path: path))))
-            penNodes = []
-            penCursor = .close
-            penSource = nil
-            drag = nil
+        if ToolBehaviors.hitsPenClose(nodes: penNodes, point: point, zoom: zoom)
+            || ToolBehaviors.hitsPenClose(nodes: penNodes, point: rawHover, zoom: zoom) {
+            beginPenClose()
             return
         }
         if penNodes.count >= 2, let other = openEndpoint(near: point, excluding: penSource) {
@@ -1627,6 +1680,17 @@ public final class EditorModel {
 
     public func penDrag(to p: Vec2, shift: Bool = false, option: Bool = false, space: Bool = false) {
         guard !penNodes.isEmpty else { return }
+        if penClosing {
+            let anchor = penNodes[0].anchor
+            // A click that jitters inside the hotspot still closes with no new handles.
+            guard anchor.distance(to: p) > 2 / max(zoom, 0.05) else { return }
+            penPullingHandle = true
+            let placed = ToolBehaviors.placeHandle(anchor: anchor, drag: p, shift: shift, option: option)
+            penNodes[0].outHandle = placed.outHandle
+            penNodes[0].inHandle = placed.inHandle
+            penNodes[0].corner = option ? .corner : .smooth
+            return
+        }
         let last = penNodes.count - 1
         if space || spaceHeld {
             penPullingHandle = false
@@ -1645,6 +1709,11 @@ public final class EditorModel {
     }
 
     public func finishPen() {
+        if penClosing {
+            commitPenClose()
+            refreshPenChrome()
+            return
+        }
         guard penNodes.count >= 2 else {
             penNodes = []
             refreshPenChrome()
