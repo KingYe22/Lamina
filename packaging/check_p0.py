@@ -38,6 +38,12 @@ TITLE_FILL = np.array([66, 66, 66])
 LINE = np.array([106, 106, 106])
 PASTE = np.array([96, 96, 96])
 GUIDE = np.array([0, 114, 239])
+# IllustratorToolbar.drawHeader after ToolbarChrome.contentOffsetY (-16).
+# View points from the title seam: 0 is #5E5E5E, 2..16 is the #424242 << bar.
+COLLAPSE_RULE = np.array([94, 94, 94])
+COLLAPSE_BAR = np.array([66, 66, 66])
+COLLAPSE_BAR_Y = 2
+COLLAPSE_BAR_H = 14
 
 
 def load(path):
@@ -158,18 +164,31 @@ def check_borders(workspace):
 
 
 def check_toolbar(workspace):
-    # The old hole was pasteboard #606060 for about 22 pt under the title.
+    # 0.4.7 seats the << row on the title seam. The first 20 pt used to be
+    # panel fill under a 28 pt lift, so the old panel-fill count no longer
+    # describes this band. #5E5E5E is two levels from pasteboard #606060;
+    # a tolerance of 6 counted that 1 pt rule as a hole.
     x = 16
     y0 = TITLE_BAND * SCALE
     y1 = y0 + 40
     strip = workspace[y0:y1, x]
     print(f"toolbar seam x={x} y={y0}..{y1} first={strip[0].tolist()} mid={strip[len(strip)//2].tolist()}")
-    paste_hits = sum(near(pixel, PASTE, 6) for pixel in strip)
-    panel_hits = sum(near(pixel, PANEL_FILL, 12) for pixel in strip)
-    ok = require(paste_hits == 0 and panel_hits > 30, f"toolbar seam paste={paste_hits} panel={panel_hits}")
-    # Left edge stays on the window. A couple of pixels in is still toolbar fill.
-    left = workspace[y0 + 20, 4]
-    ok &= require(near(left, PANEL_FILL, 14), f"toolbar left {left.tolist()}")
+    paste_hits = sum(near(pixel, PASTE, 1) for pixel in strip)
+    bar0 = COLLAPSE_BAR_Y * SCALE
+    bar1 = bar0 + COLLAPSE_BAR_H * SCALE
+    bar = strip[bar0:bar1]
+    bar_hits = sum(near(pixel, COLLAPSE_BAR, 8) for pixel in bar)
+    ok = require(
+        paste_hits == 0 and bar_hits >= len(bar) - 2 and near(strip[0], COLLAPSE_RULE, 8),
+        f"toolbar seam paste={paste_hits} bar={bar_hits}/{len(bar)} top={strip[0].tolist()}",
+    )
+    # Inside the collapse bar, a couple of pixels in from the window edge.
+    # The chevron ink starts lower, so this pixel is the bar itself.
+    left = workspace[y0 + (COLLAPSE_BAR_Y + 2) * SCALE, 4]
+    ok &= require(near(left, COLLAPSE_BAR, 8), f"toolbar left {left.tolist()}")
+    # Below the grip, and above 「选择」, the column is still panel fill.
+    body = workspace[y0 + 44 * SCALE, 4]
+    ok &= require(near(body, PANEL_FILL, 14) and not near(body, PASTE, 1), f"toolbar body {body.tolist()}")
     return ok
 
 
