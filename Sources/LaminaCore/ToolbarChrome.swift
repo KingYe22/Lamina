@@ -21,6 +21,43 @@ public enum ToolbarChrome {
     /// Dashed grip is about 11 pt tall. The hit row is the full strip and at least 22 pt.
     public static let gripVisualHeight: Double = 11
     public static let gripHitHeight: Double = 22
+    /// Traced y of the `<<` collapse row. The row is this band, then the grip.
+    public static let tracedCollapseTop: Double = 16
+    public static let tracedCollapseBottom: Double = 32
+    /// Traced center of the dashed grip, just under the collapse row.
+    public static let tracedGripCenterY: Double = 39.5
+    /// Traced top of the 「选择」 tool slots. Icons must sit below the grip hit.
+    public static let tracedSelectionMinY: Double = 83.40
+    /// Shifts traced toolbar y into the view. Negative, so the collapse row
+    /// sits on the top edge. The old `+toolbarLift` pad left a dead band above `<<`.
+    public static let contentOffsetY: Double = -tracedCollapseTop
+
+    /// `viewY = tracedY + contentOffsetY`.
+    public static func viewY(_ tracedY: Double) -> Double {
+        tracedY + contentOffsetY
+    }
+
+    /// Collapse row in view points. Its top is the toolbar's top edge.
+    public static var collapseRow: DockFrame {
+        DockFrame(
+            x: 0,
+            y: viewY(tracedCollapseTop),
+            width: stripWidth,
+            height: tracedCollapseBottom - tracedCollapseTop
+        )
+    }
+
+    public static var gripCenterY: Double { viewY(tracedGripCenterY) }
+
+    /// Dashed grip marks, centered under the collapse row.
+    public static var gripVisualFrame: DockFrame {
+        DockFrame(
+            x: 0,
+            y: gripCenterY - gripVisualHeight / 2,
+            width: stripWidth,
+            height: gripVisualHeight
+        )
+    }
     /// Press-drag at least this far and the docked toolbar becomes a floating window.
     public static let undockTravel: Double = 12
     public static let tracedContentMinX: Double = 6.40

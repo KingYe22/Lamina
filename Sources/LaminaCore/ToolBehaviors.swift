@@ -93,9 +93,24 @@ public enum ToolBehaviors {
         return best
     }
 
+    /// Screen-point radius of the pen's close hotspot. Illustrator uses about 4–6 pt.
+    public static let penCloseSlop: Double = 6
+
+    /// Document-point radius at `zoom`. One screen point is `1/zoom` document points.
+    public static func penCloseDistance(zoom: Double) -> Double {
+        penCloseSlop / max(zoom, 0.05)
+    }
+
+    /// True when a click or hover on `point` should close the path being drawn.
+    /// Requires at least two anchors. The test uses the pointer itself, not a
+    /// guide snap that can walk the click off the first anchor.
+    public static func hitsPenClose(nodes: [PathNode], point: Vec2, zoom: Double) -> Bool {
+        guard nodes.count >= 2, let first = nodes.first else { return false }
+        return first.anchor.distance(to: point) <= penCloseDistance(zoom: zoom) + 1e-6
+    }
+
     public static func penCursor(nodes: [PathNode], hover: Vec2, zoom: Double, nearAnchor: Bool, nearSegment: Bool, nearForeignEnd: Bool) -> PenCursor {
-        let slop = 8 / max(zoom, 0.05)
-        if let first = nodes.first, nodes.count >= 3, first.anchor.distance(to: hover) <= slop { return .close }
+        if hitsPenClose(nodes: nodes, point: hover, zoom: zoom) { return .close }
         if nearForeignEnd, nodes.count >= 2 { return .join }
         if nodes.isEmpty, nearForeignEnd { return .continuePath }
         if nodes.isEmpty, nearAnchor { return .delete }

@@ -789,6 +789,28 @@ final class UXLockTests: XCTestCase {
         XCTAssertEqual(ToolbarChrome.undockTravel, 12, accuracy: 0.001)
     }
 
+    func testToolbarCollapseRowSitsOnTheTopEdge() {
+        let collapse = ToolbarChrome.collapseRow
+        XCTAssertLessThanOrEqual(collapse.minY, 2, "no dead band above <<")
+        XCTAssertGreaterThanOrEqual(collapse.height, 16)
+        XCTAssertLessThanOrEqual(collapse.height, 20)
+        XCTAssertEqual(ToolbarChrome.contentOffsetY, -ToolbarChrome.tracedCollapseTop, accuracy: 0.001)
+
+        let grip = ToolbarChrome.gripVisualFrame
+        XCTAssertGreaterThanOrEqual(grip.height, 10)
+        XCTAssertLessThanOrEqual(grip.height, 12)
+        XCTAssertGreaterThanOrEqual(grip.minY, collapse.maxY - 0.001)
+
+        let hit = ToolbarChrome.gripHitRect(stripWidth: ToolbarChrome.stripWidth, gripCenterY: ToolbarChrome.gripCenterY)
+        XCTAssertGreaterThanOrEqual(hit.height, 22)
+        XCTAssertEqual(hit.x, 0, accuracy: 0.001)
+        XCTAssertEqual(hit.width, ToolbarChrome.stripWidth, accuracy: 0.001)
+        let selectionTop = ToolbarChrome.viewY(ToolbarChrome.tracedSelectionMinY)
+        XCTAssertGreaterThan(selectionTop, grip.maxY)
+        XCTAssertLessThan(hit.maxY, selectionTop, "tool icons are outside the undock hit")
+        XCTAssertEqual(ToolbarChrome.gripCenterY, 23.5, accuracy: 0.001)
+    }
+
     func testGripStaysDockedUnderTwelveAndUndocksAtTwelve() {
         var drag = ToolbarGripDrag(start: .zero, docked: true)
         XCTAssertFalse(drag.step(pointer: Vec2(11.9, 0)))
@@ -965,6 +987,97 @@ final class UXLockTests: XCTestCase {
         guard case .path(let still) = model.document.item(id: closed.id) else { return XCTFail("仍是路径") }
         XCTAssertTrue(still.path.closed)
         XCTAssertFalse(still.locked)
+    }
+
+    /// A click a few points off the first anchor must close. On main, smart guides
+    /// snap that click onto a nearby guide and the path stays open, while the
+    /// magenta 「锚点」 affordance is already showing.
+    func testPenClosesWhenClickIsNearTheFirstAnchor() {
+        let model = EditorModel()
+        model.tool = .pen
+        XCTAssertTrue(model.smartGuides)
+        model.document.guides.append(Guide(axis: .vertical, position: 109))
+        for point in [Vec2(100, 100), Vec2(160, 100), Vec2(130, 40)] {
+            model.pointerDown(at: point, shift: false, option: false, command: false)
+            model.pointerUp(at: point, shift: false, option: false, command: false)
+        }
+        let near = Vec2(104, 100)
+        model.pointerMove(to: near)
+        XCTAssertEqual(model.penHoverCursor, .close)
+        XCTAssertTrue(model.penAnchorLabel)
+        model.pointerDown(at: near, shift: false, option: false, command: false)
+        model.pointerUp(at: near, shift: false, option: false, command: false)
+
+        XCTAssertTrue(model.penNodes.isEmpty, "close ends the pen session")
+        let items = model.document.flatItems()
+        XCTAssertEqual(items.count, 1)
+        guard case .path(let closed) = items[0] else { return XCTFail("闭合后应是普通路径") }
+        XCTAssertTrue(closed.path.closed)
+        XCTAssertEqual(closed.path.nodes.count, 3)
+        XCTAssertEqual(closed.path.nodes[0].anchor.x, 100, accuracy: 0.01)
+        XCTAssertEqual(closed.path.nodes[0].anchor.y, 100, accuracy: 0.01)
+        XCTAssertFalse(items.contains { if case .compound = $0 { return true }; return false })
+
+        model.pointerMove(to: Vec2(400, 400))
+        XCTAssertEqual(model.penHoverCursor, .pen)
+        XCTAssertTrue(model.penNewPathMark)
+    }
+
+    func testPenClosesATwoAnchorPathInsideSixPoints() {
+        let model = EditorModel()
+        model.smartGuides = false
+        model.tool = .pen
+        model.pointerDown(at: .zero, shift: false, option: false, command: false)
+        model.pointerUp(at: .zero, shift: false, option: false, command: false)
+        model.pointerDown(at: Vec2(40, 0), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(40, 0), shift: false, option: false, command: false)
+        let near = Vec2(5, 0)
+        XCTAssertEqual(ToolBehaviors.penCloseSlop, 6, accuracy: 0.001)
+        model.pointerMove(to: near)
+        XCTAssertEqual(model.penHoverCursor, .close)
+        XCTAssertTrue(model.penAnchorLabel)
+        model.pointerDown(at: near, shift: false, option: false, command: false)
+        model.pointerUp(at: near, shift: false, option: false, command: false)
+        XCTAssertTrue(model.penNodes.isEmpty)
+        guard case .path(let closed) = model.document.flatItems().last else { return XCTFail("闭合") }
+        XCTAssertTrue(closed.path.closed)
+        XCTAssertEqual(closed.path.nodes.count, 2)
+
+        let outside = EditorModel()
+        outside.smartGuides = false
+        outside.tool = .pen
+        for point in [Vec2.zero, Vec2(40, 0), Vec2(20, 30)] {
+            outside.pointerDown(at: point, shift: false, option: false, command: false)
+            outside.pointerUp(at: point, shift: false, option: false, command: false)
+        }
+        outside.pointerMove(to: Vec2(7, 0))
+        XCTAssertEqual(outside.penHoverCursor, .pen)
+        XCTAssertFalse(outside.penAnchorLabel)
+        outside.pointerDown(at: Vec2(7, 0), shift: false, option: false, command: false)
+        outside.pointerUp(at: Vec2(7, 0), shift: false, option: false, command: false)
+        XCTAssertEqual(outside.penNodes.count, 4)
+        XCTAssertTrue(outside.document.flatItems().isEmpty)
+    }
+
+    func testPenCloseDragPullsTheFirstHandlesThenCloses() {
+        let model = EditorModel()
+        model.smartGuides = false
+        model.tool = .pen
+        for point in [Vec2.zero, Vec2(40, 0), Vec2(20, 30)] {
+            model.pointerDown(at: point, shift: false, option: false, command: false)
+            model.pointerUp(at: point, shift: false, option: false, command: false)
+        }
+        model.pointerDown(at: Vec2(1, 0), shift: false, option: false, command: false)
+        model.pointerDrag(to: Vec2(24, 0), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(24, 0), shift: false, option: false, command: false)
+        XCTAssertTrue(model.penNodes.isEmpty)
+        guard case .path(let closed) = model.document.flatItems().last else { return XCTFail("闭合") }
+        XCTAssertTrue(closed.path.closed)
+        XCTAssertEqual(closed.path.nodes.count, 3)
+        guard let handle = closed.path.nodes[0].outHandle else { return XCTFail("首点手柄") }
+        XCTAssertEqual(handle.x, 24, accuracy: 0.01)
+        XCTAssertEqual(handle.y, 0, accuracy: 0.01)
+        XCTAssertFalse(model.document.flatItems().contains { if case .compound = $0 { return true }; return false })
     }
 
     private func polylineLength(_ nodes: [PathNode]) -> Double {

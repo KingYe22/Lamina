@@ -83,15 +83,15 @@ final class IllustratorToolbar: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    /// The dashed grip under the collapse mark undocks the toolbar. The rest of the
-    /// empty band above the tools still drags the window. Tool buttons keep the click.
+    /// The dashed grip under the collapse mark undocks the toolbar. Clicks in the
+    /// collapse row still drag the window. Tool buttons keep the click.
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if gripHitRect().contains(point) {
             trackGrip(event)
             return
         }
-        if point.y < WorkspaceMetrics.chromeInset + WorkspaceMetrics.toolbarLift {
+        if point.y < CGFloat(ToolbarChrome.viewY(ToolbarChrome.tracedSelectionMinY)) {
             window?.performDrag(with: event)
         }
     }
@@ -100,7 +100,7 @@ final class IllustratorToolbar: NSView {
         let strip = bounds.width > 1 ? Double(bounds.width) : ToolbarChrome.stripWidth
         let box = ToolbarChrome.gripHitRect(
             stripWidth: strip,
-            gripCenterY: 39.5 + Double(WorkspaceMetrics.toolbarLift)
+            gripCenterY: ToolbarChrome.gripCenterY
         )
         return NSRect(x: box.x, y: box.y, width: box.width, height: box.height)
     }
@@ -138,7 +138,7 @@ final class IllustratorToolbar: NSView {
 
     override func layout() {
         super.layout()
-        let footerTop: CGFloat = 627 + WorkspaceMetrics.toolbarLift
+        let footerTop: CGFloat = 627 + CGFloat(ToolbarChrome.contentOffsetY)
         footer.frame = NSRect(x: 0, y: min(footerTop, bounds.height), width: bounds.width, height: max(0, bounds.height - footerTop))
         placeSlots()
         // Titles are drawn inside the lift transform, so these stay at the traced y.
@@ -187,7 +187,7 @@ final class IllustratorToolbar: NSView {
         let mapped = rect.width * scale
         var slot = NSRect(
             x: CGFloat(ToolbarChrome.placedX(Double(rect.minX), stripWidth: stripWidth)),
-            y: rect.minY + WorkspaceMetrics.toolbarLift,
+            y: rect.minY + CGFloat(ToolbarChrome.contentOffsetY),
             width: mapped,
             height: rect.height
         )
@@ -204,7 +204,7 @@ final class IllustratorToolbar: NSView {
         Theme.panel.setFill()
         bounds.fill()
         NSGraphicsContext.saveGraphicsState()
-        NSAffineTransform(transform: AffineTransform(translationByX: 0, byY: WorkspaceMetrics.toolbarLift)).concat()
+        NSAffineTransform(transform: AffineTransform(translationByX: 0, byY: CGFloat(ToolbarChrome.contentOffsetY))).concat()
         drawHeader()
         Theme.color(0x2D8CEB).setFill()
         NSBezierPath(ovalIn: NSRect(x: placed(4.5), y: 252.5, width: 9, height: 9)).fill()

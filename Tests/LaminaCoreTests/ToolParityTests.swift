@@ -119,9 +119,11 @@ final class ToolParityTests: XCTestCase {
         model.tool = .pen
         model.pointerDown(at: Vec2(0, 0), shift: false, option: false, command: false)
         XCTAssertEqual(model.penCursor, .continuePath)
-        model.pointerDown(at: Vec2(0, 0), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(0, 0), shift: false, option: false, command: false)
         model.pointerDown(at: Vec2(10, 40), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(10, 40), shift: false, option: false, command: false)
         model.pointerDown(at: Vec2(0, 0), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(0, 0), shift: false, option: false, command: false)
         XCTAssertEqual(model.penNodes.count, 0)
         guard case .path(let closed) = model.document.flatItems().last else { return XCTFail("闭合") }
         XCTAssertTrue(closed.path.closed)
