@@ -62,7 +62,10 @@ public enum IllustratorDock {
     }
 
     public static func rightChrome(column: DockFrame) -> (bar: DockFrame, tint: DockFrame) {
-        let barX = column.minX - rightInner - barThickness
+        // The bar sits flush on the column edge. The capture's pixel span ended
+        // about 2 pt short of that edge; the retest measured the same gap. The
+        // pointer zone is unchanged: −410 is inside, −383 is outside.
+        let barX = column.minX - barThickness
         let bar = DockFrame(x: barX, y: column.minY, width: barThickness, height: column.height)
         let tint = DockFrame(
             x: column.minX - rightOuter,
@@ -71,6 +74,16 @@ public enum IllustratorDock {
             height: column.height
         )
         return (bar, tint)
+    }
+
+    /// Device-RGB components of `barHex`, so a screen capture stores #2C62CB
+    /// instead of the sRGB-tagged conversion of the same hex.
+    public static func barDeviceComponents() -> (r: Double, g: Double, b: Double) {
+        (
+            Double((barHex >> 16) & 0xFF) / 255,
+            Double((barHex >> 8) & 0xFF) / 255,
+            Double(barHex & 0xFF) / 255
+        )
     }
 
     public static func edgeBar(x: Double, span: DockFrame) -> DockFrame {
@@ -206,7 +219,12 @@ public struct PanelDragPath: Equatable, Sendable {
 
     public mutating func step(pointer: Vec2, scene: DockWorkspace, up: Bool) -> DockPlacement {
         let travel = pointer.distance(to: startPointer)
-        let following = !wasDocked || travel > IllustratorDock.undockStationary + 1e-9
+        // Tab and group drags use the same stationary sample as a column undock:
+        // 7.3 pt does not move the panel, and 10.4 pt (the retest's follow sample,
+        // already past 7.3) does. The toolbar keeps its own grip threshold.
+        let following = draggingToolbar
+            ? (!wasDocked || travel > IllustratorDock.undockStationary + 1e-9)
+            : (travel > IllustratorDock.undockStationary + 1e-9)
         var frame = origin
         if following {
             frame.x = origin.x + (pointer.x - startPointer.x)
@@ -416,6 +434,135 @@ public enum PanelCollapse {
 public enum FloatingPlacement {
     public static func resetsFrames(alreadyPlaced: Bool) -> Bool {
         !alreadyPlaced
+    }
+}
+
+/// Properties-panel crop, locked to the design window.
+///
+/// Subtracting the live dock origin slides the 属性 UI out of the column as soon
+/// as the window is not 1033 pt wide. The strip is the same gray as the canvas,
+/// so the column looks gone. Width and height changing together is when that
+/// was reported; the origin must not depend on the live frame either way.
+public enum PropertiesChrome {
+    public static let designWindowWidth = 1033.0
+    public static let designDockWidth = 312.0
+    public static let designToolWidth = 81.0
+    public static let designChromeInset = 89.0
+    public static let designDockLift = 36.0
+
+    public static var originX: Double { designWindowWidth - designDockWidth - designToolWidth }
+    public static var originY: Double { designChromeInset - designDockLift }
+
+    public static func localX(cropX: Double) -> Double { cropX - originX }
+    public static func localY(cropY: Double) -> Double { cropY - originY }
+}
+
+/// A group's frame after one tab leaves. The body is the measured panel, not the
+/// width of the remaining tab labels. Drawing is clipped to that frame.
+public enum PanelContentFit {
+    public static let alignWidth = 313.0
+    public static let alignHeight = 283.0
+    public static let appearanceWidth = 302.0
+    public static let appearanceHeight = 243.0
+    public static let strokeWidth = 313.0
+    public static let strokeHeight = 442.0
+
+    public static func size(tabs: [String]) -> (width: Double, height: Double) {
+        let names = Set(tabs)
+        if names.contains("描边") || names.contains("透明度") {
+            return (strokeWidth, strokeHeight)
+        }
+        if names == ["外观"] {
+            return (appearanceWidth, appearanceHeight)
+        }
+        if names.contains("变换") || names.contains("对齐") || names.contains("路径查找器") {
+            return (alignWidth, alignHeight)
+        }
+        return (alignWidth, alignHeight)
+    }
+
+    /// A glyph past the frame paints on the canvas unless the panel clips.
+    public static func staysInside(contentMaxX: Double, frameWidth: Double, clipsToBounds: Bool) -> Bool {
+        if clipsToBounds { return true }
+        return contentMaxX <= frameWidth + 1e-6
+    }
+}
+
+/// Status-bar strings. The hint yields to the trailing cluster so the two never overlap.
+public struct StatusBarItems: Equatable, Sendable {
+    public var hintX: Double
+    public var hintWidth: Double
+    public var trailingX: Double
+    public var trailingWidth: Double
+
+    public init(hintX: Double, hintWidth: Double, trailingX: Double, trailingWidth: Double) {
+        self.hintX = hintX
+        self.hintWidth = hintWidth
+        self.trailingX = trailingX
+        self.trailingWidth = trailingWidth
+    }
+
+    public var overlaps: Bool {
+        guard hintWidth > 0.5, trailingWidth > 0.5 else { return false }
+        return hintX + hintWidth > trailingX + 1e-6
+    }
+}
+
+public enum StatusBarLayout {
+    public static func place(
+        barWidth: Double,
+        hintWidth: Double,
+        trailingWidth: Double,
+        leftInset: Double = 10,
+        rightInset: Double = 12,
+        gap: Double = 8
+    ) -> StatusBarItems {
+        let room = max(0, barWidth - leftInset - rightInset)
+        let trail = min(max(0, trailingWidth), room)
+        let trailingX = barWidth - rightInset - trail
+        let hintRoom = max(0, trailingX - gap - leftInset)
+        let hint = min(max(0, hintWidth), hintRoom)
+        return StatusBarItems(hintX: leftInset, hintWidth: hint, trailingX: trailingX, trailingWidth: trail)
+    }
+}
+
+/// Floating panels keep their screen position when the window resizes.
+/// Coordinates are y-up, in the window. If the new host would clip the panel
+/// under the top chrome, it shifts just enough to stay inside the host.
+public enum FloatingScreen {
+    public static func reposition(
+        panelInWindow: DockBox,
+        oldWindowOrigin: (x: Double, y: Double),
+        newWindowOrigin: (x: Double, y: Double),
+        hostInWindow: DockBox
+    ) -> DockBox {
+        var x = panelInWindow.x + oldWindowOrigin.x - newWindowOrigin.x
+        var y = panelInWindow.y + oldWindowOrigin.y - newWindowOrigin.y
+        let host = hostInWindow
+        if panelInWindow.width <= host.width + 1e-6 {
+            if x < host.x { x = host.x }
+            if x + panelInWindow.width > host.maxX { x = host.maxX - panelInWindow.width }
+        }
+        if panelInWindow.height <= host.height + 1e-6 {
+            if y < host.y { y = host.y }
+            if y + panelInWindow.height > host.maxY { y = host.maxY - panelInWindow.height }
+        }
+        return DockBox(x: x, y: y, width: panelInWindow.width, height: panelInWindow.height)
+    }
+
+    /// Launch centering and the screen clamp are not a user resize. Holding
+    /// starts on the first on-screen frame that fits, and that frame is recorded
+    /// without moving panels. A later window-frame change keeps screen position.
+    public static func holdDecision(
+        alreadySettled: Bool,
+        windowVisible: Bool,
+        frameFitsScreen: Bool,
+        windowFrameChanged: Bool
+    ) -> (settled: Bool, move: Bool) {
+        if !alreadySettled {
+            return (windowVisible && frameFitsScreen, false)
+        }
+        return (true, windowFrameChanged)
     }
 }
 

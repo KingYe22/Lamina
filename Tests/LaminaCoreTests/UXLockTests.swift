@@ -1105,7 +1105,7 @@ final class UXLockTests: XCTestCase {
             guard case .bar(let bar, let tint) = hit.chrome else {
                 return XCTFail("pointer \(x) should light the right bar")
             }
-            XCTAssertEqual(bar.maxX, properties.minX - IllustratorDock.rightInner, accuracy: 0.001)
+            XCTAssertEqual(bar.maxX, properties.minX, accuracy: 0.001)
             XCTAssertEqual(bar.width, IllustratorDock.barThickness, accuracy: 0.001)
             XCTAssertEqual(bar.minY, properties.minY, accuracy: 0.001)
             XCTAssertEqual(bar.height, properties.height, accuracy: 0.001)
@@ -1297,7 +1297,7 @@ final class UXLockTests: XCTestCase {
         guard case .bar(let rightBar, _) = toolbar.step(pointer: Vec2(-400, 420), scene: bare, up: false).chrome else {
             return XCTFail("floating toolbar uses the right zone")
         }
-        XCTAssertEqual(rightBar.maxX, -381 - IllustratorDock.rightInner, accuracy: 0.001)
+        XCTAssertEqual(rightBar.maxX, -381, accuracy: 0.001)
         XCTAssertEqual(toolbar.step(pointer: Vec2(-415, 420), scene: bare, up: false).chrome, .none)
         XCTAssertEqual(toolbar.step(pointer: Vec2(-383, 420), scene: bare, up: false).chrome, .none)
         let parked = IllustratorDock.toolbarColumn(scene: bare, side: .right, width: 91)
@@ -1631,6 +1631,199 @@ final class UXLockTests: XCTestCase {
                 XCTAssertFalse(entry.value.overlaps(other.value), "\(entry.key) overlaps \(other.key)", file: file, line: line)
             }
         }
+    }
+
+    func testTabAndGroupPickupMatchesColumnUndock() {
+        let scene = illustratorScene(toolbar: true)
+        let origin = DockFrame(x: -900, y: 200, width: 313, height: 283)
+        for wasDocked in [true, false] {
+            var drag = PanelDragPath(
+                wasDocked: wasDocked,
+                origin: origin,
+                startPointer: Vec2(-700, 220),
+                floatingWidth: origin.width,
+                floatingHeight: origin.height
+            )
+            let still = drag.step(pointer: Vec2(-700 - 7, 220), scene: scene, up: false)
+            XCTAssertFalse(still.following, "wasDocked \(wasDocked) at 7 pt")
+            XCTAssertEqual(still.frame, origin)
+            XCTAssertEqual(still.target, .stay)
+            let gone = drag.step(pointer: Vec2(-700 - 10.4, 220), scene: scene, up: false)
+            XCTAssertTrue(gone.following, "wasDocked \(wasDocked) at 10.4 pt")
+            XCTAssertEqual(gone.frame.x, origin.x - 10.4, accuracy: 0.001)
+        }
+    }
+
+    func testRemainingGroupKeepsContentWidthAndClips() {
+        let fit = PanelContentFit.size(tabs: ["变换", "对齐"])
+        XCTAssertEqual(fit.width, PanelContentFit.alignWidth, accuracy: 0.001)
+        XCTAssertEqual(fit.height, PanelContentFit.alignHeight, accuracy: 0.001)
+        XCTAssertGreaterThan(fit.width, 200)
+        let labelWidth = 148.0
+        XCTAssertFalse(PanelContentFit.staysInside(contentMaxX: fit.width, frameWidth: labelWidth, clipsToBounds: false))
+        XCTAssertTrue(PanelContentFit.staysInside(contentMaxX: fit.width, frameWidth: labelWidth, clipsToBounds: true))
+        XCTAssertTrue(PanelContentFit.staysInside(contentMaxX: fit.width, frameWidth: fit.width, clipsToBounds: true))
+        XCTAssertEqual(PanelContentFit.size(tabs: ["路径查找器"]).width, PanelContentFit.alignWidth, accuracy: 0.001)
+        XCTAssertEqual(PanelContentFit.size(tabs: ["描边", "透明度"]).width, PanelContentFit.strokeWidth, accuracy: 0.001)
+    }
+
+    func testFloatingTabJoinsAGroupTabBarWithAnOutline() {
+        var scene = illustratorScene(toolbar: true)
+        let group = DockGroupBox(
+            id: "align",
+            frame: DockFrame(x: -700, y: 200, width: 313, height: 283),
+            tabHeight: 34,
+            columnID: ""
+        )
+        scene.groups.append(group)
+        var drag = PanelDragPath(
+            wasDocked: false,
+            origin: DockFrame(x: -980, y: 420, width: 180, height: 140),
+            startPointer: Vec2(-900, 480),
+            floatingWidth: 180,
+            floatingHeight: 140
+        )
+        let pointer = Vec2(group.frame.x + 40, group.frame.minY + 16)
+        let held = drag.step(pointer: pointer, scene: scene, up: false)
+        guard case .outline(let outline) = held.chrome else {
+            return XCTFail("tab bar shows the group outline, got \(held.chrome)")
+        }
+        XCTAssertEqual(outline, group.frame)
+        XCTAssertTrue(held.ghost)
+        let dropped = drag.step(pointer: pointer, scene: scene, up: true)
+        guard case .join(let id) = dropped.target else { return XCTFail(String(describing: dropped.target)) }
+        XCTAssertEqual(id, "align")
+    }
+
+    func testBothAxesResizeKeepsTheColumnAndFloatingScreenPosition() {
+        let members = [
+            DockMember(id: "stroke", columnID: "right", order: 0, height: 442),
+        ]
+        let column = DockColumnSpec(id: "right", place: .before, width: 313)
+        for size in [(1400.0, 900.0), (800.0, 900.0), (1400.0, 970.0), (1033.0, 880.0)] {
+            let solved = arrange(window: size, toolbarLeft: true, members: members, columns: [column])
+            XCTAssertEqual(solved.properties.width, 312, accuracy: 0.001, "\(size)")
+            XCTAssertEqual(solved.properties.x, size.0 - 312, accuracy: 0.001, "\(size)")
+            XCTAssertGreaterThan(solved.properties.height, 100, "\(size)")
+            XCTAssertEqual(solved.columns.map(\.id), ["right"], "\(size)")
+            XCTAssertGreaterThan(solved.memberFrames["stroke"]?.height ?? 0, 1, "\(size)")
+        }
+        let panel = DockBox(x: 120, y: 640, width: 302, height: 243)
+        let shrunk = DockBox(x: 81, y: 20, width: 700, height: 620)
+        let pulled = FloatingScreen.reposition(
+            panelInWindow: panel,
+            oldWindowOrigin: (0, 100),
+            newWindowOrigin: (0, 100),
+            hostInWindow: shrunk
+        )
+        XCTAssertLessThanOrEqual(pulled.maxY, shrunk.maxY + 0.001)
+        XCTAssertGreaterThanOrEqual(pulled.y, shrunk.y)
+        XCTAssertEqual(pulled.height, panel.height, accuracy: 0.001)
+        let host = DockBox(x: 81, y: 20, width: 900, height: 860)
+        let slid = FloatingScreen.reposition(
+            panelInWindow: DockBox(x: 200, y: 180, width: 302, height: 243),
+            oldWindowOrigin: (40, 200),
+            newWindowOrigin: (40, 140),
+            hostInWindow: host
+        )
+        XCTAssertEqual(slid.x, 200, accuracy: 0.001)
+        XCTAssertEqual(slid.y, 240, accuracy: 0.001)
+        let local = PropertiesChrome.localX(cropX: 652)
+        XCTAssertGreaterThanOrEqual(local, 0)
+        XCTAssertLessThan(local, PropertiesChrome.designDockWidth)
+        let slidOff = 652.0 - (1400.0 - 312.0 - 81.0)
+        XCTAssertLessThan(slidOff, 0)
+        XCTAssertGreaterThan(abs(local - slidOff), 1)
+        let centering = FloatingScreen.holdDecision(
+            alreadySettled: false, windowVisible: true, frameFitsScreen: false, windowFrameChanged: true
+        )
+        XCTAssertFalse(centering.settled)
+        XCTAssertFalse(centering.move, "centering a too-large window is not a user resize")
+        let fitted = FloatingScreen.holdDecision(
+            alreadySettled: false, windowVisible: true, frameFitsScreen: true, windowFrameChanged: true
+        )
+        XCTAssertTrue(fitted.settled)
+        XCTAssertFalse(fitted.move, "the first frame that fits is recorded without moving panels")
+        let idle = FloatingScreen.holdDecision(
+            alreadySettled: true, windowVisible: true, frameFitsScreen: true, windowFrameChanged: false
+        )
+        XCTAssertFalse(idle.move)
+        let resized = FloatingScreen.holdDecision(
+            alreadySettled: true, windowVisible: true, frameFitsScreen: true, windowFrameChanged: true
+        )
+        XCTAssertTrue(resized.move)
+    }
+
+    func testStatusItemsDoNotOverlapWhenTheCanvasNarrows() {
+        let wide = StatusBarLayout.place(barWidth: 640, hintWidth: 280, trailingWidth: 180)
+        XCTAssertFalse(wide.overlaps)
+        XCTAssertEqual(wide.hintWidth, 280, accuracy: 0.001)
+        XCTAssertEqual(wide.trailingX, 640 - 12 - 180, accuracy: 0.001)
+        let narrow = StatusBarLayout.place(barWidth: 212, hintWidth: 280, trailingWidth: 180)
+        XCTAssertFalse(narrow.overlaps)
+        XCTAssertLessThan(narrow.hintWidth, 280)
+        XCTAssertLessThanOrEqual(narrow.hintX + narrow.hintWidth, narrow.trailingX + 0.001)
+        XCTAssertGreaterThan(narrow.trailingWidth, 1)
+    }
+
+    func testPenEndsOnEscapeToolSwitchAndDeselectAndClearDeletes() {
+        let model = EditorModel()
+        model.smartGuides = false
+        model.tool = .pen
+        for point in [Vec2.zero, Vec2(40, 0)] {
+            model.pointerDown(at: point, shift: false, option: false, command: false)
+            model.pointerUp(at: point, shift: false, option: false, command: false)
+        }
+        XCTAssertEqual(model.penNodes.count, 2)
+        model.endPenFromEscape()
+        XCTAssertTrue(model.penNodes.isEmpty)
+        XCTAssertEqual(model.document.flatItems().count, 1)
+
+        model.perform("取消选择")
+        model.tool = .pen
+        model.pointerDown(at: .zero, shift: false, option: false, command: false)
+        model.pointerUp(at: .zero, shift: false, option: false, command: false)
+        XCTAssertEqual(model.penNodes.count, 1)
+        XCTAssertEqual(model.document.flatItems().count, 1, "an unselected endpoint starts a new path")
+
+        model.pointerDown(at: Vec2(16, 12), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(16, 12), shift: false, option: false, command: false)
+        XCTAssertEqual(model.penNodes.count, 2)
+        model.tool = .selection
+        XCTAssertTrue(model.penNodes.isEmpty)
+        XCTAssertEqual(model.document.flatItems().count, 2)
+
+        model.tool = .pen
+        model.pointerDown(at: Vec2(80, 80), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(80, 80), shift: false, option: false, command: false)
+        model.pointerDown(at: Vec2(100, 80), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(100, 80), shift: false, option: false, command: false)
+        model.perform("取消选择")
+        XCTAssertTrue(model.penNodes.isEmpty)
+        XCTAssertTrue(model.selection.isEmpty)
+
+        model.perform("全选")
+        XCTAssertFalse(model.selection.isEmpty)
+        model.perform("清除")
+        XCTAssertTrue(model.document.flatItems().isEmpty)
+        XCTAssertTrue(model.selection.isEmpty)
+        XCTAssertTrue(model.penNodes.isEmpty)
+    }
+
+    func testDockBarIsFlushAndUsesTheSampledBlue() {
+        let column = DockFrame(x: -381, y: 90, width: 314, height: 747)
+        let chrome = IllustratorDock.rightChrome(column: column)
+        XCTAssertEqual(chrome.bar.maxX, column.minX, accuracy: 0.001)
+        XCTAssertEqual(chrome.bar.width, IllustratorDock.barThickness, accuracy: 0.001)
+        XCTAssertEqual(IllustratorDock.barHex, 0x2C62CB)
+        let parts = IllustratorDock.barDeviceComponents()
+        XCTAssertEqual(parts.r, 44.0 / 255, accuracy: 0.0001)
+        XCTAssertEqual(parts.g, 98.0 / 255, accuracy: 0.0001)
+        XCTAssertEqual(parts.b, 203.0 / 255, accuracy: 0.0001)
+        XCTAssertTrue(IllustratorDock.rightHot(edge: column.minX, pointerX: -410))
+        XCTAssertFalse(IllustratorDock.rightHot(edge: column.minX, pointerX: -413))
+        XCTAssertTrue(IllustratorDock.rightHot(edge: column.minX, pointerX: -384))
+        XCTAssertFalse(IllustratorDock.rightHot(edge: column.minX, pointerX: -383))
     }
 
     private func illustratorScene(toolbar: Bool) -> DockWorkspace {

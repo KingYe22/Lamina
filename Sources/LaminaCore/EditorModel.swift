@@ -33,7 +33,13 @@ public final class EditorModel {
     public var selectedAnchors: Set<UUID> = []
     public var tool: Tool = .selection {
         didSet {
-            if tool != oldValue { refreshPenChrome() }
+            guard tool != oldValue else { return }
+            // Esc, a tool switch, or a deselect ends the open path. A later click
+            // with nothing selected starts a new one instead of continuing it.
+            if oldValue == .pen || oldValue == .curvature {
+                finishPen()
+            }
+            refreshPenChrome()
         }
     }
     public var activeAttrIsFill = true
@@ -689,13 +695,14 @@ public final class EditorModel {
             return
         }
         penAnchorLabel = penNearExistingAnchor(hover)
+        let foreign = openEndpoint(near: hover, excluding: penSource)
         penHoverCursor = ToolBehaviors.penCursor(
             nodes: penNodes,
             hover: hover,
             zoom: zoom,
             nearAnchor: penNearSelectionAnchor(hover),
             nearSegment: penNearSegment(hover),
-            nearForeignEnd: openEndpoint(near: hover, excluding: penSource) != nil
+            nearForeignEnd: foreign.map { selection.contains($0.item) } ?? false
         )
         guard let last = penNodes.last else {
             penDistance = ""
@@ -802,9 +809,11 @@ public final class EditorModel {
         case "退出应用程序":
             status = "退出"
         case "全选", "选择全部对象":
+            absorbOpenPen()
             selection = document.layers.flatMap { $0.items.map(\.id) }
             status = "已选择 \(selection.count) 个对象"
         case "取消选择":
+            finishPen()
             lastSelection = selection
             selection = []
             selectedAnchors = []
@@ -831,6 +840,7 @@ public final class EditorModel {
         case "粘贴到所有画板上":
             pasteOnAllArtboards()
         case "清除":
+            absorbOpenPen()
             deleteSelection(recordUndo: true)
         case "编组选定图稿":
             groupSelection()
@@ -1655,7 +1665,7 @@ public final class EditorModel {
             drag = nil
             return
         }
-        if penNodes.isEmpty, let end = openEndpoint(near: point, excluding: nil) {
+        if penNodes.isEmpty, let end = openEndpoint(near: point, excluding: nil), selection.contains(end.item) {
             beginChange()
             if case .path(let object) = document.item(id: end.item) {
                 penNodes = object.path.nodes
@@ -1711,6 +1721,23 @@ public final class EditorModel {
         penNodes[last].corner = option ? .corner : .smooth
     }
 
+    /// Esc. Commits an open path of two or more points and leaves the pen idle.
+    public func endPenFromEscape() {
+        finishPen()
+    }
+
+    /// Fold an in-progress path into the document without dropping the selection.
+    private func absorbOpenPen() {
+        guard !penNodes.isEmpty else { return }
+        let prior = selection
+        finishPen()
+        var ids = prior
+        for id in selection where document.containsItem(id) && !ids.contains(id) {
+            ids.append(id)
+        }
+        selection = ids.filter { document.containsItem($0) }
+    }
+
     public func finishPen() {
         if penClosing {
             commitPenClose()
@@ -1719,6 +1746,8 @@ public final class EditorModel {
         }
         guard penNodes.count >= 2 else {
             penNodes = []
+            penSource = nil
+            if case .pen = drag { drag = nil }
             refreshPenChrome()
             return
         }
@@ -1726,6 +1755,8 @@ public final class EditorModel {
         let path = PathItem(nodes: penNodes, closed: penClosed, shape: .free)
         insertNew(.path(styled(PathObject(name: "路径", path: path))))
         penNodes = []
+        penSource = nil
+        if case .pen = drag { drag = nil }
         status = "路径"
         refreshPenChrome()
     }

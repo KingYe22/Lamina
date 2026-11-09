@@ -248,18 +248,33 @@ final class IllustratorStatusBar: NSView {
         NSBezierPath(rect: NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)).fill()
         guard let model = workspace?.active.model else { return }
         let hint = Self.hint(for: model.tool) as NSString
-        hint.draw(at: NSPoint(x: 10, y: 4), withAttributes: [
-            .font: Theme.ui(11), .foregroundColor: Theme.dim
-        ])
         let zoom = String(format: "%.2f%%", model.zoom * 100)
         let boards = max(model.document.artboards.count, 1)
         let index = min(model.document.activeArtboard + 1, boards)
         let right = "\(zoom) ▾    0°    ‹ \(index) / \(boards) ›    \(model.tool.title)" as NSString
         let font = Theme.ui(11)
-        let size = right.size(withAttributes: [.font: font])
-        right.draw(at: NSPoint(x: bounds.width - size.width - 12, y: 4), withAttributes: [
-            .font: font, .foregroundColor: Theme.text
-        ])
+        let hintFont = Theme.ui(11)
+        let placed = StatusBarLayout.place(
+            barWidth: Double(bounds.width),
+            hintWidth: Double(hint.size(withAttributes: [.font: hintFont]).width),
+            trailingWidth: Double(right.size(withAttributes: [.font: font]).width)
+        )
+        if placed.hintWidth > 1, let context = NSGraphicsContext.current {
+            context.saveGraphicsState()
+            NSBezierPath(rect: NSRect(x: placed.hintX, y: 0, width: placed.hintWidth, height: bounds.height)).addClip()
+            hint.draw(at: NSPoint(x: placed.hintX, y: 4), withAttributes: [
+                .font: hintFont, .foregroundColor: Theme.dim
+            ])
+            context.restoreGraphicsState()
+        }
+        if placed.trailingWidth > 1, let context = NSGraphicsContext.current {
+            context.saveGraphicsState()
+            NSBezierPath(rect: NSRect(x: placed.trailingX, y: 0, width: placed.trailingWidth, height: bounds.height)).addClip()
+            right.draw(at: NSPoint(x: placed.trailingX, y: 4), withAttributes: [
+                .font: font, .foregroundColor: Theme.text
+            ])
+            context.restoreGraphicsState()
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -470,9 +485,10 @@ final class PropertiesDock: NSView {
 
     /// Map a comparison-crop point (y grows downward from the body top) into this flipped dock.
     private func crop(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
-        let originX = frame.minX - WorkspaceMetrics.toolWidth
-        let originY = WorkspaceMetrics.chromeInset - WorkspaceMetrics.dockLift
-        return NSPoint(x: x - originX, y: y - originY)
+        NSPoint(
+            x: CGFloat(PropertiesChrome.localX(cropX: Double(x))),
+            y: CGFloat(PropertiesChrome.localY(cropY: Double(y)))
+        )
     }
 
     private func cropRect(_ x: CGFloat, _ y: CGFloat, _ width: CGFloat, _ height: CGFloat) -> NSRect {
@@ -568,7 +584,7 @@ final class PropertiesDock: NSView {
         inkText("标尺与网格", x: 652.5, top: 308.5, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
         let rulerOn = [model.showRulers, model.artboardRulers, model.showGrid]
         drawIconRow(rulerRects, on: rulerOn) { _, _ in }
-        let dockOrigin = NSPoint(x: frame.minX - WorkspaceMetrics.toolWidth, y: WorkspaceMetrics.chromeInset - WorkspaceMetrics.dockLift)
+        let dockOrigin = NSPoint(x: CGFloat(PropertiesChrome.originX), y: CGFloat(PropertiesChrome.originY))
         TracedMarks.draw("d0", origin: dockOrigin, color: Theme.color(0xC2C2C2))
         TracedMarks.draw("d1", origin: dockOrigin, color: Theme.color(0xC2C2C2))
         TracedMarks.draw("d2", origin: dockOrigin, color: Theme.color(0xC2C2C2))
@@ -882,7 +898,7 @@ final class PropertiesDock: NSView {
             guard let next = source?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { return }
             let dx = next.locationInWindow.x - start.x
             let dy = next.locationInWindow.y - start.y
-            if hypot(dx, dy) > 3 {
+            if hypot(dx, dy) > CGFloat(IllustratorDock.undockStationary) {
                 releaseAdopted(panel)
                 panel.beginMeasuredDrag(from: event, first: next)
                 return
