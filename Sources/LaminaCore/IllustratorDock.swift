@@ -549,6 +549,21 @@ public enum FloatingScreen {
         }
         return DockBox(x: x, y: y, width: panelInWindow.width, height: panelInWindow.height)
     }
+
+    /// Launch centering and the screen clamp are not a user resize. Holding
+    /// starts on the first on-screen frame that fits, and that frame is recorded
+    /// without moving panels. A later window-frame change keeps screen position.
+    public static func holdDecision(
+        alreadySettled: Bool,
+        windowVisible: Bool,
+        frameFitsScreen: Bool,
+        windowFrameChanged: Bool
+    ) -> (settled: Bool, move: Bool) {
+        if !alreadySettled {
+            return (windowVisible && frameFitsScreen, false)
+        }
+        return (true, windowFrameChanged)
+    }
 }
 
 /// Screen-space pen close. Both points are in the same space (view points).

@@ -124,16 +124,26 @@ final class EditorShell: NSView, ToolbarGripHost {
 
     private var lastWindowFrame: NSRect?
     private var lastHostFrame: NSRect?
+    /// False until the window is on screen at a frame the display can hold.
+    /// `center()` and the screen clamp run before that and must not walk panels.
+    private var floatingHoldSettled = false
 
-    /// A resize keeps each floating panel on the same screen point, then pulls it
-    /// back inside the host so a shorter window cannot slide 外观 under the title bar.
+    /// A user resize keeps each floating panel on the same screen point, then pulls
+    /// it back inside the host so a shorter window cannot slide 外观 under the title bar.
     private func holdFloatingScreens() {
         guard let window else { return }
         let newWindow = window.frame
         let newHost = floaters.frame
-        if let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
-           oldWindow.width > 1, oldWindow.height > 1,
-           oldWindow != newWindow || oldHost != newHost {
+        let changed = lastWindowFrame.map { windowFrameChanged($0, newWindow) } ?? false
+        let decision = FloatingScreen.holdDecision(
+            alreadySettled: floatingHoldSettled,
+            windowVisible: window.isVisible,
+            frameFitsScreen: windowFitsScreen(newWindow),
+            windowFrameChanged: changed
+        )
+        floatingHoldSettled = decision.settled
+        if decision.move, let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
+           oldWindow.width > 1, oldWindow.height > 1 {
             for panel in floaters.dockPanels()
             where panel.dockColumnID == nil && !panel.dragging && !panel.embeddedInDock && panel.superview === floaters {
                 let oldInWindow = DockBox(
@@ -164,6 +174,21 @@ final class EditorShell: NSView, ToolbarGripHost {
         }
         lastWindowFrame = newWindow
         lastHostFrame = newHost
+    }
+
+    /// Half a point ignores floating-point noise in `window.frame`. It is not a dock measurement.
+    private func windowFrameChanged(_ old: NSRect, _ new: NSRect) -> Bool {
+        abs(old.origin.x - new.origin.x) > 0.5
+            || abs(old.origin.y - new.origin.y) > 0.5
+            || abs(old.size.width - new.size.width) > 0.5
+            || abs(old.size.height - new.size.height) > 0.5
+    }
+
+    /// True when the frame sits in the visible screen, including a window flush with the menu bar.
+    private func windowFitsScreen(_ frame: NSRect) -> Bool {
+        guard let screen = window?.screen ?? NSScreen.main else { return false }
+        let visible = screen.visibleFrame.insetBy(dx: -1, dy: -1)
+        return visible.contains(frame)
     }
 
     var toolbarIsDocked: Bool { toolbarDock == .left || toolbarDock == .right }

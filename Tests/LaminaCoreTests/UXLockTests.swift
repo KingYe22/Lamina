@@ -1734,6 +1734,24 @@ final class UXLockTests: XCTestCase {
         let slidOff = 652.0 - (1400.0 - 312.0 - 81.0)
         XCTAssertLessThan(slidOff, 0)
         XCTAssertGreaterThan(abs(local - slidOff), 1)
+        let centering = FloatingScreen.holdDecision(
+            alreadySettled: false, windowVisible: true, frameFitsScreen: false, windowFrameChanged: true
+        )
+        XCTAssertFalse(centering.settled)
+        XCTAssertFalse(centering.move, "centering a too-large window is not a user resize")
+        let fitted = FloatingScreen.holdDecision(
+            alreadySettled: false, windowVisible: true, frameFitsScreen: true, windowFrameChanged: true
+        )
+        XCTAssertTrue(fitted.settled)
+        XCTAssertFalse(fitted.move, "the first frame that fits is recorded without moving panels")
+        let idle = FloatingScreen.holdDecision(
+            alreadySettled: true, windowVisible: true, frameFitsScreen: true, windowFrameChanged: false
+        )
+        XCTAssertFalse(idle.move)
+        let resized = FloatingScreen.holdDecision(
+            alreadySettled: true, windowVisible: true, frameFitsScreen: true, windowFrameChanged: true
+        )
+        XCTAssertTrue(resized.move)
     }
 
     func testStatusItemsDoNotOverlapWhenTheCanvasNarrows() {
