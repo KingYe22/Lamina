@@ -17,14 +17,14 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
           # A published release checks out its tag. Push and pull_request keep github.sha.
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
 
-      # macos-14 defaults to Xcode 15.4 (Swift 5.10). Package.swift requires Swift 6.
+      # macos-15 defaults to Xcode 16.4. Keep 16.2, the toolchain this app was built with.
       - name: Select Xcode 16.2
         run: |
           sudo xcode-select -s /Applications/Xcode_16.2.app
@@ -317,6 +317,8 @@ jobs:
             1. 在 Finder 里右键 Lamina.app，选择「打开」，再点对话框里的「打开」。
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
+
+            0.4.8（build 24）：面板磁吸按 Illustrator 30.5.1 的实测。指针进入右侧停靠列左缘外的热区才亮 #2C62CB 指示，松手在该列左侧新开一列，宽度用面板浮动时的宽度，原列不动。停靠组的上沿、标签条、下沿分别是上插、并入标签、下叠；拖过约 7.3 pt 才脱离停靠。工具栏抓手拖出后，指示画在浮动窗口之上。钢笔在第一个锚点 6 pt 内点击会闭合路径，不再多加一个点。截图用的旧 8 pt / #0072EF 导轨仍只用于校对图。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
 
             0.4.6（build 22）：工具栏虚线抓手拖出 12 pt 后变成浮动工具栏，可再磁吸回左缘或右缘。外观、对齐的标题条和底边抓手拖到左缘或右缘 8 pt 内出现 #0072EF 导轨，松手缝为 0 并入停靠列；右肩停靠保持不变。工具栏图标左右留白各 8 pt，选中井宽 22 pt 并在槽内居中。双击标题栏空白或文档标题会缩放窗口。钢笔闭合仍是普通闭合路径，直接选择可拖锚点，选择工具可拖定界框。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
 

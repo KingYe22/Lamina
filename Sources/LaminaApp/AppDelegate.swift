@@ -242,6 +242,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let dir = URL(fileURLWithPath: directory, isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         window.setContentSize(NSSize(width: WorkspaceMetrics.windowWidth, height: WorkspaceMetrics.windowHeight))
+        if window.frame.width < WorkspaceMetrics.windowWidth - 1 || window.frame.height < WorkspaceMetrics.windowHeight - 1 {
+            let origin = window.frame.origin
+            window.setFrame(
+                NSRect(x: origin.x, y: origin.y, width: WorkspaceMetrics.windowWidth, height: WorkspaceMetrics.windowHeight),
+                display: true
+            )
+        }
+        let shotLine = "shot frame \(window.frame) content \(root.bounds)\n"
+        try? FileHandle.standardError.write(contentsOf: Data(shotLine.utf8))
         root.layoutSubtreeIfNeeded()
         root.showHome()
         window.displayIfNeeded()
