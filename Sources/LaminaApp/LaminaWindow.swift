@@ -45,6 +45,16 @@ final class LaminaWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
+    /// Screenshot capture asks for the 1033×970 design size. The macos-15
+    /// runner's display is about 1024×768, and the default clamp would shrink
+    /// the bitmap that check_p0 measures.
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        if ProcessInfo.processInfo.environment["LAMINA_SHOTS"] != nil {
+            return frameRect
+        }
+        return super.constrainFrameRect(frameRect, to: screen)
+    }
+
     override var isMovableByWindowBackground: Bool {
         get { false }
         set { super.isMovableByWindowBackground = false }

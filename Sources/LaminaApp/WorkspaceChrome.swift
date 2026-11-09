@@ -1624,8 +1624,14 @@ final class NewDocSheet: NSView {
         }
 
         moreSettingsRect = NSRect(x: columnLeft + 12, y: originY(imageY: 1027, height: 14), width: width, height: 14)
-        createButton.frame = NSRect(x: columnLeft + 217, y: originY(imageY: 1164, height: 31), width: 75, height: 31)
-        closeButton.frame = NSRect(x: columnLeft + 128.5, y: originY(imageY: 1163, height: 32), width: 76, height: 32)
+        let createY = originY(imageY: 1164, height: 31)
+        let closeY = originY(imageY: 1163, height: 32)
+        // The reference sheet is 680 pt. A shorter window (the macos-15 runner
+        // clamps to 1024×700) puts these frames below the sheet, so the
+        // shortcut click misses 创建. Lift the pair together when that happens.
+        let lift = max(0, 12 - min(createY, closeY))
+        createButton.frame = NSRect(x: columnLeft + 217, y: createY + lift, width: 75, height: 31)
+        closeButton.frame = NSRect(x: columnLeft + 128.5, y: closeY + lift, width: 76, height: 32)
     }
 
     override func draw(_ dirtyRect: NSRect) {
