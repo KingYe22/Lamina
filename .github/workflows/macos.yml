@@ -127,6 +127,25 @@ jobs:
           echo "app=$DEST/Lamina.app" >> "$GITHUB_OUTPUT"
           du -sh "$DEST/Lamina.app"
 
+      # macos-14's desktop was 1920×1080, which is what let the 1033×970 window
+      # stay fully on screen. macos-15 clamps that window to the visible
+      # display (this run: 1024×700), and the new-document Create button is
+      # then laid out below the sheet so the shortcut click misses it.
+      - name: Match the macOS 14 desktop size
+        run: |
+          set -euo pipefail
+          system_profiler SPDisplaysDataType | grep -E 'Resolution|Display Type|UI Looks like' || true
+          TOOL="/Library/Application Support/VMware Tools/vmware-resolutionSet"
+          if [[ ! -x "$TOOL" ]]; then
+            echo "vmware-resolutionSet is missing"
+            ls -la "/Library/Application Support/VMware Tools" || true
+            find /Library /opt /usr/local -name 'vmware-resolutionSet' -o -name 'resolutionSet' 2>/dev/null || true
+            exit 1
+          fi
+          "$TOOL" 1920 1080
+          sleep 3
+          system_profiler SPDisplaysDataType | grep -E 'Resolution|Display Type|UI Looks like' || true
+
       - name: Smoke test launch window
         run: |
           set -euo pipefail
