@@ -17,14 +17,14 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
         with:
           # A published release checks out its tag. Push and pull_request keep github.sha.
           ref: ${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}
 
-      # macos-14 defaults to Xcode 15.4 (Swift 5.10). Package.swift requires Swift 6.
+      # macos-15 defaults to Xcode 16.4. Keep 16.2, the toolchain this app was built with.
       - name: Select Xcode 16.2
         run: |
           sudo xcode-select -s /Applications/Xcode_16.2.app
