@@ -362,6 +362,36 @@ final class PropertiesDock: NSView {
     private let nudgeField = PanelField(text: "1 pt")
     private let tabs = ["属性", "注释", "图层", "库"]
     private var tab = "属性"
+    private var adopted: [(title: String, panel: FloatPanel)] = []
+    private var adoptedHits: [(title: String, rect: NSRect, panel: FloatPanel)] = []
+
+    func adopt(_ panel: FloatPanel) {
+        let title = panel.tabs.map(\.rawValue).joined(separator: " / ")
+        panel.embeddedInDock = true
+        panel.isHidden = false
+        panel.dockColumnID = nil
+        if panel.superview !== self {
+            panel.removeFromSuperview()
+            addSubview(panel)
+        }
+        if let index = adopted.firstIndex(where: { $0.panel === panel }) {
+            adopted[index].title = title
+        } else {
+            adopted.append((title, panel))
+        }
+        tab = title
+        needsLayout = true
+        needsDisplay = true
+    }
+
+    func releaseAdopted(_ panel: FloatPanel) {
+        adopted.removeAll { $0.panel === panel }
+        panel.embeddedInDock = false
+        panel.isHidden = false
+        if !tabs.contains(tab) { tab = "属性" }
+        needsLayout = true
+        needsDisplay = true
+    }
 
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { true }
@@ -407,6 +437,20 @@ final class PropertiesDock: NSView {
         super.layout()
         placeControls()
         nudgeField.isHidden = tab != "属性"
+        var x: CGFloat = 196
+        adoptedHits = []
+        for item in adopted {
+            let width = min(88, (item.title as NSString).size(withAttributes: [.font: Theme.ui(13)]).width + 10)
+            let rect = NSRect(x: x, y: 4, width: width, height: 28)
+            adoptedHits.append((item.title, rect, item.panel))
+            x += width + 6
+            item.panel.embeddedInDock = true
+            item.panel.isHidden = tab != item.title
+            if item.panel.superview !== self {
+                addSubview(item.panel)
+            }
+            item.panel.frame = NSRect(x: 0, y: 37, width: bounds.width, height: max(0, bounds.height - 37))
+        }
     }
 
     private func applyNudge() {
@@ -492,6 +536,16 @@ final class PropertiesDock: NSView {
             }
         }
         PanelIcons.menu(in: NSRect(x: bounds.width - 22, y: 8, width: 14, height: 12))
+        for hit in adoptedHits {
+            let on = hit.title == tab
+            let color = on ? Theme.color(0xF0F0F0) : Theme.color(0xB0B0B0)
+            (hit.title as NSString).draw(at: NSPoint(x: hit.rect.minX, y: 8), withAttributes: [.font: tabFont, .foregroundColor: color])
+            if on {
+                Theme.color(0xF0F0F0).setFill()
+                NSRect(x: hit.rect.minX, y: 28, width: min(hit.rect.width, (hit.title as NSString).size(withAttributes: [.font: tabFont]).width), height: 2).fill()
+            }
+        }
+        if adopted.contains(where: { $0.title == tab }) { return }
         guard tab == "属性", let model = workspace?.active.model else {
             let note = tab == "图层" ? layerText() : "\(tab) 为空"
             (note as NSString).draw(at: NSPoint(x: 12, y: 48), withAttributes: [
@@ -751,6 +805,10 @@ final class PropertiesDock: NSView {
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         if point.y < 37 {
+            if let hit = adoptedHits.first(where: { $0.rect.contains(point) }) {
+                trackAdopted(hit.panel, title: hit.title, event: event)
+                return
+            }
             if point.x > bounds.width - 28 { return }
             let spots: [CGFloat] = [652, 701, 751.5, 801, 860]
             for index in tabs.indices {
@@ -815,6 +873,27 @@ final class PropertiesDock: NSView {
         }
         workspace.touch()
         needsDisplay = true
+    }
+
+    private func trackAdopted(_ panel: FloatPanel, title: String, event: NSEvent) {
+        let start = event.locationInWindow
+        let source = window
+        while true {
+            guard let next = source?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { return }
+            let dx = next.locationInWindow.x - start.x
+            let dy = next.locationInWindow.y - start.y
+            if hypot(dx, dy) > 3 {
+                releaseAdopted(panel)
+                panel.beginMeasuredDrag(from: event, first: next)
+                return
+            }
+            if next.type == .leftMouseUp {
+                tab = title
+                needsLayout = true
+                needsDisplay = true
+                return
+            }
+        }
     }
 
     override func updateTrackingAreas() {

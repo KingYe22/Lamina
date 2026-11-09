@@ -137,7 +137,8 @@ final class FloatingPanels: NSView {
         placeGenerative()
         guard bounds.width > 400, bounds.height > 200 else { return }
         let size = bounds.size
-        if !placed || size != placedSize {
+        // A window resize must not put floating panels back on the metric grid.
+        if FloatingPlacement.resetsFrames(alreadyPlaced: placed) {
             placed = true
             placedSize = size
             let metrics = [
@@ -145,8 +146,10 @@ final class FloatingPanels: NSView {
                 WorkspaceMetrics.align.rect(in: bounds.height),
                 WorkspaceMetrics.stroke.rect(in: bounds.height)
             ]
-            for (panel, rect) in zip(panels, metrics) where panel.columnSeat == .none && !panel.dragging {
+            for (panel, rect) in zip(panels, metrics) where panel.dockColumnID == nil && panel.superview === self && !panel.dragging {
                 panel.frame = rect
+                panel.preferredSize = rect.size
+                panel.expandedHeight = rect.height
             }
         }
         seatAnchoredPanels()
@@ -276,6 +279,35 @@ final class FloatingPanels: NSView {
         }
     }
 
+    func dockPanels() -> [FloatPanel] { panels }
+
+    func addFloating(_ panel: FloatPanel) {
+        panel.workspace = workspace
+        panel.host = self
+        if !panels.contains(where: { $0 === panel }) {
+            panels.append(panel)
+        }
+        addSubview(panel, positioned: .below, relativeTo: guideOverlay)
+    }
+
+    /// `frameInShell` is in the editor shell's coordinates. Called after layout
+    /// so a removed column has already moved this host.
+    func receiveFloating(_ panel: FloatPanel, frameInShell: NSRect) {
+        panel.workspace = workspace
+        panel.host = self
+        panel.embeddedInDock = false
+        if !panels.contains(where: { $0 === panel }) {
+            panels.append(panel)
+        }
+        if panel.superview !== self {
+            panel.removeFromSuperview()
+            addSubview(panel, positioned: .below, relativeTo: guideOverlay)
+        }
+        if let shell = superview {
+            panel.frame = convert(frameInShell, from: shell)
+        }
+    }
+
     func merge(_ panel: FloatPanel, into target: FloatPanel) {
         guard panel !== target else { return }
         for tab in panel.tabs where !target.tabs.contains(tab) {
@@ -317,8 +349,16 @@ final class FloatPanel: NSView {
     var dragging = false
     /// Mouse-up landed while a dock guide was lit. Layout keeps seating it.
     var columnSeat: DockAnchor = .none
-    /// Width before the panel joined the column, so a later drag can undock.
-    private var undockedWidth: CGFloat?
+    var preferredSize = NSSize.zero
+    var expandedHeight: CGFloat = 0
+    var dockColumnID: String?
+    var dockOrder = 0
+    var dragSlotHeight: CGFloat = 0
+    var embeddedInDock = false
+    var suppressContent = false
+    var onDragEnd: (() -> Void)?
+    var dockGroupID: String { "p\(ObjectIdentifier(self).hashValue)" }
+    var dockTabHeight: CGFloat { titleHeight }
 
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
@@ -366,7 +406,7 @@ final class FloatPanel: NSView {
 
     override func layout() {
         super.layout()
-        let showStroke = !collapsed && active == .stroke
+        let showStroke = !collapsed && !suppressContent && !embeddedInDock && active == .stroke
         weightField.isHidden = !showStroke
         limitField.isHidden = !showStroke
         if showStroke {
@@ -379,6 +419,10 @@ final class FloatPanel: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        if embeddedInDock {
+            drawEmbeddedBody()
+            return
+        }
         Theme.panel.setFill()
         bounds.fill()
         Theme.color(0x424242).setFill()
@@ -411,19 +455,12 @@ final class FloatPanel: NSView {
         }
         if !collapsed {
             PanelIcons.menu(in: NSRect(x: bounds.width - 68, y: 4, width: 14, height: 12))
-            let content = NSRect(x: 8, y: titleHeight + 8, width: bounds.width - 16, height: max(0, bounds.height - titleHeight - 18))
-            let ink = Theme.color(0xD1D1D1)
-            switch active {
-            case .appearance: drawAppearance(content)
-            case .transform: drawTransform(content, ink: ink)
-            case .align: drawAlign(content, ink: ink)
-            case .pathfinder: drawPathfinder(content, ink: enabled ? Theme.text : Theme.color(0x707070))
-            case .stroke: drawStroke(content, ink: ink)
-            case .opacity: drawOpacity(content, ink: ink)
+            if !suppressContent {
+                drawBody(NSRect(x: 8, y: titleHeight + 8, width: bounds.width - 16, height: max(0, bounds.height - titleHeight - 18)))
+                Theme.dim.setFill()
+                let grip = NSRect(x: bounds.midX - 16, y: bounds.height - 8, width: 32, height: 3)
+                NSBezierPath(roundedRect: grip, xRadius: 1, yRadius: 1).fill()
             }
-            Theme.dim.setFill()
-            let grip = NSRect(x: bounds.midX - 16, y: bounds.height - 8, width: 32, height: 3)
-            NSBezierPath(roundedRect: grip, xRadius: 1, yRadius: 1).fill()
         }
         PanelHairline.draw(in: bounds, titleHeight: titleHeight)
         if let activeTab, let context = NSGraphicsContext.current {
@@ -906,24 +943,40 @@ final class FloatPanel: NSView {
         _ = ink
     }
 
+    private func drawBody(_ content: NSRect) {
+        let ink = Theme.color(0xD1D1D1)
+        switch active {
+        case .appearance: drawAppearance(content)
+        case .transform: drawTransform(content, ink: ink)
+        case .align: drawAlign(content, ink: ink)
+        case .pathfinder: drawPathfinder(content, ink: enabled ? Theme.text : Theme.color(0x707070))
+        case .stroke: drawStroke(content, ink: ink)
+        case .opacity: drawOpacity(content, ink: ink)
+        }
+    }
+
+    private func drawEmbeddedBody() {
+        Theme.panel.setFill()
+        bounds.fill()
+        guard !suppressContent else { return }
+        drawBody(NSRect(x: 8, y: 8, width: max(0, bounds.width - 16), height: max(0, bounds.height - 16)))
+    }
+
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if NSRect(x: bounds.width - 24, y: 2, width: 20, height: 20).contains(point) {
-            isHidden = true
+        if !embeddedInDock, NSRect(x: bounds.width - 24, y: 2, width: 20, height: 20).contains(point) {
+            trackControl(event) { [weak self] in self?.closeFromChrome() }
             return
         }
-        if NSRect(x: bounds.width - 48, y: 2, width: 20, height: 20).contains(point) {
-            collapsed.toggle()
-            let height: CGFloat = collapsed ? WorkspaceMetrics.panelTitleHeight : 312
-            frame.size.height = height
-            needsDisplay = true
+        if !embeddedInDock, NSRect(x: bounds.width - 48, y: 2, width: 20, height: 20).contains(point) {
+            trackControl(event) { [weak self] in self?.applyCollapse(!((self?.collapsed) ?? false)) }
             return
         }
-        if NSRect(x: bounds.width - 72, y: 2, width: 22, height: 18).contains(point) {
-            showMenu()
+        if !embeddedInDock, NSRect(x: bounds.width - 72, y: 2, width: 22, height: 18).contains(point) {
+            trackControl(event) { [weak self] in self?.showMenu() }
             return
         }
-        if !collapsed, tabs.count > 1, point.y < titleHeight, point.x < bounds.width - 74, let tab = tab(at: point) {
+        if !collapsed, tabs.count > 1, point.y < titleHeight, let tab = tab(at: point) {
             trackTab(tab, from: event)
             return
         }
@@ -962,13 +1015,54 @@ final class FloatPanel: NSView {
         NSMenu.popUpContextMenu(menu, with: NSApp.currentEvent ?? NSEvent(), for: self)
     }
 
-    @objc private func menuCollapse() {
-        collapsed = true
-        frame.size.height = WorkspaceMetrics.panelTitleHeight
+    @objc private func menuCollapse() { applyCollapse(true) }
+    @objc private func menuClose() { closeFromChrome() }
+
+    private func applyCollapse(_ collapse: Bool) {
+        guard collapse != collapsed else { return }
+        if collapse {
+            expandedHeight = max(frame.size.height, titleHeight + 1)
+            collapsed = true
+            frame.size.height = CGFloat(PanelCollapse.height(collapsed: true, expanded: Double(expandedHeight), title: Double(titleHeight)))
+        } else {
+            collapsed = false
+            let remembered = expandedHeight > titleHeight + 1 ? expandedHeight : preferredSize.height
+            frame.size.height = CGFloat(PanelCollapse.height(
+                collapsed: false,
+                expanded: Double(max(remembered, titleHeight + 1)),
+                title: Double(titleHeight)
+            ))
+        }
         needsLayout = true
         needsDisplay = true
     }
-    @objc private func menuClose() { isHidden = true }
+
+    private func closeFromChrome() {
+        isHidden = true
+        dockColumnID = nil
+        embeddedInDock = false
+        editorShell?.releaseColumnIfEmpty()
+    }
+
+    /// A click on the title buttons still runs the button. Moving past the
+    /// existing 3 pt tab slop starts the same drag the title bar uses.
+    private func trackControl(_ event: NSEvent, act: @escaping () -> Void) {
+        let start = event.locationInWindow
+        let source = window
+        while true {
+            guard let next = source?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { return }
+            let dx = next.locationInWindow.x - start.x
+            let dy = next.locationInWindow.y - start.y
+            if hypot(dx, dy) > 3 {
+                trackDrag(from: event, first: next)
+                return
+            }
+            if next.type == .leftMouseUp {
+                act()
+                return
+            }
+        }
+    }
     @objc private func menuSplit() { host?.split(self); needsDisplay = true }
     @objc private func menuMerge() {
         guard let other = host?.subviews.compactMap({ $0 as? FloatPanel }).first(where: { $0 !== self && !$0.isHidden }) else { return }
@@ -992,8 +1086,69 @@ final class FloatPanel: NSView {
                 }
                 continue
             }
-            trackDrag(from: event, first: next)
+            guard let born = extract(tab) else { return }
+            born.trackDrag(from: event, first: next)
             return
+        }
+    }
+
+    /// Pull one tab out. The source keeps the other tabs and only shrinks.
+    private func extract(_ tab: PanelKind) -> FloatPanel? {
+        guard tabs.count > 1, let host else { return nil }
+        tabs.removeAll { $0 == tab }
+        if active == tab { active = tabs[0] }
+        suppressContent = true
+        needsDisplay = true
+        shrinkToRemainingTabs()
+        let born = FloatPanel(tabs: [tab])
+        born.workspace = workspace
+        let shellFrame = superview?.convert(frame, to: editorShell) ?? frame
+        host.addFloating(born)
+        if let shell = editorShell {
+            born.frame = host.convert(shellFrame, from: shell)
+        } else {
+            born.frame = frame
+        }
+        if let fit = Self.fittedSize(tabs: [tab]) {
+            born.preferredSize = NSSize(
+                width: fit.width > 1 ? fit.width : frame.width,
+                height: fit.height > 1 ? fit.height : frame.height
+            )
+            born.expandedHeight = born.preferredSize.height
+            born.frame.size = born.preferredSize
+        }
+        born.onDragEnd = { [weak self] in
+            self?.suppressContent = false
+            self?.needsDisplay = true
+        }
+        return born
+    }
+
+    private func shrinkToRemainingTabs() {
+        guard let fit = Self.fittedSize(tabs: tabs) else { return }
+        var size = frame.size
+        if fit.width > 1 { size.width = min(size.width, fit.width) }
+        if fit.height > 1 { size.height = min(size.height, fit.height) }
+        frame.size = size
+        preferredSize = size
+        expandedHeight = size.height
+        if let id = dockColumnID {
+            editorShell?.resizeColumn(id, to: size.width)
+        }
+    }
+
+    static func fittedSize(tabs: [PanelKind]) -> NSSize? {
+        switch tabs {
+        case [.appearance]:
+            return NSSize(width: WorkspaceMetrics.appearance.width, height: WorkspaceMetrics.appearance.height)
+        case [.transform, .align, .pathfinder]:
+            return NSSize(width: WorkspaceMetrics.align.width, height: WorkspaceMetrics.align.height)
+        case [.stroke, .opacity]:
+            return NSSize(width: WorkspaceMetrics.stroke.width, height: WorkspaceMetrics.stroke.height)
+        default:
+            let text = tabs.map(\.rawValue).joined(separator: "  ")
+            let width = (text as NSString).size(withAttributes: [.font: Theme.ui(13, weight: .semibold)]).width + 90
+            return NSSize(width: max(140, width), height: 0)
         }
     }
 
@@ -1017,20 +1172,24 @@ final class FloatPanel: NSView {
         trackDrag(from: event, first: nil)
     }
 
-    /// Magnet uses the unsnapped pointer delta. While the blue shoulder guide is
-    /// lit, the panel occupies that column; mouse-up keeps it there instead of
-    /// writing the raw drag origin back.
+    func beginMeasuredDrag(from event: NSEvent, first: NSEvent?) {
+        trackDrag(from: event, first: first)
+    }
+
+    /// Title, tab, and button drags all come through here. The pointer is handed
+    /// to `PanelDragPath`, which is the measured Illustrator zone test.
     private func trackDrag(from event: NSEvent, first: NSEvent?) {
         dragging = true
-        host?.bringToFront(self)
-        let origin = frame.origin
-        let start = event.locationInWindow
-        let floatSize = NSSize(width: undockedWidth ?? frame.width, height: frame.height)
-        let startMaxX = Double(origin.x) + Double(floatSize.width)
-        var gesture = DockGesture(floating: DockFrame(
-            x: Double(origin.x), y: Double(origin.y),
-            width: Double(floatSize.width), height: Double(floatSize.height)
-        ))
+        let source = event.window ?? window
+        guard let shell = editorShell else {
+            dragging = false
+            let ended = onDragEnd
+            onDragEnd = nil
+            ended?()
+            return
+        }
+        shell.lift(self)
+        var path = shell.makeDragPath(for: self, windowPoint: event.locationInWindow)
         var pending = first
         while true {
             let sample: NSEvent?
@@ -1038,75 +1197,19 @@ final class FloatPanel: NSView {
                 sample = queued
                 pending = nil
             } else {
-                sample = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp])
+                sample = source?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp])
             }
             guard let sample else { break }
-            applyDrag(sample, origin: origin, start: start, startMaxX: startMaxX, floatSize: floatSize, gesture: &gesture)
-            if sample.type == .leftMouseUp { break }
+            let up = sample.type == .leftMouseUp
+            shell.dragStep(self, path: &path, windowPoint: sample.locationInWindow, up: up)
+            window?.displayIfNeeded()
+            if up { break }
         }
         dragging = false
-        host?.showGuides([])
-        if columnSeat != .none {
-            host?.seatAnchoredPanels()
-        }
-    }
-
-    private func applyDrag(
-        _ next: NSEvent,
-        origin: NSPoint,
-        start: NSPoint,
-        startMaxX: Double,
-        floatSize: NSSize,
-        gesture: inout DockGesture
-    ) {
-        var proposed = NSPoint(
-            x: origin.x + next.locationInWindow.x - start.x,
-            y: origin.y + next.locationInWindow.y - start.y
-        )
-        guard let host else {
-            frame.origin = proposed
-            return
-        }
-        let limitX = max(0, host.bounds.width - floatSize.width)
-        let limitY = max(0, host.bounds.height - floatSize.height)
-        proposed.x = min(max(proposed.x, 0), limitX)
-        proposed.y = min(max(proposed.y, 0), limitY)
-        let local = host.convert(next.locationInWindow, from: nil)
-        let sample = DockFrame(
-            x: Double(proposed.x), y: Double(proposed.y),
-            width: Double(floatSize.width), height: Double(floatSize.height)
-        )
-        let result = gesture.step(
-            proposed: sample,
-            others: host.dockTargets(excluding: self),
-            host: Self.dockBox(host.bounds),
-            shoulder: host.rightShoulder,
-            pointer: Vec2(Double(local.x), Double(local.y)),
-            dragStartMaxX: startMaxX,
-            occupied: host.anchoredFrames(excluding: self),
-            leftColumn: host.leftColumnFrame(excluding: self),
-            leftOccupied: host.leftFrames(excluding: self),
-            up: next.type == .leftMouseUp
-        )
-        if result.anchor != .none, undockedWidth == nil {
-            undockedWidth = floatSize.width
-        }
-        if next.type == .leftMouseUp, result.anchor == .none {
-            undockedWidth = nil
-        }
-        columnSeat = result.anchor
-        frame = NSRect(x: result.frame.x, y: result.frame.y, width: result.frame.width, height: result.frame.height)
-        if next.type == .leftMouseUp {
-            host.showGuides([])
-        } else {
-            host.showGuides(result.guides)
-        }
-        needsDisplay = true
-        window?.displayIfNeeded()
-    }
-
-    private static func dockBox(_ rect: NSRect) -> DockFrame {
-        DockFrame(x: Double(rect.origin.x), y: Double(rect.origin.y), width: Double(rect.size.width), height: Double(rect.size.height))
+        alphaValue = 1
+        let ended = onDragEnd
+        onDragEnd = nil
+        ended?()
     }
 
     private func dragResize(_ event: NSEvent) {
@@ -1121,6 +1224,9 @@ final class FloatPanel: NSView {
             frame.size.height = nextHeight
             if next.type == .leftMouseUp { break }
         }
+        expandedHeight = frame.size.height
+        preferredSize.height = frame.size.height
+        if preferredSize.width < 1 { preferredSize.width = frame.size.width }
     }
 
     private func handleContent(_ point: NSPoint) {

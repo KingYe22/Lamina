@@ -268,7 +268,7 @@ public final class EditorModel {
 
     // MARK: Pointer
 
-    public func pointerDown(at p: Vec2, shift: Bool, option: Bool, command: Bool, space: Bool = false, stylus: StylusSample = .mouse, clickCount: Int = 1) {
+    public func pointerDown(at p: Vec2, shift: Bool, option: Bool, command: Bool, space: Bool = false, stylus: StylusSample = .mouse, clickCount: Int = 1, closeHit: Bool = false) {
         defer { refreshPenChrome() }
         rawHover = p
         penClosing = false
@@ -326,7 +326,10 @@ public final class EditorModel {
                 return
             }
             // Close uses the pointer, before smart guides can walk it off the first anchor.
-            if !(space || spaceHeld), ToolBehaviors.hitsPenClose(nodes: penNodes, point: rawHover, zoom: zoom) {
+            // `closeHit` is the view's screen-space test (6 pt from the drawn anchor),
+            // including a latch when the close cursor is already showing.
+            let geometric = ToolBehaviors.hitsPenClose(nodes: penNodes, point: rawHover, zoom: zoom)
+            if !(space || spaceHeld), penNodes.count >= 2, closeHit || geometric {
                 hover = penNodes[0].anchor
                 gestureOrigin = rawHover
                 beginPenClose()

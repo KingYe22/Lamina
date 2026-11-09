@@ -333,7 +333,24 @@ final class VectorCanvas: NSView {
         window?.invalidateCursorRects(for: self)
     }
 
+    /// Screen-space close, read before first-responder changes can move the view.
+    /// The close cursor is latched too: a click that still shows 「锚点」 on the
+    /// first anchor closes even if the document point then misses the 6 pt test.
+    private func penScreenClose(_ event: NSEvent) -> Bool {
+        guard let model = workspace?.active.model, model.tool == .pen else { return false }
+        if event.modifierFlags.contains(.command) || model.spaceHeld { return false }
+        guard model.penNodes.count >= 2 else { return false }
+        if model.penHoverCursor == .close { return true }
+        let view = convert(event.locationInWindow, from: nil)
+        let anchor = viewPoint(model.penNodes[0].anchor, model: model)
+        return PenCloseHit.screen(
+            pointer: Vec2(Double(view.x), Double(view.y)),
+            anchor: Vec2(Double(anchor.x), Double(anchor.y))
+        )
+    }
+
     override func mouseDown(with event: NSEvent) {
+        let closeHit = penScreenClose(event)
         PanelField.disarmAll(in: window)
         window?.endEditing(for: nil)
         window?.makeFirstResponder(self)
@@ -341,13 +358,42 @@ final class VectorCanvas: NSView {
         panAtDown = model.pan
         let before = documentPoint(event, pan: model.pan)
         let oldZoom = model.zoom
-        model.pointerDown(at: before, shift: event.modifierFlags.contains(.shift), option: event.modifierFlags.contains(.option), command: event.modifierFlags.contains(.command), space: model.spaceHeld, stylus: stylus(event), clickCount: event.clickCount)
+        model.pointerDown(at: before, shift: event.modifierFlags.contains(.shift), option: event.modifierFlags.contains(.option), command: event.modifierFlags.contains(.command), space: model.spaceHeld, stylus: stylus(event), clickCount: event.clickCount, closeHit: closeHit)
         if model.tool == .zoom, abs(model.zoom - oldZoom) > 0.0001 {
             let loc = convert(event.locationInWindow, from: nil)
             model.pan = Vec2(
                 before.x - Double(loc.x) / model.zoom,
                 before.y - (Double(bounds.height) - Double(loc.y)) / model.zoom
             )
+        }
+        if model.tool == .pen, let source = event.window {
+            trackPen(source: source, model: model)
+            return
+        }
+        needsDisplay = true
+        refreshCursor()
+        workspace?.touch()
+        KeyProbe.bump(workspace)
+    }
+
+    /// Pen commits on mouse-up. Tracking it here keeps a close from being dropped
+    /// when the up event never arrives as `mouseUp`.
+    private func trackPen(source: NSWindow, model: EditorModel) {
+        while true {
+            guard let next = source.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
+            let point = documentPoint(next, pan: model.pan)
+            let shift = next.modifierFlags.contains(.shift)
+            let option = next.modifierFlags.contains(.option)
+            let command = next.modifierFlags.contains(.command)
+            if next.type == .leftMouseUp {
+                model.pointerUp(at: point, shift: shift, option: option, command: command, space: model.spaceHeld, stylus: stylus(next))
+                break
+            }
+            model.pointerDrag(to: point, shift: shift, option: option, command: command, space: model.spaceHeld, stylus: stylus(next))
+            needsDisplay = true
+            displayIfNeeded()
+            refreshCursor()
+            KeyProbe.bump(workspace)
         }
         needsDisplay = true
         refreshCursor()

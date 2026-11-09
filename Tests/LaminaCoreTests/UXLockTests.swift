@@ -1080,6 +1080,302 @@ final class UXLockTests: XCTestCase {
         XCTAssertFalse(model.document.flatItems().contains { if case .compound = $0 { return true }; return false })
     }
 
+    /// The drag path FloatPanel.trackDrag and the toolbar grip both call.
+    /// Numbers are the 2026-11-09 Illustrator capture (y down).
+    func testMeasuredDockFollowsThePointerUntilRelease() {
+        let scene = illustratorScene(toolbar: true)
+        let floating = DockFrame(x: -900, y: 200, width: 487, height: 167)
+        var drag = PanelDragPath(
+            wasDocked: false,
+            origin: floating,
+            startPointer: Vec2(-800, 420),
+            floatingWidth: floating.width,
+            floatingHeight: floating.height
+        )
+        let outside = drag.step(pointer: Vec2(-500, 420), scene: scene, up: false)
+        XCTAssertTrue(outside.following)
+        XCTAssertEqual(outside.chrome, .none)
+        XCTAssertFalse(outside.ghost)
+        XCTAssertEqual(outside.frame.width, 487, accuracy: 0.001)
+        XCTAssertEqual(outside.target, .stay)
+
+        let properties = scene.columns[0].frame
+        for x in [-410.0, -405, -400, -395, -390, -386, -384] {
+            let hit = drag.step(pointer: Vec2(x, 420), scene: scene, up: false)
+            guard case .bar(let bar, let tint) = hit.chrome else {
+                return XCTFail("pointer \(x) should light the right bar")
+            }
+            XCTAssertEqual(bar.maxX, properties.minX - IllustratorDock.rightInner, accuracy: 0.001)
+            XCTAssertEqual(bar.width, IllustratorDock.barThickness, accuracy: 0.001)
+            XCTAssertEqual(bar.minY, properties.minY, accuracy: 0.001)
+            XCTAssertEqual(bar.height, properties.height, accuracy: 0.001)
+            XCTAssertEqual(tint?.minX ?? -9999, properties.minX - IllustratorDock.rightOuter, accuracy: 0.001)
+            XCTAssertTrue(hit.ghost)
+            XCTAssertEqual(hit.frame.x, floating.x + (x - (-800)), accuracy: 0.001)
+            XCTAssertEqual(hit.frame.width, floating.width, accuracy: 0.001)
+            XCTAssertNotEqual(hit.frame.minX, properties.minX, accuracy: 0.001)
+        }
+        for x in [-413.0, -415, -420, -383, -382, -380, -370, -250, -80, -66] {
+            let miss = drag.step(pointer: Vec2(x, 420), scene: scene, up: false)
+            XCTAssertEqual(miss.chrome, .none, "pointer \(x)")
+            XCTAssertFalse(miss.ghost, "pointer \(x)")
+        }
+
+        let before = scene.columns[0].frame
+        let dropped = drag.step(pointer: Vec2(-398, 430), scene: scene, up: true)
+        guard case .newColumn(let beside, let place, let width, let height) = dropped.target else {
+            return XCTFail("release in the hot zone inserts a column, got \(dropped.target)")
+        }
+        XCTAssertEqual(beside, "properties")
+        XCTAssertEqual(place, .before)
+        XCTAssertEqual(width, 487, accuracy: 0.001)
+        XCTAssertEqual(height, 167, accuracy: 0.001)
+        let inserted = IllustratorDock.insertedFrame(scene: scene, target: dropped.target)
+        XCTAssertEqual(inserted?.maxX ?? 0, before.minX, accuracy: 0.001)
+        XCTAssertEqual(inserted?.minY ?? 0, before.minY, accuracy: 0.001)
+        XCTAssertEqual(inserted?.width ?? 0, 487, accuracy: 0.001)
+        XCTAssertEqual(scene.columns[0].frame, before)
+    }
+
+    func testMeasuredGroupZonesUseThePointerAndHysteresis() {
+        let scene = illustratorScene(toolbar: true)
+        var drag = PanelDragPath(
+            wasDocked: false,
+            origin: DockFrame(x: -900, y: 200, width: 487, height: 167),
+            startPointer: Vec2(-800, 420),
+            floatingWidth: 487,
+            floatingHeight: 167
+        )
+        XCTAssertEqual(drag.step(pointer: Vec2(-300, 96), scene: scene, up: false).chrome, .none)
+        for y in [99.0, 102, 105, 111] {
+            guard case .line = drag.step(pointer: Vec2(-300, y), scene: scene, up: false).chrome else {
+                return XCTFail("y \(y) from above is the top line")
+            }
+        }
+        guard case .outline = drag.step(pointer: Vec2(-300, 114), scene: scene, up: false).chrome else {
+            return XCTFail("tab bar is an outline")
+        }
+        guard case .outline = drag.step(pointer: Vec2(-300, 141), scene: scene, up: false).chrome else {
+            return XCTFail("tab bar plus 2 pt")
+        }
+        // Approached from the tab zone, y = 108 stays an outline.
+        guard case .outline = drag.step(pointer: Vec2(-300, 108), scene: scene, up: false).chrome else {
+            return XCTFail("hysteresis from below")
+        }
+        XCTAssertEqual(drag.step(pointer: Vec2(-300, 420), scene: scene, up: false).chrome, .none)
+        XCTAssertEqual(drag.step(pointer: Vec2(-300, 800), scene: scene, up: false).chrome, .none)
+        guard case .line = drag.step(pointer: Vec2(-300, 803), scene: scene, up: false).chrome else {
+            return XCTFail("bottom band")
+        }
+        let below = drag.step(pointer: Vec2(-300, 836), scene: scene, up: true)
+        guard case .stack(_, let above) = below.target else { return XCTFail(String(describing: below.target)) }
+        XCTAssertFalse(above)
+
+        var fromAbove = PanelDragPath(
+            wasDocked: false,
+            origin: DockFrame(x: -900, y: 80, width: 487, height: 167),
+            startPointer: Vec2(-800, 90),
+            floatingWidth: 487,
+            floatingHeight: 167
+        )
+        _ = fromAbove.step(pointer: Vec2(-300, 99), scene: scene, up: false)
+        guard case .line = fromAbove.step(pointer: Vec2(-300, 108), scene: scene, up: false).chrome else {
+            return XCTFail("hysteresis from above")
+        }
+        let joined = fromAbove.step(pointer: Vec2(-300, 120), scene: scene, up: true)
+        guard case .join = joined.target else { return XCTFail(String(describing: joined.target)) }
+    }
+
+    func testMeasuredUndockStaysPutThroughSevenAndFollowsAtFifteen() {
+        let scene = illustratorScene(toolbar: true)
+        let slot = scene.groups[0].frame
+        var drag = PanelDragPath(
+            wasDocked: true,
+            origin: slot,
+            startPointer: Vec2(-600, 122),
+            floatingWidth: 487,
+            floatingHeight: 167,
+            originGroupID: "properties"
+        )
+        for travel in [1.4, 3.6, 7.3] {
+            let step = drag.step(pointer: Vec2(-600 - travel, 122), scene: scene, up: false)
+            XCTAssertFalse(step.following, "travel \(travel)")
+            XCTAssertEqual(step.frame, slot)
+            XCTAssertEqual(step.chrome, .none)
+            XCTAssertFalse(step.ghost)
+            XCTAssertEqual(step.target, .stay)
+        }
+        let away = drag.step(pointer: Vec2(-600 - 15.5, 122), scene: scene, up: false)
+        XCTAssertTrue(away.following)
+        XCTAssertFalse(away.ghost, "no indicator, so the panel stays opaque")
+        XCTAssertEqual(away.frame.x, slot.x - 15.5, accuracy: 0.001)
+        XCTAssertEqual(away.frame.width, 487, accuracy: 0.001)
+
+        var back = PanelDragPath(
+            wasDocked: true,
+            origin: slot,
+            startPointer: Vec2(-600, 122),
+            floatingWidth: 487,
+            floatingHeight: 167,
+            originGroupID: "properties"
+        )
+        let overSlot = back.step(pointer: Vec2(-300, 200), scene: sceneWithVacatedSlot(), up: false)
+        XCTAssertTrue(overSlot.ghost)
+        guard case .outline = overSlot.chrome else { return XCTFail("re-drop outline") }
+        let restored = back.step(pointer: Vec2(-300, 200), scene: sceneWithVacatedSlot(), up: true)
+        guard case .restore = restored.target else { return XCTFail(String(describing: restored.target)) }
+
+        let floated = drag.step(pointer: Vec2(-1000, 450), scene: scene, up: true)
+        XCTAssertEqual(floated.target, .float)
+    }
+
+    func testMeasuredLeftZonesAndToolbarRedock() {
+        let docked = illustratorScene(toolbar: true)
+        var panel = PanelDragPath(
+            wasDocked: false,
+            origin: DockFrame(x: -1100, y: 300, width: 487, height: 167),
+            startPointer: Vec2(-1100, 450),
+            floatingWidth: 487,
+            floatingHeight: 167
+        )
+        for x in [-1235.0, -1225] {
+            guard case .bar(let bar, let tint) = panel.step(pointer: Vec2(x, 450), scene: docked, up: false).chrome else {
+                return XCTFail("toolbar-right \(x)")
+            }
+            XCTAssertNil(tint)
+            XCTAssertEqual(bar.minX, -1240, accuracy: 0.001)
+            XCTAssertEqual(bar.width, 6, accuracy: 0.001)
+        }
+        XCTAssertEqual(panel.step(pointer: Vec2(-1200, 450), scene: docked, up: false).chrome, .none)
+        var occupied = docked
+        occupied.columns.append(DockColumnBox(
+            id: "left",
+            frame: DockFrame(x: -1331, y: 90, width: 40, height: 747),
+            side: .left
+        ))
+        XCTAssertEqual(panel.step(pointer: Vec2(-1328, 450), scene: occupied, up: false).chrome, .none)
+        XCTAssertEqual(panel.step(pointer: Vec2(-1242, 450), scene: docked, up: false).chrome, .none)
+        XCTAssertEqual(panel.step(pointer: Vec2(-1315, 450), scene: docked, up: false).chrome, .none)
+        XCTAssertEqual(panel.step(pointer: Vec2(-1334, 450), scene: docked, up: false).chrome, .none)
+        for x in [-1328.0, -1322] {
+            guard case .bar(let bar, _) = panel.step(pointer: Vec2(x, 450), scene: docked, up: false).chrome else {
+                return XCTFail("window edge \(x)")
+            }
+            XCTAssertEqual(bar.minX, -1331, accuracy: 0.001)
+            XCTAssertEqual(bar.width, 6, accuracy: 0.001)
+        }
+        let besideToolbar = panel.step(pointer: Vec2(-1225, 450), scene: docked, up: true)
+        let inserted = IllustratorDock.insertedFrame(scene: docked, target: besideToolbar.target)
+        XCTAssertEqual(inserted?.minX ?? 0, -1240, accuracy: 0.001)
+        XCTAssertEqual(inserted?.width ?? 0, 487, accuracy: 0.001)
+
+        let bare = illustratorScene(toolbar: false)
+        var toolbar = PanelDragPath(
+            wasDocked: true,
+            draggingToolbar: true,
+            origin: DockFrame(x: -1200, y: 90, width: 102, height: 874),
+            startPointer: Vec2(-1288, 110),
+            floatingWidth: 102,
+            floatingHeight: 874,
+            toolbarWidth: 91
+        )
+        for x in [-1329.0, -1312] {
+            guard case .bar(let bar, _) = toolbar.step(pointer: Vec2(x, 305), scene: bare, up: false).chrome else {
+                return XCTFail("bare edge \(x)")
+            }
+            XCTAssertEqual(bar.minX, -1331, accuracy: 0.001)
+            XCTAssertEqual(bar.width, 6, accuracy: 0.001)
+        }
+        XCTAssertEqual(toolbar.step(pointer: Vec2(-1300, 305), scene: bare, up: false).chrome, .none)
+        XCTAssertEqual(toolbar.step(pointer: Vec2(-1333, 305), scene: bare, up: false).chrome, .none)
+        let redock = toolbar.step(pointer: Vec2(-1325, 305), scene: bare, up: true)
+        XCTAssertEqual(redock.target, .redockToolbar(.left))
+        let home = IllustratorDock.toolbarColumn(scene: bare, side: .left, width: 91)
+        XCTAssertEqual(home?.minX ?? 0, -1331, accuracy: 0.001)
+        XCTAssertEqual(home?.width ?? 0, 91, accuracy: 0.001)
+
+        guard case .bar(let rightBar, _) = toolbar.step(pointer: Vec2(-400, 420), scene: bare, up: false).chrome else {
+            return XCTFail("floating toolbar uses the right zone")
+        }
+        XCTAssertEqual(rightBar.maxX, -381 - IllustratorDock.rightInner, accuracy: 0.001)
+        XCTAssertEqual(toolbar.step(pointer: Vec2(-415, 420), scene: bare, up: false).chrome, .none)
+        XCTAssertEqual(toolbar.step(pointer: Vec2(-383, 420), scene: bare, up: false).chrome, .none)
+        let parked = IllustratorDock.toolbarColumn(scene: bare, side: .right, width: 91)
+        XCTAssertEqual(parked?.maxX ?? 0, -381, accuracy: 0.001)
+        XCTAssertEqual(bare.columns[0].frame.minX, -381, accuracy: 0.001)
+    }
+
+    func testCollapseRestoresTheExpandedHeightAndResizeDoesNotResetFloaters() {
+        XCTAssertEqual(PanelCollapse.height(collapsed: true, expanded: 243, title: 22), 22, accuracy: 0.001)
+        XCTAssertEqual(PanelCollapse.height(collapsed: false, expanded: 243, title: 22), 243, accuracy: 0.001)
+        XCTAssertNotEqual(PanelCollapse.height(collapsed: false, expanded: 243, title: 22), 312, accuracy: 0.001)
+        XCTAssertFalse(FloatingPlacement.resetsFrames(alreadyPlaced: true))
+        XCTAssertTrue(FloatingPlacement.resetsFrames(alreadyPlaced: false))
+    }
+
+    func testPenCloseHitIsSixScreenPointsAndTheViewFlagWins() {
+        let zoom = 0.5188
+        let anchor = Vec2(100, 80)
+        let pan = Vec2(10, 20)
+        let viewH = 600.0
+        let anchorView = PenCloseHit.viewPoint(document: anchor, viewHeight: viewH, pan: pan, zoom: zoom)
+        let nearView = Vec2(anchorView.x + 5, anchorView.y - 2)
+        XCTAssertTrue(PenCloseHit.screen(pointer: nearView, anchor: anchorView))
+        let nearDoc = PenCloseHit.documentPoint(viewX: nearView.x, viewY: nearView.y, viewHeight: viewH, pan: pan, zoom: zoom)
+        XCTAssertLessThanOrEqual(nearDoc.distance(to: anchor) * zoom, 6.01)
+        let farView = Vec2(anchorView.x + 7, anchorView.y)
+        XCTAssertFalse(PenCloseHit.screen(pointer: farView, anchor: anchorView))
+        let roundTrip = PenCloseHit.viewPoint(
+            document: PenCloseHit.documentPoint(viewX: 180, viewY: 240, viewHeight: viewH, pan: pan, zoom: zoom),
+            viewHeight: viewH, pan: pan, zoom: zoom
+        )
+        XCTAssertEqual(roundTrip.x, 180, accuracy: 0.001)
+        XCTAssertEqual(roundTrip.y, 240, accuracy: 0.001)
+
+        let model = EditorModel()
+        model.smartGuides = true
+        model.zoom = zoom
+        model.tool = .pen
+        model.document.guides.append(Guide(axis: .vertical, position: 400))
+        for point in [anchor, Vec2(220, 80), Vec2(160, 200)] {
+            model.pointerDown(at: point, shift: false, option: false, command: false)
+            model.pointerUp(at: point, shift: false, option: false, command: false)
+        }
+        let missed = Vec2(anchor.x + 40, anchor.y + 40)
+        XCTAssertFalse(ToolBehaviors.hitsPenClose(nodes: model.penNodes, point: missed, zoom: zoom))
+        model.pointerDown(at: missed, shift: false, option: false, command: false, closeHit: true)
+        model.pointerDrag(to: Vec2(anchor.x + 30, anchor.y), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(anchor.x + 30, anchor.y), shift: false, option: false, command: false)
+        XCTAssertTrue(model.penNodes.isEmpty)
+        guard case .path(let closed) = model.document.flatItems().last else { return XCTFail("闭合") }
+        XCTAssertTrue(closed.path.closed)
+        XCTAssertEqual(closed.path.nodes.count, 3)
+        XCTAssertNotNil(closed.path.nodes[0].outHandle)
+    }
+
+    private func illustratorScene(toolbar: Bool) -> DockWorkspace {
+        let host = DockFrame(x: -1331, y: 44, width: 1264, height: 793)
+        let column = DockColumnBox(
+            id: "properties",
+            frame: DockFrame(x: -381, y: 90, width: 314, height: 747),
+            side: .right
+        )
+        let group = DockGroupBox(
+            id: "properties",
+            frame: DockFrame(x: -381, y: 105, width: 314, height: 732),
+            tabHeight: 34,
+            columnID: "properties"
+        )
+        let bar: DockFrame? = toolbar ? DockFrame(x: -1331, y: 90, width: 91, height: 747) : nil
+        return DockWorkspace(host: host, toolbar: bar, columns: [column], groups: [group])
+    }
+
+    private func sceneWithVacatedSlot() -> DockWorkspace {
+        var scene = illustratorScene(toolbar: true)
+        scene.groups[0].vacated = true
+        return scene
+    }
+
     private func polylineLength(_ nodes: [PathNode]) -> Double {
         guard nodes.count >= 2 else { return 0 }
         var length = 0.0
