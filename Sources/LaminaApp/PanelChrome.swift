@@ -108,6 +108,8 @@ final class FloatingPanels: NSView {
         super.init(frame: frameRect)
         wantsLayer = true
         layer?.masksToBounds = true
+        layer?.isOpaque = false
+        layer?.backgroundColor = nil
         clipsToBounds = true
         let appearance = FloatPanel(tabs: [.appearance])
         let grouped = FloatPanel(tabs: [.transform, .align, .pathfinder])
