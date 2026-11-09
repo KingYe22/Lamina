@@ -52,29 +52,31 @@ final class EditorShell: NSView, ToolbarGripHost {
 
     override var mouseDownCanMoveWindow: Bool { false }
 
+    private var layingOut = false
+
     override func layout() {
         super.layout()
-        dropEmptyColumns()
+        guard !layingOut else { return }
+        layingOut = true
+        defer { layingOut = false }
+        let solved = DockLayout.solve(dockInput())
+        let keptIDs = Set(solved.columns.map(\.id))
+        extraColumns.removeAll { !keptIDs.contains($0.id) }
+
         let titleBand = WorkspaceMetrics.titleBand
         let tabHeight = WorkspaceMetrics.documentTabHeight
-        let statusHeight: CGFloat = 20
         let toolWidth = WorkspaceMetrics.toolWidth
         let dockWidth = WorkspaceMetrics.dockWidth
-        let windowEdge = columnWidth(.windowEdge)
-        let afterToolbar = columnWidth(.after)
-        let beforeDock = columnWidth(.before)
-        let toolbarLeft: CGFloat = toolbarDock == .left ? toolWidth : 0
-        let toolbarRight: CGFloat = toolbarDock == .right ? toolWidth : 0
-        // With no extra columns and the toolbar on the left, these match the 0.4.7 frames.
-        let leading = windowEdge + toolbarLeft + afterToolbar
+        let leading = CGFloat(solved.canvas.x)
         let trailingTool: CGFloat = 0
         let top = bounds.height - titleBand
+        let span = CGFloat(max(0, solved.canvas.width))
         tabs.frame = NSRect(x: leading, y: top - tabHeight, width: max(0, bounds.width - leading - trailingTool), height: tabHeight)
-        let rightStack = beforeDock + toolbarRight + dockWidth
-        status.frame = NSRect(x: leading, y: 0, width: max(0, bounds.width - leading - rightStack), height: statusHeight)
-        let bodyY = statusHeight
-        let bodyH = max(0, top - tabHeight - statusHeight)
-        let dockX = bounds.width - dockWidth
+        status.frame = NSRect(x: leading, y: CGFloat(solved.status.y), width: span, height: CGFloat(solved.status.height))
+        let bodyY = CGFloat(solved.status.height)
+        let bodyH = max(0, top - tabHeight - bodyY)
+        let dockX = CGFloat(solved.properties.x)
+        let windowEdge = extraColumns.reduce(CGFloat(0)) { $1.place == .windowEdge ? $0 + $1.width : $0 }
         if toolbarDock != .none {
             if toolbar.superview !== self {
                 toolbar.removeFromSuperview()
@@ -84,17 +86,19 @@ final class EditorShell: NSView, ToolbarGripHost {
             // Right redock parks the toolbar on the properties column's left edge,
             // where the right-column bar is drawn, and leaves the properties column put.
             let toolX: CGFloat = toolbarDock == .right ? dockX - toolWidth : windowEdge
-            toolbar.frame = NSRect(x: toolX, y: bodyY, width: toolWidth, height: max(0, top - statusHeight))
+            toolbar.frame = NSRect(x: toolX, y: bodyY, width: toolWidth, height: max(0, top - bodyY))
         }
         let stripX = leading
         let stripW = max(0, bounds.width - leading - trailingTool)
         controlBar.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.controlHeight, width: stripW, height: WorkspaceMetrics.controlHeight)
         let shadowH = WorkspaceMetrics.chromeInset - WorkspaceMetrics.controlHeight
         shadowBand.frame = NSRect(x: stripX, y: bodyY + bodyH - WorkspaceMetrics.chromeInset, width: stripW, height: shadowH)
-        let columnH = max(0, bodyH - WorkspaceMetrics.chromeInset)
-        let lift = WorkspaceMetrics.dockLift
-        dock.frame = NSRect(x: dockX, y: bodyY, width: dockWidth, height: columnH + lift)
-        canvas.frame = NSRect(x: leading, y: bodyY, width: max(0, bounds.width - leading - rightStack), height: columnH)
+        let columnH = CGFloat(solved.columnBodyHeight)
+        // The properties strip always occupies the right edge. 属性 fills it, or the
+        // remainder under panels that are actually seated there — never the panel
+        // currently following the pointer.
+        dock.frame = nsRect(solved.propertiesContent)
+        canvas.frame = NSRect(x: leading, y: bodyY, width: span, height: columnH)
         // Host reaches the window's right client edge. Shoulder is the properties
         // column in floater coordinates, published before the frame change.
         let floaterWidth = max(0, bounds.width - leading - trailingTool)
@@ -113,10 +117,7 @@ final class EditorShell: NSView, ToolbarGripHost {
             let guideX: CGFloat = edgeGuide.frame.midX < bounds.midX ? 0 : max(0, bounds.width - thickness)
             edgeGuide.frame = NSRect(x: guideX, y: 0, width: thickness, height: bounds.height)
         }
-        placeDockedPanels(
-            bodyY: bodyY, columnH: columnH, lift: lift,
-            dockX: dockX, dockWidth: dockWidth, toolWidth: toolWidth, windowEdge: windowEdge
-        )
+        applyDockedFrames(solved, dockX: dockX, toolWidth: toolWidth, bodyY: bodyY)
     }
 
     var toolbarIsDocked: Bool { toolbarDock == .left || toolbarDock == .right }
@@ -262,7 +263,8 @@ final class EditorShell: NSView, ToolbarGripHost {
         if panel.superview !== self {
             panel.removeFromSuperview()
         }
-        addSubview(panel, positioned: .above, relativeTo: toolbar)
+        // The panel under the pointer paints above docked panels and above the floater host.
+        place(panel, floating: DockLayer.layer(columnID: panel.dockColumnID, dragging: true) == .floating)
         panel.frame = frame
     }
 
@@ -298,7 +300,14 @@ final class EditorShell: NSView, ToolbarGripHost {
         var floated: NSRect?
         switch placement.target {
         case .stay, .restore:
-            break
+            let height = DockLayout.heightOnRelease(
+                target: placement.target,
+                slotHeight: Double(panel.dragSlotHeight),
+                carriedHeight: Double(panel.frame.height)
+            )
+            if height > 0 {
+                panel.frame.size.height = CGFloat(height)
+            }
         case .float:
             floated = panel.frame
             panel.preferredSize = panel.frame.size
@@ -364,57 +373,69 @@ final class EditorShell: NSView, ToolbarGripHost {
         return sceneFrame(of: local)
     }
 
-    private func dropEmptyColumns() {
-        let occupied = Set(floaters.dockPanels().compactMap { panel -> String? in
-            guard !panel.isHidden, let id = panel.dockColumnID else { return nil }
-            return id
-        })
-        extraColumns.removeAll { !occupied.contains($0.id) }
+    private func dockInput() -> DockLayoutInput {
+        let panels = floaters.dockPanels()
+        let members = panels.map { panel in
+            DockMember(
+                id: panel.dockGroupID,
+                columnID: panel.dockColumnID,
+                order: panel.dockOrder,
+                height: memberHeight(panel),
+                dragging: panel.dragging,
+                hidden: panel.isHidden,
+                embedded: panel.embeddedInDock
+            )
+        }
+        let columns = extraColumns.map {
+            DockColumnSpec(id: $0.id, place: $0.place, width: Double($0.width))
+        }
+        return DockLayoutInput(
+            windowWidth: Double(bounds.width),
+            windowHeight: Double(bounds.height),
+            titleBand: Double(WorkspaceMetrics.titleBand),
+            documentTabHeight: Double(WorkspaceMetrics.documentTabHeight),
+            statusHeight: 20,
+            chromeInset: Double(WorkspaceMetrics.chromeInset),
+            dockLift: Double(WorkspaceMetrics.dockLift),
+            toolWidth: Double(WorkspaceMetrics.toolWidth),
+            dockWidth: Double(WorkspaceMetrics.dockWidth),
+            toolbarLeft: toolbarDock == .left,
+            toolbarRight: toolbarDock == .right,
+            columns: columns,
+            members: members
+        )
     }
 
-    private func columnWidth(_ place: DockPlace) -> CGFloat {
-        extraColumns.reduce(0) { $1.place == place ? $0 + $1.width : $0 }
+    private func memberHeight(_ panel: FloatPanel) -> Double {
+        let shell = shellFrame(of: panel)
+        let height = shell.height > 0 ? shell.height : panel.frame.height
+        if height > 0 { return Double(height) }
+        return Double(panel.dragSlotHeight)
     }
 
-    private func placeDockedPanels(
-        bodyY: CGFloat, columnH: CGFloat, lift: CGFloat,
-        dockX: CGFloat, dockWidth: CGFloat, toolWidth: CGFloat, windowEdge: CGFloat
-    ) {
-        let height = columnH + lift
+    private func applyDockedFrames(_ solved: DockLayoutResult, dockX: CGFloat, toolWidth: CGFloat, bodyY: CGFloat) {
         var frames: [String: NSRect] = [:]
         var backgrounds: [NSRect] = []
-        var x: CGFloat = 0
-        for column in extraColumns where column.place == .windowEdge {
-            let rect = NSRect(x: x, y: bodyY, width: column.width, height: height)
+        for column in solved.columns {
+            guard let box = solved.columnFrames[column.id] else { continue }
+            let rect = nsRect(box)
             frames[column.id] = rect
             backgrounds.append(rect)
-            seat(column.id, in: rect)
-            x += column.width
         }
-        var afterX = windowEdge + (toolbarDock == .left ? toolWidth : 0)
-        for column in extraColumns where column.place == .after {
-            let rect = NSRect(x: afterX, y: bodyY, width: column.width, height: height)
-            frames[column.id] = rect
-            backgrounds.append(rect)
-            seat(column.id, in: rect)
-            afterX += column.width
-        }
-        var cursor = dockX - (toolbarDock == .right ? toolWidth : 0)
-        for column in extraColumns where column.place == .before {
-            cursor -= column.width
-            let rect = NSRect(x: cursor, y: bodyY, width: column.width, height: height)
-            frames[column.id] = rect
-            backgrounds.append(rect)
-            seat(column.id, in: rect)
-        }
-        let properties = NSRect(x: dockX, y: bodyY, width: dockWidth, height: height)
-        frames["properties"] = properties
+        frames["properties"] = nsRect(solved.properties)
         if toolbarDock == .right {
+            let height = CGFloat(solved.properties.height)
             frames["toolbar"] = NSRect(x: dockX - toolWidth, y: bodyY, width: toolWidth, height: height)
         }
-        let used = seat("properties", in: properties)
-        if used > 0.5 {
-            dock.frame = NSRect(x: dockX, y: bodyY, width: dockWidth, height: max(37, height - used))
+        let panels = Dictionary(uniqueKeysWithValues: floaters.dockPanels().map { ($0.dockGroupID, $0) })
+        for panel in panels.values where panel.dragging && panel.superview === self {
+            place(panel, floating: true)
+        }
+        for (id, box) in solved.memberFrames {
+            guard let panel = panels[id], !panel.dragging else { continue }
+            let floating = DockLayer.layer(columnID: panel.dockColumnID, dragging: panel.dragging) == .floating
+            place(panel, floating: floating)
+            panel.frame = nsRect(box)
         }
         columnFrames = frames
         if columnBackgrounds != backgrounds {
@@ -423,27 +444,20 @@ final class EditorShell: NSView, ToolbarGripHost {
         }
     }
 
-    @discardableResult
-    private func seat(_ id: String, in rect: NSRect) -> CGFloat {
-        let all = floaters.dockPanels().filter { $0.dockColumnID == id && !$0.isHidden && !$0.embeddedInDock }
-        if all.contains(where: { $0.dragging }) {
-            return all.reduce(0) { partial, panel in
-                partial + (panel.dragging ? max(panel.dragSlotHeight, panel.frame.height) : panel.frame.height)
-            }
+    /// Docked panels sit under the floater host. A floating or dragged panel sits above the status bar.
+    private func place(_ panel: FloatPanel, floating: Bool) {
+        if panel.superview !== self {
+            panel.removeFromSuperview()
         }
-        let ordered = all.sorted { $0.dockOrder < $1.dockOrder }
-        var top = rect.maxY
-        for panel in ordered {
-            let shellFrame = panel.superview === self ? panel.frame : (panel.superview?.convert(panel.frame, to: self) ?? panel.frame)
-            if panel.superview !== self {
-                panel.removeFromSuperview()
-                addSubview(panel, positioned: .above, relativeTo: toolbar)
-            }
-            let panelHeight = shellFrame.height > 1 ? shellFrame.height : panel.frame.height
-            top -= panelHeight
-            panel.frame = NSRect(x: rect.minX, y: top, width: rect.width, height: panelHeight)
+        if floating {
+            addSubview(panel, positioned: .above, relativeTo: status)
+        } else {
+            addSubview(panel, positioned: .below, relativeTo: floaters)
         }
-        return rect.maxY - top
+    }
+
+    private func nsRect(_ box: DockBox) -> NSRect {
+        NSRect(x: CGFloat(box.x), y: CGFloat(box.y), width: CGFloat(box.width), height: CGFloat(box.height))
     }
 
     private func makeScene(drag: PanelDragPath) -> DockWorkspace {

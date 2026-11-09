@@ -1353,6 +1353,286 @@ final class UXLockTests: XCTestCase {
         XCTAssertNotNil(closed.path.nodes[0].outHandle)
     }
 
+    func testDraggingOnePanelOutOfARightColumnKeepsTheOthersDocked() {
+        let column = DockColumnSpec(id: "right", place: .before, width: 313)
+        let members = [
+            DockMember(id: "appearance", columnID: "right", order: 0, height: 243),
+            DockMember(id: "pathfinder", columnID: "right", order: 1, height: 180),
+            DockMember(id: "stroke", columnID: "right", order: 2, height: 442),
+        ]
+        let parked = arrange(members: members, columns: [column])
+        XCTAssertEqual(parked.columns.map(\.id), ["right"])
+        XCTAssertEqual(parked.properties.width, 312, accuracy: 0.001)
+        XCTAssertEqual(parked.properties.x, 1470 - 312, accuracy: 0.001)
+        XCTAssertGreaterThan(parked.properties.height, 100)
+        XCTAssertEqual(parked.propertiesContent, parked.properties)
+        assertSpan(parked, windowWidth: 1470, toolbar: 0)
+        assertNoDockOverlap(parked)
+
+        var dragging = members
+        dragging[1].dragging = true
+        let during = arrange(members: dragging, columns: [column])
+        XCTAssertEqual(during.columns.map(\.id), ["right"])
+        XCTAssertEqual(during.columns[0].width, 313, accuracy: 0.001)
+        XCTAssertNil(during.memberFrames["pathfinder"])
+        XCTAssertGreaterThan(during.memberFrames["appearance"]?.height ?? 0, 1)
+        XCTAssertGreaterThan(during.memberFrames["stroke"]?.height ?? 0, 1)
+        XCTAssertEqual(during.memberFrames["appearance"]?.maxY ?? 0, parked.memberFrames["appearance"]?.maxY ?? -1, accuracy: 0.001)
+        // The panel under the pointer leaves the stack. The panel below it moves up.
+        XCTAssertEqual(during.memberFrames["stroke"]?.maxY ?? 0, during.memberFrames["appearance"]?.y ?? -1, accuracy: 0.001)
+        XCTAssertEqual(during.properties, parked.properties)
+        XCTAssertEqual(during.canvas, parked.canvas)
+        XCTAssertEqual(during.status, parked.status)
+        assertSpan(during, windowWidth: 1470, toolbar: 0)
+        assertNoDockOverlap(during)
+
+        let released = arrange(members: members, columns: [column])
+        XCTAssertEqual(released.memberFrames, parked.memberFrames)
+        XCTAssertEqual(released.columns, parked.columns)
+        XCTAssertEqual(released.canvas, parked.canvas)
+        XCTAssertEqual(released.properties, parked.properties)
+    }
+
+    func testDockedFramesDoNotOverlapAndCanvasMatchesTheColumns() {
+        let columns = [
+            DockColumnSpec(id: "align", place: .before, width: 313),
+            DockColumnSpec(id: "appearance", place: .before, width: 302),
+        ]
+        let members = [
+            DockMember(id: "align", columnID: "align", order: 0, height: 283),
+            DockMember(id: "appearance", columnID: "appearance", order: 0, height: 243),
+        ]
+        // 1470 − 302 − 313 − 312 = 543. That is the status edge in the 0.4.8 screenshot
+        // once those two columns are really there, with the toolbar undocked.
+        let laid = arrange(window: (1470, 1904), members: members, columns: columns)
+        assertSpan(laid, windowWidth: 1470, toolbar: 0)
+        XCTAssertEqual(laid.status.maxX, 543, accuracy: 0.001)
+        XCTAssertEqual(laid.canvas.width, 543, accuracy: 0.001)
+        XCTAssertEqual(laid.properties.x, 1470 - 312, accuracy: 0.001)
+        XCTAssertEqual(laid.properties.width, 312, accuracy: 0.001)
+        assertNoDockOverlap(laid)
+        XCTAssertFalse(laid.properties.overlaps(laid.canvas))
+        XCTAssertFalse(laid.properties.overlaps(laid.status))
+
+        let classic = arrange(window: (1033, 970), toolbarLeft: true, members: [], columns: [])
+        assertSpan(classic, windowWidth: 1033, toolbar: 81)
+        XCTAssertEqual(classic.canvas, DockBox(x: 81, y: 20, width: 640, height: 805))
+        XCTAssertEqual(classic.status, DockBox(x: 81, y: 0, width: 640, height: 20))
+        XCTAssertEqual(classic.properties, DockBox(x: 721, y: 20, width: 312, height: 841))
+
+        // A committed new column keeps the measured floating width. It is not invented mid-drag.
+        let dropped = arrange(
+            window: (1092, 970),
+            toolbarLeft: true,
+            members: [DockMember(id: "pathfinder", columnID: "new", order: 0, height: 167)],
+            columns: [DockColumnSpec(id: "new", place: .before, width: 487)]
+        )
+        assertSpan(dropped, windowWidth: 1092, toolbar: 81)
+        XCTAssertEqual(dropped.canvas.width, 212, accuracy: 0.001)
+        XCTAssertEqual(dropped.status.maxX, 293, accuracy: 0.001)
+        XCTAssertEqual(dropped.properties.x, 1092 - 312, accuracy: 0.001)
+        XCTAssertEqual(dropped.properties.width, 312, accuracy: 0.001)
+    }
+
+    func testPathfinderAndStrokeDragOutAndBackRestoresTheLayout() {
+        let column = DockColumnSpec(id: "right", place: .before, width: 313)
+        let members = [
+            DockMember(id: "pathfinder", columnID: "right", order: 0, height: 180),
+            DockMember(id: "stroke", columnID: "right", order: 1, height: 442),
+        ]
+        let parked = arrange(members: members, columns: [column])
+
+        var pathfinderOut = members
+        pathfinderOut[0].dragging = true
+        let pathfinderDragging = arrange(members: pathfinderOut, columns: [column])
+        XCTAssertEqual(pathfinderDragging.columns.map(\.id), ["right"])
+        XCTAssertNil(pathfinderDragging.memberFrames["pathfinder"])
+        XCTAssertGreaterThan(pathfinderDragging.memberFrames["stroke"]?.height ?? 0, 1)
+        XCTAssertEqual(pathfinderDragging.canvas, parked.canvas)
+        XCTAssertEqual(pathfinderDragging.properties, parked.properties)
+        assertNoDockOverlap(pathfinderDragging)
+        let pathfinderBack = arrange(members: members, columns: [column])
+        XCTAssertEqual(pathfinderBack, parked)
+
+        var strokeOut = members
+        strokeOut[1].dragging = true
+        let strokeDragging = arrange(members: strokeOut, columns: [column])
+        XCTAssertEqual(strokeDragging.columns.map(\.id), ["right"])
+        XCTAssertNil(strokeDragging.memberFrames["stroke"])
+        XCTAssertGreaterThan(strokeDragging.memberFrames["pathfinder"]?.height ?? 0, 1)
+        XCTAssertEqual(strokeDragging.memberFrames["pathfinder"], parked.memberFrames["pathfinder"])
+        XCTAssertEqual(strokeDragging.canvas, parked.canvas)
+        let strokeBack = arrange(members: members, columns: [column])
+        XCTAssertEqual(strokeBack, parked)
+
+        // The pointer carries the floating height. Coming back uses the slot height.
+        XCTAssertEqual(
+            DockLayout.heightOnRelease(target: .restore(group: "pathfinder"), slotHeight: 180, carriedHeight: 167),
+            180,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            DockLayout.heightOnRelease(target: .restore(group: "stroke"), slotHeight: 442, carriedHeight: 167),
+            442,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            DockLayout.heightOnRelease(target: .float, slotHeight: 442, carriedHeight: 167),
+            167,
+            accuracy: 0.001
+        )
+    }
+
+    func testWindowResizeKeepsDockedColumnsConsistent() {
+        let column = DockColumnSpec(id: "right", place: .before, width: 313)
+        let members = [
+            DockMember(id: "pathfinder", columnID: "right", order: 0, height: 180),
+            DockMember(id: "stroke", columnID: "right", order: 1, height: 442),
+        ]
+        let before = arrange(window: (1200, 970), toolbarLeft: true, members: members, columns: [column])
+        let after = arrange(window: (1380, 970), toolbarLeft: true, members: members, columns: [column])
+        XCTAssertEqual(after.columns, before.columns)
+        XCTAssertEqual(after.canvas.width, before.canvas.width + 180, accuracy: 0.001)
+        XCTAssertEqual(after.status.width, after.canvas.width, accuracy: 0.001)
+        XCTAssertEqual(after.properties.x, before.properties.x + 180, accuracy: 0.001)
+        XCTAssertEqual(after.properties.width, before.properties.width, accuracy: 0.001)
+        XCTAssertEqual(after.properties.width, 312, accuracy: 0.001)
+        XCTAssertEqual(after.memberFrames["stroke"]?.x ?? 0, (before.memberFrames["stroke"]?.x ?? 0) + 180, accuracy: 0.001)
+        XCTAssertEqual(after.memberFrames["stroke"]?.width ?? 0, before.memberFrames["stroke"]?.width ?? -1, accuracy: 0.001)
+        XCTAssertEqual(after.memberFrames["pathfinder"]?.y ?? 0, before.memberFrames["pathfinder"]?.y ?? -1, accuracy: 0.001)
+        assertSpan(before, windowWidth: 1200, toolbar: 81)
+        assertSpan(after, windowWidth: 1380, toolbar: 81)
+        assertNoDockOverlap(before)
+        assertNoDockOverlap(after)
+        XCTAssertFalse(FloatingPlacement.resetsFrames(alreadyPlaced: true))
+    }
+
+    func testColumnIsRemovedOnlyWhenItIsTrulyEmpty() {
+        let column = DockColumnSpec(id: "right", place: .before, width: 313)
+        let dragging = DockMember(id: "stroke", columnID: "right", order: 0, height: 442, dragging: true)
+        let during = arrange(members: [dragging], columns: [column])
+        XCTAssertEqual(during.columns.map(\.id), ["right"])
+        XCTAssertNil(during.memberFrames["stroke"])
+        XCTAssertEqual(during.propertiesContent, during.properties)
+
+        var embedded = dragging
+        embedded.dragging = false
+        embedded.embedded = true
+        let held = arrange(members: [embedded], columns: [column])
+        XCTAssertEqual(held.columns.map(\.id), ["right"])
+        XCTAssertNil(held.memberFrames["stroke"])
+
+        var gone = dragging
+        gone.dragging = false
+        gone.columnID = nil
+        let removed = arrange(members: [gone], columns: [column])
+        XCTAssertTrue(removed.columns.isEmpty)
+        XCTAssertEqual(removed.canvas.width, during.canvas.width + 313, accuracy: 0.001)
+        XCTAssertEqual(removed.properties, during.properties)
+        assertSpan(removed, windowWidth: 1470, toolbar: 0)
+
+        var hidden = dragging
+        hidden.dragging = false
+        hidden.hidden = true
+        XCTAssertTrue(arrange(members: [hidden], columns: [column]).columns.isEmpty)
+    }
+
+    func testDraggingInsidePropertiesDoesNotCollapseTheColumn() {
+        let parked = arrange(members: [
+            DockMember(id: "pathfinder", columnID: "properties", order: 0, height: 180),
+            DockMember(id: "stroke", columnID: "properties", order: 1, height: 200),
+        ], columns: [])
+        var dragging = [
+            DockMember(id: "pathfinder", columnID: "properties", order: 0, height: 180, dragging: true),
+            DockMember(id: "stroke", columnID: "properties", order: 1, height: 200),
+        ]
+        let during = arrange(members: dragging, columns: [])
+        XCTAssertEqual(during.properties, parked.properties)
+        XCTAssertGreaterThan(during.properties.height, 100)
+        XCTAssertEqual(during.propertiesContent.height, parked.properties.height - 200, accuracy: 0.001)
+        XCTAssertNil(during.memberFrames["pathfinder"])
+        XCTAssertGreaterThan(during.memberFrames["stroke"]?.height ?? 0, 1)
+        XCTAssertEqual(during.canvas, parked.canvas)
+        assertNoDockOverlap(during)
+
+        dragging[0].dragging = false
+        dragging[0].columnID = nil
+        let alone = arrange(members: [dragging[0]], columns: [])
+        XCTAssertEqual(alone.propertiesContent, alone.properties)
+        XCTAssertEqual(alone.properties, parked.properties)
+    }
+
+    func testFloatingLayerStaysAboveDockedPanels() {
+        XCTAssertGreaterThan(
+            DockLayer.layer(columnID: nil, dragging: false),
+            DockLayer.layer(columnID: "right", dragging: false)
+        )
+        XCTAssertGreaterThan(
+            DockLayer.layer(columnID: "right", dragging: true),
+            DockLayer.layer(columnID: "right", dragging: false)
+        )
+        XCTAssertEqual(DockLayer.layer(columnID: "properties", dragging: false), .docked)
+        XCTAssertEqual(DockLayer.layer(columnID: "right", dragging: false), .docked)
+    }
+
+    private func arrange(
+        window: (Double, Double) = (1470, 1904),
+        toolbarLeft: Bool = false,
+        toolbarRight: Bool = false,
+        members: [DockMember],
+        columns: [DockColumnSpec]
+    ) -> DockLayoutResult {
+        DockLayout.solve(DockLayoutInput(
+            windowWidth: window.0,
+            windowHeight: window.1,
+            titleBand: 28,
+            documentTabHeight: 28,
+            statusHeight: 20,
+            chromeInset: 89,
+            dockLift: 36,
+            toolWidth: 81,
+            dockWidth: 312,
+            toolbarLeft: toolbarLeft,
+            toolbarRight: toolbarRight,
+            columns: columns,
+            members: members
+        ))
+    }
+
+    private func assertSpan(
+        _ result: DockLayoutResult,
+        windowWidth: Double,
+        toolbar: Double,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let columns = result.columns.reduce(0) { $0 + $1.width }
+        let span = DockLayout.spanWidth(windowWidth: windowWidth, toolbar: toolbar, columns: columns, dock: 312)
+        XCTAssertEqual(result.canvas.width, span, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(result.status.width, span, accuracy: 0.001, file: file, line: line)
+        XCTAssertEqual(result.status.x, result.canvas.x, accuracy: 0.001, file: file, line: line)
+        XCTAssertGreaterThan(span, 0, file: file, line: line)
+    }
+
+    private func assertNoDockOverlap(
+        _ result: DockLayoutResult,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let frames = result.memberFrames.sorted { $0.key < $1.key }
+        for (index, entry) in frames.enumerated() {
+            XCTAssertFalse(entry.value.overlaps(result.canvas), "\(entry.key) covers the canvas", file: file, line: line)
+            XCTAssertFalse(entry.value.overlaps(result.status), "\(entry.key) covers the status bar", file: file, line: line)
+            XCTAssertFalse(entry.value.overlaps(result.propertiesContent), "\(entry.key) covers 属性", file: file, line: line)
+            if entry.value.maxX <= result.properties.x + 0.05 {
+                XCTAssertFalse(entry.value.overlaps(result.properties), "\(entry.key) covers the properties column", file: file, line: line)
+            }
+            for other in frames.dropFirst(index + 1) {
+                XCTAssertFalse(entry.value.overlaps(other.value), "\(entry.key) overlaps \(other.key)", file: file, line: line)
+            }
+        }
+    }
+
     private func illustratorScene(toolbar: Bool) -> DockWorkspace {
         let host = DockFrame(x: -1331, y: 44, width: 1264, height: 793)
         let column = DockColumnBox(
