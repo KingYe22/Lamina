@@ -35,7 +35,8 @@ final class DockIndicatorCanvas: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        let color = Theme.color(IllustratorDock.barHex)
+        let parts = IllustratorDock.barDeviceComponents()
+        let color = NSColor(deviceRed: CGFloat(parts.r), green: CGFloat(parts.g), blue: CGFloat(parts.b), alpha: 1)
         for piece in pieces {
             switch piece {
             case .fill(let rect, let alpha):
@@ -74,6 +75,7 @@ final class DockIndicatorPanel: NSPanel {
         isReleasedWhenClosed = false
         isMovableByWindowBackground = false
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        colorSpace = NSColorSpace.deviceRGB
         contentView = canvas
         canvas.frame = contentView?.bounds ?? .zero
         canvas.autoresizingMask = [.width, .height]

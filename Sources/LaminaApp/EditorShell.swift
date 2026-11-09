@@ -118,6 +118,52 @@ final class EditorShell: NSView, ToolbarGripHost {
             edgeGuide.frame = NSRect(x: guideX, y: 0, width: thickness, height: bounds.height)
         }
         applyDockedFrames(solved, dockX: dockX, toolWidth: toolWidth, bodyY: bodyY)
+        holdFloatingScreens()
+        dock.needsDisplay = true
+    }
+
+    private var lastWindowFrame: NSRect?
+    private var lastHostFrame: NSRect?
+
+    /// A resize keeps each floating panel on the same screen point, then pulls it
+    /// back inside the host so a shorter window cannot slide 外观 under the title bar.
+    private func holdFloatingScreens() {
+        guard let window else { return }
+        let newWindow = window.frame
+        let newHost = floaters.frame
+        if let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
+           oldWindow.width > 1, oldWindow.height > 1,
+           oldWindow != newWindow || oldHost != newHost {
+            for panel in floaters.dockPanels()
+            where panel.dockColumnID == nil && !panel.dragging && !panel.embeddedInDock && panel.superview === floaters {
+                let oldInWindow = DockBox(
+                    x: Double(oldHost.minX + panel.frame.minX),
+                    y: Double(oldHost.minY + panel.frame.minY),
+                    width: Double(panel.frame.width),
+                    height: Double(panel.frame.height)
+                )
+                let host = DockBox(
+                    x: Double(newHost.minX),
+                    y: Double(newHost.minY),
+                    width: Double(newHost.width),
+                    height: Double(newHost.height)
+                )
+                let placed = FloatingScreen.reposition(
+                    panelInWindow: oldInWindow,
+                    oldWindowOrigin: (Double(oldWindow.minX), Double(oldWindow.minY)),
+                    newWindowOrigin: (Double(newWindow.minX), Double(newWindow.minY)),
+                    hostInWindow: host
+                )
+                panel.frame = NSRect(
+                    x: CGFloat(placed.x - host.x),
+                    y: CGFloat(placed.y - host.y),
+                    width: CGFloat(placed.width),
+                    height: CGFloat(placed.height)
+                )
+            }
+        }
+        lastWindowFrame = newWindow
+        lastHostFrame = newHost
     }
 
     var toolbarIsDocked: Bool { toolbarDock == .left || toolbarDock == .right }
@@ -473,7 +519,8 @@ final class EditorShell: NSView, ToolbarGripHost {
         if toolbarDock == .right, let rect = columnFrames["toolbar"] {
             columns.append(DockColumnBox(id: "toolbar", frame: sceneFrame(of: rect), side: .right))
         }
-        for panel in floaters.dockPanels() where !panel.isHidden && panel.dockColumnID != nil && !panel.embeddedInDock {
+        // Docked and floating groups both accept a tab. The panel under the pointer is omitted.
+        for panel in floaters.dockPanels() where !panel.isHidden && !panel.embeddedInDock {
             if panel.dragging, drag.originGroupID == panel.dockGroupID {
                 groups.append(DockGroupBox(
                     id: panel.dockGroupID,

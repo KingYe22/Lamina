@@ -135,6 +135,8 @@ final class FloatingPanels: NSView {
 
     override func layout() {
         super.layout()
+        layer?.isOpaque = false
+        layer?.backgroundColor = nil
         guideOverlay.frame = bounds
         placeGenerative()
         guard bounds.width > 400, bounds.height > 200 else { return }
@@ -370,6 +372,8 @@ final class FloatPanel: NSView {
         self.active = tabs[0]
         super.init(frame: .zero)
         wantsLayer = true
+        clipsToBounds = true
+        layer?.masksToBounds = true
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 0
         for field in [weightField, limitField] {
@@ -421,6 +425,7 @@ final class FloatPanel: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        NSBezierPath(rect: bounds).addClip()
         if embeddedInDock {
             drawEmbeddedBody()
             return
@@ -1047,7 +1052,7 @@ final class FloatPanel: NSView {
     }
 
     /// A click on the title buttons still runs the button. Moving past the
-    /// existing 3 pt tab slop starts the same drag the title bar uses.
+    /// column-undock stationary distance starts the same drag the title bar uses.
     private func trackControl(_ event: NSEvent, act: @escaping () -> Void) {
         let start = event.locationInWindow
         let source = window
@@ -1055,7 +1060,7 @@ final class FloatPanel: NSView {
             guard let next = source?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { return }
             let dx = next.locationInWindow.x - start.x
             let dy = next.locationInWindow.y - start.y
-            if hypot(dx, dy) > 3 {
+            if hypot(dx, dy) > CGFloat(IllustratorDock.undockStationary) {
                 trackDrag(from: event, first: next)
                 return
             }
@@ -1079,7 +1084,7 @@ final class FloatPanel: NSView {
             guard let next = window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]) else { break }
             let dx = next.locationInWindow.x - start.x
             let dy = next.locationInWindow.y - start.y
-            if hypot(dx, dy) < 3 {
+            if hypot(dx, dy) <= CGFloat(IllustratorDock.undockStationary) {
                 if next.type == .leftMouseUp {
                     active = tab
                     needsLayout = true
@@ -1129,8 +1134,8 @@ final class FloatPanel: NSView {
     private func shrinkToRemainingTabs() {
         guard let fit = Self.fittedSize(tabs: tabs) else { return }
         var size = frame.size
-        if fit.width > 1 { size.width = min(size.width, fit.width) }
-        if fit.height > 1 { size.height = min(size.height, fit.height) }
+        if fit.width > 1 { size.width = fit.width }
+        if fit.height > 1 { size.height = fit.height }
         frame.size = size
         preferredSize = size
         expandedHeight = size.height
@@ -1140,18 +1145,8 @@ final class FloatPanel: NSView {
     }
 
     static func fittedSize(tabs: [PanelKind]) -> NSSize? {
-        switch tabs {
-        case [.appearance]:
-            return NSSize(width: WorkspaceMetrics.appearance.width, height: WorkspaceMetrics.appearance.height)
-        case [.transform, .align, .pathfinder]:
-            return NSSize(width: WorkspaceMetrics.align.width, height: WorkspaceMetrics.align.height)
-        case [.stroke, .opacity]:
-            return NSSize(width: WorkspaceMetrics.stroke.width, height: WorkspaceMetrics.stroke.height)
-        default:
-            let text = tabs.map(\.rawValue).joined(separator: "  ")
-            let width = (text as NSString).size(withAttributes: [.font: Theme.ui(13, weight: .semibold)]).width + 90
-            return NSSize(width: max(140, width), height: 0)
-        }
+        let fit = PanelContentFit.size(tabs: tabs.map(\.rawValue))
+        return NSSize(width: CGFloat(fit.width), height: CGFloat(fit.height))
     }
 
     private func tab(at point: NSPoint) -> PanelKind? {
