@@ -1909,13 +1909,92 @@ final class UXLockTests: XCTestCase {
         XCTAssertNotEqual(IllustratorDock.barHex, 0x3D62C5)
     }
 
-    /// 15.5 pt over the vacated slot follows opaque. 31 pt is the ghost sample.
-    /// 12.4 pt is the retest point that must stay opaque. Follow still starts after 7.3.
+    /// Toolbar-right, window-edge, and the right column bar are one draw list.
+    /// The opaque step is always DockBarDrawing.source. The right bar's first
+    /// step stays its measured tint. A left bar's first step is covered by the bar.
+    func testEveryDockBarSharesOneDrawingSource() throws {
+        let scene = illustratorScene(toolbar: true)
+        var drag = PanelDragPath(
+            wasDocked: false,
+            origin: DockFrame(x: -1100, y: 300, width: 487, height: 167),
+            startPointer: Vec2(-1100, 450),
+            floatingWidth: 487,
+            floatingHeight: 167
+        )
+        guard case .bar(let beside, _) = drag.step(pointer: Vec2(-1235, 450), scene: scene, up: false).chrome else {
+            return XCTFail("toolbar-right bar")
+        }
+        guard case .bar(let edge, _) = drag.step(pointer: Vec2(-1328, 450), scene: scene, up: false).chrome else {
+            return XCTFail("window-edge bar")
+        }
+        guard case .bar(let right, let rightTint) = drag.step(pointer: Vec2(-400, 420), scene: scene, up: false).chrome else {
+            return XCTFail("right bar")
+        }
+        let rightChrome = IllustratorDock.rightChrome(column: scene.columns[0].frame)
+        let chromes: [DockChrome] = [
+            .bar(beside, tint: nil),
+            .bar(edge, tint: nil),
+            .bar(right, tint: rightTint)
+        ]
+        for chrome in chromes {
+            let steps = DockBarDrawing.steps(for: chrome)
+            XCTAssertEqual(steps.count, 2, "\(chrome)")
+            XCTAssertEqual(steps[0].source, DockBarDrawing.sourceName)
+            XCTAssertEqual(steps[1].source, DockBarDrawing.sourceName)
+            XCTAssertEqual(steps[1].alpha, 1, accuracy: 1e-12)
+            XCTAssertEqual(steps[0].alpha, DockBarDrawing.tintAlpha, accuracy: 1e-12)
+            guard case .bar(let bar, _) = chrome else { return }
+            XCTAssertEqual(steps[1].rect, bar)
+            XCTAssertEqual(steps[1].rect.width, IllustratorDock.barThickness, accuracy: 0.001)
+            let opaque = DockBarDrawing.source(alpha: steps[1].alpha)
+            XCTAssertEqual(opaque, DockBarDrawing.source(alpha: 1))
+            XCTAssertEqual(opaque.red, 44.0 / 255, accuracy: 1e-12)
+            XCTAssertEqual(opaque.green, 98.0 / 255, accuracy: 1e-12)
+            XCTAssertEqual(opaque.blue, 203.0 / 255, accuracy: 1e-12)
+        }
+        let rightSteps = DockBarDrawing.steps(for: .bar(rightChrome.bar, tint: rightChrome.tint))
+        XCTAssertEqual(rightSteps[0].rect, rightChrome.tint)
+        XCTAssertEqual(rightSteps[1].rect, rightChrome.bar)
+        for bar in [beside, edge] {
+            let steps = DockBarDrawing.steps(for: .bar(bar, tint: nil))
+            XCTAssertEqual(steps[0].rect, DockBarDrawing.coveredPrimer(for: bar))
+            XCTAssertGreaterThan(steps[0].rect.minX, bar.minX)
+            XCTAssertLessThan(steps[0].rect.maxX, bar.maxX)
+            XCTAssertGreaterThan(steps[0].rect.minY, bar.minY)
+            XCTAssertLessThan(steps[0].rect.maxY, bar.maxY)
+        }
+
+        let app = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/LaminaApp")
+        let files = try FileManager.default.contentsOfDirectory(at: app, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+        var sourceCallers: [String] = []
+        for file in files {
+            let text = try String(contentsOf: file, encoding: .utf8)
+            if text.contains("DockBarDrawing.source") || text.contains("DockBarPaint.device") {
+                sourceCallers.append(file.lastPathComponent)
+            }
+            XCTAssertFalse(text.contains("deviceRed"), file.lastPathComponent)
+            XCTAssertFalse(text.contains("0x3D62C5"), file.lastPathComponent)
+        }
+        XCTAssertEqual(sourceCallers.sorted(), ["DockIndicator.swift"])
+        let shell = try String(contentsOf: app.appendingPathComponent("EditorShell.swift"), encoding: .utf8)
+        XCTAssertTrue(shell.contains("DockBarDrawing.steps"))
+        XCTAssertFalse(shell.contains(".fill(shellRect(from: bar)"))
+        let indicator = try String(contentsOf: app.appendingPathComponent("DockIndicator.swift"), encoding: .utf8)
+        XCTAssertEqual(indicator.components(separatedBy: "DockBarDrawing.source").count, 2)
+    }
+
+    /// 12 and 15.5 pt over the vacated slot follow solid with no outline.
+    /// 31 pt is the ghost and the outline. Follow still starts after 7.3.
     func testColumnUndockStaysOpaqueAtFifteenAndGhostsAtThirtyOne() {
         let scene = sceneWithVacatedSlot()
         let slot = scene.groups[0].frame
         let start = Vec2(slot.x + slot.width / 2, slot.minY + 20)
-        func step(_ travel: Double) -> DockPlacement {
+        func step(_ travel: Double, up: Bool = false) -> DockPlacement {
             var path = PanelDragPath(
                 wasDocked: true,
                 origin: slot,
@@ -1924,21 +2003,27 @@ final class UXLockTests: XCTestCase {
                 floatingHeight: slot.height,
                 originGroupID: "properties"
             )
-            return path.step(pointer: Vec2(start.x - travel, start.y), scene: scene, up: false)
+            return path.step(pointer: Vec2(start.x - travel, start.y), scene: scene, up: up)
         }
-        let early = step(12.4)
+        let early = step(12)
         XCTAssertTrue(early.following)
         XCTAssertFalse(early.ghost)
-        guard case .outline = early.chrome else { return XCTFail("12.4 is still over the slot") }
+        XCTAssertEqual(early.chrome, .none, "12 pt has no old-slot outline")
         let solid = step(15.5)
         XCTAssertTrue(solid.following)
         XCTAssertFalse(solid.ghost)
-        guard case .outline = solid.chrome else { return XCTFail("15.5 follows opaque over the slot") }
+        XCTAssertEqual(solid.chrome, .none, "15.5 pt follows solid with no outline")
         XCTAssertEqual(solid.frame.x, slot.x - 15.5, accuracy: 0.001)
+        let released = step(15.5, up: true)
+        XCTAssertEqual(released.target, .float)
+        XCTAssertEqual(released.chrome, .none)
+        XCTAssertFalse(released.ghost)
         let ghost = step(31)
         XCTAssertTrue(ghost.following)
         XCTAssertTrue(ghost.ghost)
         guard case .outline = ghost.chrome else { return XCTFail("31 ghosts over the slot") }
+        let restored = step(31, up: true)
+        guard case .restore = restored.target else { return XCTFail(String(describing: restored.target)) }
         XCTAssertEqual(IllustratorDock.undockGhost, 31, accuracy: 0.001)
         XCTAssertEqual(IllustratorDock.undockStationary, 7.3, accuracy: 0.001)
     }
@@ -2013,6 +2098,63 @@ final class UXLockTests: XCTestCase {
         ))
         model.endPenFromEscape()
         XCTAssertTrue(model.penNodes.isEmpty)
+
+        XCTAssertTrue(PenEscape.localMonitorConsumes(
+            keyCode: PenEscape.keyCode,
+            toolIsPen: true,
+            hasOpenPath: true,
+            editingText: false,
+            panelField: false,
+            dialog: false
+        ))
+        XCTAssertFalse(PenEscape.localMonitorConsumes(
+            keyCode: PenEscape.keyCode,
+            toolIsPen: false,
+            hasOpenPath: true,
+            editingText: false,
+            panelField: false,
+            dialog: false
+        ))
+        XCTAssertFalse(PenEscape.localMonitorConsumes(
+            keyCode: PenEscape.keyCode,
+            toolIsPen: true,
+            hasOpenPath: false,
+            editingText: false,
+            panelField: false,
+            dialog: false
+        ))
+        XCTAssertFalse(PenEscape.localMonitorConsumes(
+            keyCode: 0,
+            toolIsPen: true,
+            hasOpenPath: true,
+            editingText: false,
+            panelField: false,
+            dialog: false
+        ))
+        XCTAssertFalse(PenEscape.localMonitorConsumes(
+            keyCode: PenEscape.keyCode,
+            toolIsPen: true,
+            hasOpenPath: true,
+            editingText: true,
+            panelField: false,
+            dialog: false
+        ))
+        XCTAssertFalse(PenEscape.localMonitorConsumes(
+            keyCode: PenEscape.keyCode,
+            toolIsPen: true,
+            hasOpenPath: true,
+            editingText: false,
+            panelField: true,
+            dialog: false
+        ))
+        XCTAssertFalse(PenEscape.localMonitorConsumes(
+            keyCode: PenEscape.keyCode,
+            toolIsPen: true,
+            hasOpenPath: true,
+            editingText: false,
+            panelField: false,
+            dialog: true
+        ))
     }
 
     private func illustratorScene(toolbar: Bool) -> DockWorkspace {

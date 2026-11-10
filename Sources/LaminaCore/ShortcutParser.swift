@@ -104,6 +104,22 @@ public enum PenEscape {
         guard pressedEscape, stringDoesNotBlock else { return false }
         return toolIsPen || hasOpenNodes
     }
+
+    /// Local keyDown monitor. True only while the pen tool has an open path.
+    /// A dialog, a panel field, or text editing keeps the key.
+    public static func localMonitorConsumes(
+        keyCode: UInt16,
+        toolIsPen: Bool,
+        hasOpenPath: Bool,
+        editingText: Bool,
+        panelField: Bool,
+        dialog: Bool
+    ) -> Bool {
+        guard keyCode == Self.keyCode else { return false }
+        guard toolIsPen, hasOpenPath else { return false }
+        if editingText || panelField || dialog { return false }
+        return true
+    }
 }
 
 public struct ShortcutEntry: Equatable, Sendable {

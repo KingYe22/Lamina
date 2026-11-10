@@ -368,6 +368,24 @@ enum PenEscapeAction {
     }
 }
 
+/// HID-tap CGEvent key code 53 is swallowed by the text input system's local
+/// monitor before keyDown and cancelOperation. Monitors run newest-first, so
+/// this one is installed again after a pen path opens and handles that key
+/// only while the pen tool has an open path.
+enum PenEscapeMonitor {
+    private static var token: Any?
+
+    static func install() {
+        if let token {
+            NSEvent.removeMonitor(token)
+        }
+        token = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard let delegate = NSApp.delegate as? AppDelegate else { return event }
+            return delegate.penEscapeMonitor(event)
+        }
+    }
+}
+
 /// Esc that the input method turned into cancelOperation, including while Pinyin is active.
 enum PenEscapeBridge {
     @discardableResult
