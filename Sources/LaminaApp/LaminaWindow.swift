@@ -1,4 +1,5 @@
 import AppKit
+import LaminaCore
 
 final class LaminaWindow: NSWindow {
     weak var workspace: Workspace?

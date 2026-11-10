@@ -63,7 +63,7 @@ final class DockIndicatorCanvas: NSView {
                     blue: CGFloat(paint.blue),
                     alpha: CGFloat(paint.alpha)
                 )
-                context.setLineWidth(2)
+                context.setLineWidth(CGFloat(2))
                 context.stroke(rect.insetBy(dx: 1, dy: 1))
             }
         }

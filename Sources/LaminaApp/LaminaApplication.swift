@@ -1,4 +1,5 @@
 import AppKit
+import LaminaCore
 
 /// Called from the Objective-C principal class. The subclass itself lives in
 /// LaminaApplication.m so NSClassFromString can see it before main().
