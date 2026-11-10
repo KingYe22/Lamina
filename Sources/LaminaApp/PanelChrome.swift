@@ -106,6 +106,10 @@ final class FloatingPanels: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        // A flexible-height or bottom-pinned mask walks every floater up by the
+        // window's height delta before the screen-position correction runs.
+        autoresizingMask = []
+        autoresizesSubviews = false
         wantsLayer = true
         layer?.masksToBounds = true
         layer?.isOpaque = false
@@ -371,6 +375,7 @@ final class FloatPanel: NSView {
         self.tabs = tabs
         self.active = tabs[0]
         super.init(frame: .zero)
+        autoresizingMask = []
         wantsLayer = true
         clipsToBounds = true
         layer?.masksToBounds = true

@@ -216,7 +216,10 @@ enum KeyRouter {
 
     static func handle(_ event: NSEvent, workspace: Workspace) -> NSEvent? {
         if event.type != .keyDown { return event }
-        if event.timestamp == lastStamp, event.keyCode == lastCode {
+        // A posted CGEvent often shares timestamp 0, and Esc must not be dropped
+        // as a duplicate of that stamp. Ending the path twice is a no-op.
+        let isEscape = event.keyCode == VirtualKey.escape || event.keyCode == PenEscape.keyCode
+        if !isEscape, event.timestamp == lastStamp, event.keyCode == lastCode {
             return lastConsumed ? nil : event
         }
         let result = route(event, workspace: workspace)
@@ -230,21 +233,29 @@ enum KeyRouter {
     private static func route(_ event: NSEvent, workspace: Workspace) -> NSEvent? {
         let model = workspace.active.model
         if isActivelyEditing(event), model.editingText == nil {
-            ShortcutLog.record(event, route: "交给正在编辑的文本框", action: "—")
-            return event
+            // Pinyin can install a text view as first responder and swallow Esc.
+            // An open pen path still ends. A real panel field is resigned earlier.
+            let openPen = model.tool == .pen || model.tool == .curvature || !model.penNodes.isEmpty
+            if event.keyCode != VirtualKey.escape || !openPen {
+                ShortcutLog.record(event, route: "交给正在编辑的文本框", action: "—")
+                return event
+            }
         }
         func consume(_ route: String, _ action: String) -> NSEvent? {
             ShortcutLog.record(event, route: route, action: action)
             return nil
         }
-        if event.keyCode == VirtualKey.escape, model.editingText == nil, !isActivelyEditing(event),
+        if event.keyCode == VirtualKey.escape, model.editingText == nil,
            workspace.onDismissDialog?() == true {
             return consume("Esc", "关闭对话框")
         }
-        if event.keyCode == VirtualKey.escape, model.editingText == nil, !isActivelyEditing(event),
-           (model.tool == .pen || model.tool == .curvature || !model.penNodes.isEmpty) {
-            model.endPenFromEscape()
-            workspace.touch()
+        if event.keyCode == VirtualKey.escape, model.editingText == nil,
+           PenEscapeAction.endPath(
+               workspace: workspace,
+               keyCode: event.keyCode,
+               charactersEmpty: (event.characters ?? "").isEmpty,
+               cancelOperation: false
+           ) {
             return consume("Esc", "结束路径")
         }
         if event.keyCode == VirtualKey.space {
@@ -329,5 +340,54 @@ enum KeyRouter {
             if let found = findCanvas(child) { return found }
         }
         return nil
+    }
+}
+
+/// keyDown and cancelOperation share this. The character string is ignored.
+enum PenEscapeAction {
+    @discardableResult
+    static func endPath(
+        workspace: Workspace,
+        keyCode: UInt16,
+        charactersEmpty: Bool,
+        cancelOperation: Bool
+    ) -> Bool {
+        let model = workspace.active.model
+        guard model.editingText == nil else { return false }
+        guard PenEscape.endsOpenPath(
+            keyCode: keyCode,
+            charactersEmpty: charactersEmpty,
+            cancelOperation: cancelOperation,
+            toolIsPen: model.tool == .pen || model.tool == .curvature,
+            hasOpenNodes: !model.penNodes.isEmpty
+        ) else { return false }
+        NSTextInputContext.current?.discardMarkedText()
+        model.endPenFromEscape()
+        workspace.touch()
+        return true
+    }
+}
+
+/// Esc that the input method turned into cancelOperation, including while Pinyin is active.
+enum PenEscapeBridge {
+    @discardableResult
+    static func perform(workspace: Workspace, window: NSWindow?) -> Bool {
+        if let field = PanelField.fieldOwningFirstResponder(in: window) {
+            field.leave()
+            KeyProbe.bump(workspace)
+            return true
+        }
+        if workspace.onDismissDialog?() == true {
+            KeyProbe.bump(workspace)
+            return true
+        }
+        let ended = PenEscapeAction.endPath(
+            workspace: workspace,
+            keyCode: PenEscape.keyCode,
+            charactersEmpty: true,
+            cancelOperation: true
+        )
+        if ended { KeyProbe.bump(workspace) }
+        return ended
     }
 }

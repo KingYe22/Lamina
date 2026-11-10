@@ -66,6 +66,19 @@ final class AppRoot: NSView {
         if KeyRouter.handle(event, workspace: workspace) == nil { return }
     }
 
+    override func cancelOperation(_ sender: Any?) {
+        if PenEscapeBridge.perform(workspace: workspace, window: window) { return }
+        super.cancelOperation(sender)
+    }
+
+    override func doCommand(by selector: Selector) {
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            cancelOperation(nil)
+            return
+        }
+        super.doCommand(by: selector)
+    }
+
     init(workspace: Workspace) {
         self.workspace = workspace
         editor = EditorShell(workspace: workspace)

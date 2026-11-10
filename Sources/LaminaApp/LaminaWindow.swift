@@ -12,7 +12,9 @@ final class LaminaWindow: NSWindow {
                 KeyProbe.bump(workspace)
                 return
             }
-            if !KeyRouter.isActivelyEditing(event), KeyRouter.handle(event, workspace: workspace) == nil {
+            let routeEscape = event.keyCode == VirtualKey.escape || event.keyCode == PenEscape.keyCode
+            if (!KeyRouter.isActivelyEditing(event) || routeEscape),
+               KeyRouter.handle(event, workspace: workspace) == nil {
                 return
             }
         }
@@ -26,7 +28,8 @@ final class LaminaWindow: NSWindow {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard let workspace else { return super.performKeyEquivalent(with: event) }
-        if KeyRouter.isActivelyEditing(event) {
+        let routeEscape = event.keyCode == VirtualKey.escape || event.keyCode == PenEscape.keyCode
+        if KeyRouter.isActivelyEditing(event), !routeEscape {
             return super.performKeyEquivalent(with: event)
         }
         if KeyRouter.handle(event, workspace: workspace) == nil { return true }
@@ -40,6 +43,23 @@ final class LaminaWindow: NSWindow {
         }
         if KeyRouter.handle(event, workspace: workspace) == nil { return }
         super.keyDown(with: event)
+    }
+
+    override func cancelOperation(_ sender: Any?) {
+        guard let workspace else {
+            super.cancelOperation(sender)
+            return
+        }
+        if PenEscapeBridge.perform(workspace: workspace, window: self) { return }
+        super.cancelOperation(sender)
+    }
+
+    override func doCommand(by selector: Selector) {
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            cancelOperation(nil)
+            return
+        }
+        super.doCommand(by: selector)
     }
 
     override var canBecomeKey: Bool { true }

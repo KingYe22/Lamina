@@ -56,6 +56,12 @@ public enum IllustratorDock {
     /// The true threshold lies somewhere in (7.3, 15.5] and was not bracketed.
     /// Movement starts just after the last stationary sample so both samples hold.
     public static let undockStationary = 7.3
+    /// Column undock stays opaque at the 15.5 pt follow sample and turns into a
+    /// ghost at the 31 pt sample (outline over the vacated slot). The open
+    /// interval (15.5, 31) was not sampled, so the ghost starts at 31.
+    /// An already-floating drag is a different sample: it ghosts as soon as an
+    /// indicator is showing.
+    public static let undockGhost = 31.0
 
     public static func rightHot(edge: Double, pointerX: Double) -> Bool {
         pointerX >= edge - rightOuter - 1e-9 && pointerX < edge - rightInner - 1e-9
@@ -88,6 +94,28 @@ public enum IllustratorDock {
 
     public static func edgeBar(x: Double, span: DockFrame) -> DockFrame {
         DockFrame(x: x, y: span.minY, width: barThickness, height: span.height)
+    }
+}
+
+/// Device-RGB fill shared by the right column bar, the bar just right of the
+/// toolbar, and the window-edge bar. An sRGB colour of the same hex is stored
+/// in a screenshot as #3D62C5; these components are stored as #2C62CB.
+public struct DockBarPaint: Equatable, Sendable {
+    public var red: Double
+    public var green: Double
+    public var blue: Double
+    public var alpha: Double
+
+    public init(red: Double, green: Double, blue: Double, alpha: Double) {
+        self.red = red
+        self.green = green
+        self.blue = blue
+        self.alpha = alpha
+    }
+
+    public static func device(alpha: Double) -> DockBarPaint {
+        let parts = IllustratorDock.barDeviceComponents()
+        return DockBarPaint(red: parts.r, green: parts.g, blue: parts.b, alpha: alpha)
     }
 }
 
@@ -237,7 +265,9 @@ public struct PanelDragPath: Equatable, Sendable {
             return DockPlacement(frame: origin, chrome: .none, ghost: false, following: false, target: .stay)
         }
         let hit = resolve(pointer: pointer, scene: scene)
-        let ghost = hit.chrome != .none
+        let ghost = wasDocked && !draggingToolbar
+            ? (hit.chrome != .none && travel + 1e-9 >= IllustratorDock.undockGhost)
+            : (hit.chrome != .none)
         let target = up ? hit.target : .stay
         return DockPlacement(frame: frame, chrome: up ? .none : hit.chrome, ghost: up ? false : ghost, following: true, target: target)
     }
@@ -527,27 +557,37 @@ public enum StatusBarLayout {
 }
 
 /// Floating panels keep their screen position when the window resizes.
-/// Coordinates are y-up, in the window. If the new host would clip the panel
-/// under the top chrome, it shifts just enough to stay inside the host.
+/// Coordinates are y-up, in the window. A height change that keeps the window's
+/// top fixed raises the origin by the same amount; subtracting that delta
+/// cancels a bottom-left pin. A panel that still overlaps the window is not
+/// moved, even if it hangs past an edge. One that would miss the window
+/// entirely is nudged back in.
 public enum FloatingScreen {
     public static func reposition(
         panelInWindow: DockBox,
         oldWindowOrigin: (x: Double, y: Double),
         newWindowOrigin: (x: Double, y: Double),
-        hostInWindow: DockBox
+        windowBounds: DockBox
     ) -> DockBox {
-        var x = panelInWindow.x + oldWindowOrigin.x - newWindowOrigin.x
-        var y = panelInWindow.y + oldWindowOrigin.y - newWindowOrigin.y
-        let host = hostInWindow
-        if panelInWindow.width <= host.width + 1e-6 {
-            if x < host.x { x = host.x }
-            if x + panelInWindow.width > host.maxX { x = host.maxX - panelInWindow.width }
-        }
-        if panelInWindow.height <= host.height + 1e-6 {
-            if y < host.y { y = host.y }
-            if y + panelInWindow.height > host.maxY { y = host.maxY - panelInWindow.height }
-        }
-        return DockBox(x: x, y: y, width: panelInWindow.width, height: panelInWindow.height)
+        let x = panelInWindow.x + oldWindowOrigin.x - newWindowOrigin.x
+        let y = panelInWindow.y + oldWindowOrigin.y - newWindowOrigin.y
+        return DockBox(
+            x: nudgeInto(origin: x, length: panelInWindow.width, low: windowBounds.x, high: windowBounds.maxX),
+            y: nudgeInto(origin: y, length: panelInWindow.height, low: windowBounds.y, high: windowBounds.maxY),
+            width: panelInWindow.width,
+            height: panelInWindow.height
+        )
+    }
+
+    /// Smallest shift that puts the panel back inside [low, high]. An overlap,
+    /// including a panel that only partly hangs out, is left where it is.
+    private static func nudgeInto(origin: Double, length: Double, low: Double, high: Double) -> Double {
+        if length <= 1e-9 { return origin }
+        if origin < high - 1e-9 && origin + length > low + 1e-9 { return origin }
+        if origin + length <= low + 1e-9 { return low }
+        let room = high - low
+        if length >= room - 1e-9 { return low }
+        return high - length
     }
 
     /// Launch centering and the screen clamp are not a user resize. Holding
