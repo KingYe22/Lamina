@@ -84,6 +84,28 @@ public struct KeyChord: Hashable, Sendable {
     }
 }
 
+/// Esc ends an open pen path. A CGEvent keyDown for key code 53 often has an
+/// empty character string, and Pinyin can deliver that same key as
+/// cancelOperation instead of keyDown. Either one ends the path.
+public enum PenEscape {
+    /// Physical Escape, kVK_Escape.
+    public static let keyCode: UInt16 = 53
+
+    public static func endsOpenPath(
+        keyCode: UInt16,
+        charactersEmpty: Bool,
+        cancelOperation: Bool,
+        toolIsPen: Bool,
+        hasOpenNodes: Bool
+    ) -> Bool {
+        let pressedEscape = cancelOperation || keyCode == Self.keyCode
+        // The character string is not consulted. Empty or not, Esc still ends the path.
+        let stringDoesNotBlock = charactersEmpty || !charactersEmpty
+        guard pressedEscape, stringDoesNotBlock else { return false }
+        return toolIsPen || hasOpenNodes
+    }
+}
+
 public struct ShortcutEntry: Equatable, Sendable {
     public var index: Int
     public var category: String

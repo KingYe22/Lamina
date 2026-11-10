@@ -1709,22 +1709,21 @@ final class UXLockTests: XCTestCase {
             XCTAssertGreaterThan(solved.memberFrames["stroke"]?.height ?? 0, 1, "\(size)")
         }
         let panel = DockBox(x: 120, y: 640, width: 302, height: 243)
-        let shrunk = DockBox(x: 81, y: 20, width: 700, height: 620)
-        let pulled = FloatingScreen.reposition(
+        let window = DockBox(x: 0, y: 0, width: 1400, height: 900)
+        let held = FloatingScreen.reposition(
             panelInWindow: panel,
             oldWindowOrigin: (0, 100),
             newWindowOrigin: (0, 100),
-            hostInWindow: shrunk
+            windowBounds: window
         )
-        XCTAssertLessThanOrEqual(pulled.maxY, shrunk.maxY + 0.001)
-        XCTAssertGreaterThanOrEqual(pulled.y, shrunk.y)
-        XCTAssertEqual(pulled.height, panel.height, accuracy: 0.001)
-        let host = DockBox(x: 81, y: 20, width: 900, height: 860)
+        XCTAssertEqual(held.x, panel.x, accuracy: 0.001)
+        XCTAssertEqual(held.y, panel.y, accuracy: 0.001)
+        XCTAssertEqual(held.height, panel.height, accuracy: 0.001)
         let slid = FloatingScreen.reposition(
             panelInWindow: DockBox(x: 200, y: 180, width: 302, height: 243),
             oldWindowOrigin: (40, 200),
             newWindowOrigin: (40, 140),
-            hostInWindow: host
+            windowBounds: DockBox(x: 0, y: 0, width: 1200, height: 1000)
         )
         XCTAssertEqual(slid.x, 200, accuracy: 0.001)
         XCTAssertEqual(slid.y, 240, accuracy: 0.001)
@@ -1824,6 +1823,196 @@ final class UXLockTests: XCTestCase {
         XCTAssertFalse(IllustratorDock.rightHot(edge: column.minX, pointerX: -413))
         XCTAssertTrue(IllustratorDock.rightHot(edge: column.minX, pointerX: -384))
         XCTAssertFalse(IllustratorDock.rightHot(edge: column.minX, pointerX: -383))
+    }
+
+    /// Height shrinks with the window's top fixed, so the origin rises by the
+    /// same delta. 描边 on the bottom keeps its screen position. It is not
+    /// pinned to the host bottom (that lift was exactly −70 and −90 pt).
+    func testBottomFloaterKeepsItsScreenPositionWhenTheWindowShrinks() {
+        let stroke = DockBox(x: 322, y: 20, width: 313, height: 442)
+        let window900 = DockBox(x: 0, y: 0, width: 1033, height: 900)
+        let by70 = FloatingScreen.reposition(
+            panelInWindow: stroke,
+            oldWindowOrigin: (763, 115),
+            newWindowOrigin: (763, 185),
+            windowBounds: window900
+        )
+        XCTAssertEqual(by70.y, 20 - 70, accuracy: 0.001)
+        XCTAssertEqual(by70.x, stroke.x, accuracy: 0.001)
+        XCTAssertEqual(by70.y + 185, stroke.y + 115, accuracy: 0.001, "screen y is unchanged")
+        let by90 = FloatingScreen.reposition(
+            panelInWindow: stroke,
+            oldWindowOrigin: (763, 115),
+            newWindowOrigin: (763, 205),
+            windowBounds: DockBox(x: 0, y: 0, width: 1033, height: 880)
+        )
+        XCTAssertEqual(by90.y, 20 - 90, accuracy: 0.001)
+        XCTAssertEqual(by90.y + 205, stroke.y + 115, accuracy: 0.001)
+
+        let top = DockBox(x: 100, y: 542, width: 302, height: 243)
+        let topHeld = FloatingScreen.reposition(
+            panelInWindow: top,
+            oldWindowOrigin: (763, 115),
+            newWindowOrigin: (763, 185),
+            windowBounds: window900
+        )
+        XCTAssertEqual(topHeld.y, 542 - 70, accuracy: 0.001)
+        XCTAssertEqual(topHeld.x, top.x, accuracy: 0.001)
+
+        let hanging = FloatingScreen.reposition(
+            panelInWindow: DockBox(x: 10, y: -30, width: 100, height: 80),
+            oldWindowOrigin: (0, 0),
+            newWindowOrigin: (0, 0),
+            windowBounds: DockBox(x: 0, y: 0, width: 1033, height: 700)
+        )
+        XCTAssertEqual(hanging.y, -30, accuracy: 0.001)
+        let escaped = FloatingScreen.reposition(
+            panelInWindow: DockBox(x: 10, y: 900, width: 100, height: 80),
+            oldWindowOrigin: (0, 0),
+            newWindowOrigin: (0, 0),
+            windowBounds: DockBox(x: 0, y: 0, width: 1033, height: 700)
+        )
+        XCTAssertEqual(escaped.y, 700 - 80, accuracy: 0.001)
+    }
+
+    /// Toolbar-right and window-edge bars use the same device blue as the right bar.
+    func testLeftDockBarsUseTheRightBarsDeviceBlue() {
+        let scene = illustratorScene(toolbar: true)
+        var drag = PanelDragPath(
+            wasDocked: false,
+            origin: DockFrame(x: -1100, y: 300, width: 487, height: 167),
+            startPointer: Vec2(-1100, 450),
+            floatingWidth: 487,
+            floatingHeight: 167
+        )
+        guard case .bar(let beside, let besideTint) = drag.step(pointer: Vec2(-1235, 450), scene: scene, up: false).chrome else {
+            return XCTFail("toolbar-right bar")
+        }
+        XCTAssertNil(besideTint)
+        guard case .bar(let edge, let edgeTint) = drag.step(pointer: Vec2(-1328, 450), scene: scene, up: false).chrome else {
+            return XCTFail("window-edge bar")
+        }
+        XCTAssertNil(edgeTint)
+        guard case .bar(let right, _) = drag.step(pointer: Vec2(-400, 420), scene: scene, up: false).chrome else {
+            return XCTFail("right bar")
+        }
+        XCTAssertEqual(beside.width, right.width, accuracy: 0.001)
+        XCTAssertEqual(edge.width, right.width, accuracy: 0.001)
+        XCTAssertEqual(beside.width, IllustratorDock.barThickness, accuracy: 0.001)
+        let paint = DockBarPaint.device(alpha: 1)
+        XCTAssertEqual(paint, DockBarPaint.device(alpha: 1))
+        XCTAssertEqual(paint.red, 44.0 / 255, accuracy: 1e-12)
+        XCTAssertEqual(paint.green, 98.0 / 255, accuracy: 1e-12)
+        XCTAssertEqual(paint.blue, 203.0 / 255, accuracy: 1e-12)
+        XCTAssertEqual(paint.alpha, 1, accuracy: 1e-12)
+        XCTAssertEqual(IllustratorDock.barHex, 0x2C62CB)
+        XCTAssertNotEqual(IllustratorDock.barHex, 0x3D62C5)
+    }
+
+    /// 15.5 pt over the vacated slot follows opaque. 31 pt is the ghost sample.
+    /// 12.4 pt is the retest point that must stay opaque. Follow still starts after 7.3.
+    func testColumnUndockStaysOpaqueAtFifteenAndGhostsAtThirtyOne() {
+        let scene = sceneWithVacatedSlot()
+        let slot = scene.groups[0].frame
+        let start = Vec2(slot.x + slot.width / 2, slot.minY + 20)
+        func step(_ travel: Double) -> DockPlacement {
+            var path = PanelDragPath(
+                wasDocked: true,
+                origin: slot,
+                startPointer: start,
+                floatingWidth: slot.width,
+                floatingHeight: slot.height,
+                originGroupID: "properties"
+            )
+            return path.step(pointer: Vec2(start.x - travel, start.y), scene: scene, up: false)
+        }
+        let early = step(12.4)
+        XCTAssertTrue(early.following)
+        XCTAssertFalse(early.ghost)
+        guard case .outline = early.chrome else { return XCTFail("12.4 is still over the slot") }
+        let solid = step(15.5)
+        XCTAssertTrue(solid.following)
+        XCTAssertFalse(solid.ghost)
+        guard case .outline = solid.chrome else { return XCTFail("15.5 follows opaque over the slot") }
+        XCTAssertEqual(solid.frame.x, slot.x - 15.5, accuracy: 0.001)
+        let ghost = step(31)
+        XCTAssertTrue(ghost.following)
+        XCTAssertTrue(ghost.ghost)
+        guard case .outline = ghost.chrome else { return XCTFail("31 ghosts over the slot") }
+        XCTAssertEqual(IllustratorDock.undockGhost, 31, accuracy: 0.001)
+        XCTAssertEqual(IllustratorDock.undockStationary, 7.3, accuracy: 0.001)
+    }
+
+    /// Key code 53 with an empty character string, and cancelOperation, both end an open path.
+    func testEscapeEndsThePenFromKeyDownOrCancelOperation() {
+        XCTAssertEqual(PenEscape.keyCode, 53)
+        XCTAssertFalse(PenEscape.endsOpenPath(
+            keyCode: 0,
+            charactersEmpty: true,
+            cancelOperation: false,
+            toolIsPen: true,
+            hasOpenNodes: true
+        ))
+        XCTAssertTrue(PenEscape.endsOpenPath(
+            keyCode: PenEscape.keyCode,
+            charactersEmpty: true,
+            cancelOperation: false,
+            toolIsPen: true,
+            hasOpenNodes: true
+        ))
+        XCTAssertTrue(PenEscape.endsOpenPath(
+            keyCode: PenEscape.keyCode,
+            charactersEmpty: false,
+            cancelOperation: false,
+            toolIsPen: true,
+            hasOpenNodes: false
+        ))
+        XCTAssertTrue(PenEscape.endsOpenPath(
+            keyCode: 0,
+            charactersEmpty: true,
+            cancelOperation: true,
+            toolIsPen: false,
+            hasOpenNodes: true
+        ))
+        XCTAssertFalse(PenEscape.endsOpenPath(
+            keyCode: PenEscape.keyCode,
+            charactersEmpty: true,
+            cancelOperation: true,
+            toolIsPen: false,
+            hasOpenNodes: false
+        ))
+
+        let model = EditorModel()
+        model.smartGuides = false
+        model.tool = .pen
+        for point in [Vec2.zero, Vec2(30, 0)] {
+            model.pointerDown(at: point, shift: false, option: false, command: false)
+            model.pointerUp(at: point, shift: false, option: false, command: false)
+        }
+        XCTAssertEqual(model.penNodes.count, 2)
+        XCTAssertTrue(PenEscape.endsOpenPath(
+            keyCode: PenEscape.keyCode,
+            charactersEmpty: true,
+            cancelOperation: false,
+            toolIsPen: model.tool == .pen,
+            hasOpenNodes: !model.penNodes.isEmpty
+        ))
+        model.endPenFromEscape()
+        XCTAssertTrue(model.penNodes.isEmpty)
+        XCTAssertEqual(model.document.flatItems().count, 1)
+
+        model.pointerDown(at: Vec2(8, 8), shift: false, option: false, command: false)
+        model.pointerUp(at: Vec2(8, 8), shift: false, option: false, command: false)
+        XCTAssertEqual(model.penNodes.count, 1)
+        XCTAssertTrue(PenEscape.endsOpenPath(
+            keyCode: 0,
+            charactersEmpty: true,
+            cancelOperation: true,
+            toolIsPen: model.tool == .pen,
+            hasOpenNodes: !model.penNodes.isEmpty
+        ))
+        model.endPenFromEscape()
+        XCTAssertTrue(model.penNodes.isEmpty)
     }
 
     private func illustratorScene(toolbar: Bool) -> DockWorkspace {

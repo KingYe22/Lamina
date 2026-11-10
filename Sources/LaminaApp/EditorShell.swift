@@ -128,8 +128,10 @@ final class EditorShell: NSView, ToolbarGripHost {
     /// `center()` and the screen clamp run before that and must not walk panels.
     private var floatingHoldSettled = false
 
-    /// A user resize keeps each floating panel on the same screen point, then pulls
-    /// it back inside the host so a shorter window cannot slide 外观 under the title bar.
+    /// A user resize keeps each floating panel on the same screen point.
+    /// The host is bottom-left pinned, so a shorter window would otherwise lift a
+    /// panel that sits on that edge by the whole height delta. Nudge only when
+    /// the panel would miss the window entirely.
     private func holdFloatingScreens() {
         guard let window else { return }
         let newWindow = window.frame
@@ -143,30 +145,29 @@ final class EditorShell: NSView, ToolbarGripHost {
         )
         floatingHoldSettled = decision.settled
         if decision.move, let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
-           oldWindow.width > 1, oldWindow.height > 1 {
+           oldWindow.width > 1, oldWindow.height > 1, bounds.width > 1, bounds.height > 1 {
+            let windowBox = DockBox(x: 0, y: 0, width: Double(bounds.width), height: Double(bounds.height))
             for panel in floaters.dockPanels()
-            where panel.dockColumnID == nil && !panel.dragging && !panel.embeddedInDock && panel.superview === floaters {
+            where panel.dockColumnID == nil && !panel.dragging && !panel.embeddedInDock
+                && (panel.superview === floaters || panel.superview === self) {
+                let inHost = panel.superview === floaters
                 let oldInWindow = DockBox(
-                    x: Double(oldHost.minX + panel.frame.minX),
-                    y: Double(oldHost.minY + panel.frame.minY),
+                    x: Double(inHost ? oldHost.minX + panel.frame.minX : panel.frame.minX),
+                    y: Double(inHost ? oldHost.minY + panel.frame.minY : panel.frame.minY),
                     width: Double(panel.frame.width),
                     height: Double(panel.frame.height)
-                )
-                let host = DockBox(
-                    x: Double(newHost.minX),
-                    y: Double(newHost.minY),
-                    width: Double(newHost.width),
-                    height: Double(newHost.height)
                 )
                 let placed = FloatingScreen.reposition(
                     panelInWindow: oldInWindow,
                     oldWindowOrigin: (Double(oldWindow.minX), Double(oldWindow.minY)),
                     newWindowOrigin: (Double(newWindow.minX), Double(newWindow.minY)),
-                    hostInWindow: host
+                    windowBounds: windowBox
                 )
+                let originX = inHost ? placed.x - Double(newHost.minX) : placed.x
+                let originY = inHost ? placed.y - Double(newHost.minY) : placed.y
                 panel.frame = NSRect(
-                    x: CGFloat(placed.x - host.x),
-                    y: CGFloat(placed.y - host.y),
+                    x: CGFloat(originX),
+                    y: CGFloat(originY),
                     width: CGFloat(placed.width),
                     height: CGFloat(placed.height)
                 )

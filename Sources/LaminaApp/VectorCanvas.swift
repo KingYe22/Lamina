@@ -114,6 +114,25 @@ final class VectorCanvas: NSView {
         _ = KeyRouter.handle(event, workspace: workspace)
     }
 
+    /// Pinyin delivers a posted Esc (key code 53, often with no characters) as
+    /// cancelOperation rather than keyDown. Either path ends the pen.
+    override func cancelOperation(_ sender: Any?) {
+        guard let workspace else {
+            super.cancelOperation(sender)
+            return
+        }
+        if PenEscapeBridge.perform(workspace: workspace, window: window) { return }
+        super.cancelOperation(sender)
+    }
+
+    override func doCommand(by selector: Selector) {
+        if selector == #selector(NSResponder.cancelOperation(_:)) {
+            cancelOperation(nil)
+            return
+        }
+        super.doCommand(by: selector)
+    }
+
     override func keyUp(with event: NSEvent) {
         if event.keyCode == VirtualKey.space {
             workspace?.active.model.spaceHeld = false

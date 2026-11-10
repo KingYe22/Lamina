@@ -5,6 +5,8 @@
 
 /// Returns 1 when the event was handled and must not reach the text system.
 extern int LaminaConsumeEvent(void *event);
+/// Returns 1 when Esc, delivered as cancelOperation, ended a pen path or left a field.
+extern int LaminaCancelOperation(void);
 
 @interface LaminaApplication : NSApplication
 @end
@@ -14,6 +16,11 @@ extern int LaminaConsumeEvent(void *event);
 - (void)sendEvent:(NSEvent *)event {
     if (LaminaConsumeEvent((__bridge void *)event)) return;
     [super sendEvent:event];
+}
+
+- (void)cancelOperation:(id)sender {
+    if (LaminaCancelOperation()) return;
+    [super cancelOperation:sender];
 }
 
 @end

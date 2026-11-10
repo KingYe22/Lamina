@@ -35,20 +35,36 @@ final class DockIndicatorCanvas: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func draw(_ dirtyRect: NSRect) {
-        let parts = IllustratorDock.barDeviceComponents()
-        let color = NSColor(deviceRed: CGFloat(parts.r), green: CGFloat(parts.g), blue: CGFloat(parts.b), alpha: 1)
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        // Device RGB, not NSColor.withAlphaComponent. That call retags a device
+        // colour as sRGB, and a screenshot then stores #2C62CB as #3D62C5.
+        // Left bars (no tint) and the right bar take this same fill.
+        let space = CGColorSpaceCreateDeviceRGB()
+        context.setFillColorSpace(space)
+        context.setStrokeColorSpace(space)
         for piece in pieces {
             switch piece {
             case .fill(let rect, let alpha):
                 guard !rect.isEmpty else { continue }
-                color.withAlphaComponent(alpha).setFill()
-                rect.fill()
+                let paint = DockBarPaint.device(alpha: Double(alpha))
+                context.setFillColor(
+                    red: CGFloat(paint.red),
+                    green: CGFloat(paint.green),
+                    blue: CGFloat(paint.blue),
+                    alpha: CGFloat(paint.alpha)
+                )
+                context.fill(rect)
             case .stroke(let rect):
                 guard rect.width > 2, rect.height > 2 else { continue }
-                color.setStroke()
-                let path = NSBezierPath(rect: rect.insetBy(dx: 1, dy: 1))
-                path.lineWidth = 2
-                path.stroke()
+                let paint = DockBarPaint.device(alpha: 1)
+                context.setStrokeColor(
+                    red: CGFloat(paint.red),
+                    green: CGFloat(paint.green),
+                    blue: CGFloat(paint.blue),
+                    alpha: CGFloat(paint.alpha)
+                )
+                context.setLineWidth(CGFloat(2))
+                context.stroke(rect.insetBy(dx: 1, dy: 1))
             }
         }
     }
@@ -77,11 +93,13 @@ final class DockIndicatorPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         colorSpace = NSColorSpace.deviceRGB
         contentView = canvas
+        canvas.wantsLayer = false
         canvas.frame = contentView?.bounds ?? .zero
         canvas.autoresizingMask = [.width, .height]
     }
 
     func present(screen: NSRect, pieces: [DockIndicatorCanvas.Piece]) {
+        colorSpace = .deviceRGB
         setFrame(screen, display: false)
         canvas.pieces = pieces
         canvas.needsDisplay = true
