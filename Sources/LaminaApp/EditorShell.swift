@@ -23,9 +23,6 @@ final class EditorShell: NSView, ToolbarGripHost {
     private var indicator: DockIndicatorPanel?
     /// Ghost opacity while a docking indicator is showing. The capture did not measure it.
     private let dockGhostAlpha: CGFloat = 0.45
-    /// Light-blue wash over the part of the right hot zone the solid bar does not cover.
-    /// The capture did not measure the alpha.
-    private let dockTintAlpha: CGFloat = 0.20
 
     init(workspace: Workspace) {
         self.workspace = workspace
@@ -613,17 +610,13 @@ final class EditorShell: NSView, ToolbarGripHost {
             return
         }
         var pieces: [DockIndicatorCanvas.Piece] = []
-        switch chrome {
-        case .none:
-            break
-        case .bar(let bar, let tint):
-            if let tint {
-                pieces.append(.fill(shellRect(from: tint), dockTintAlpha))
-            }
-            pieces.append(.fill(shellRect(from: bar), 1))
-        case .line(let line):
-            pieces.append(.fill(shellRect(from: line), 1))
-        case .outline(let frame):
+        // Right column, toolbar-right, and window-edge bars are this one list.
+        // A bar with no tint still starts with the covered primer so its solid
+        // fill is the same later device-RGB fill as the right bar.
+        for step in DockBarDrawing.steps(for: chrome) {
+            pieces.append(.fill(shellRect(from: step.rect), CGFloat(step.alpha)))
+        }
+        if case .outline(let frame) = chrome {
             pieces.append(.stroke(shellRect(from: frame)))
         }
         let panel = indicator ?? DockIndicatorPanel()

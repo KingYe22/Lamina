@@ -36,9 +36,8 @@ final class DockIndicatorCanvas: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
-        // Device RGB, not NSColor.withAlphaComponent. That call retags a device
-        // colour as sRGB, and a screenshot then stores #2C62CB as #3D62C5.
-        // Left bars (no tint) and the right bar take this same fill.
+        // One device-RGB source for every piece. The right bar, the toolbar-right
+        // bar, and the window-edge bar are all steps from DockBarDrawing.
         let space = CGColorSpaceCreateDeviceRGB()
         context.setFillColorSpace(space)
         context.setStrokeColorSpace(space)
@@ -46,27 +45,31 @@ final class DockIndicatorCanvas: NSView {
             switch piece {
             case .fill(let rect, let alpha):
                 guard !rect.isEmpty else { continue }
-                let paint = DockBarPaint.device(alpha: Double(alpha))
-                context.setFillColor(
-                    red: CGFloat(paint.red),
-                    green: CGFloat(paint.green),
-                    blue: CGFloat(paint.blue),
-                    alpha: CGFloat(paint.alpha)
-                )
+                setDeviceColor(context, alpha: alpha)
                 context.fill(rect)
             case .stroke(let rect):
                 guard rect.width > 2, rect.height > 2 else { continue }
-                let paint = DockBarPaint.device(alpha: 1)
-                context.setStrokeColor(
-                    red: CGFloat(paint.red),
-                    green: CGFloat(paint.green),
-                    blue: CGFloat(paint.blue),
-                    alpha: CGFloat(paint.alpha)
-                )
+                setDeviceColor(context, alpha: 1)
                 context.setLineWidth(CGFloat(2))
                 context.stroke(rect.insetBy(dx: 1, dy: 1))
             }
         }
+    }
+
+    private func setDeviceColor(_ context: CGContext, alpha: CGFloat) {
+        let paint = DockBarDrawing.source(alpha: Double(alpha))
+        context.setFillColor(
+            red: CGFloat(paint.red),
+            green: CGFloat(paint.green),
+            blue: CGFloat(paint.blue),
+            alpha: CGFloat(paint.alpha)
+        )
+        context.setStrokeColor(
+            red: CGFloat(paint.red),
+            green: CGFloat(paint.green),
+            blue: CGFloat(paint.blue),
+            alpha: CGFloat(paint.alpha)
+        )
     }
 }
 

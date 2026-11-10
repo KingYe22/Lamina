@@ -393,6 +393,7 @@ final class VectorCanvas: NSView {
         refreshCursor()
         workspace?.touch()
         KeyProbe.bump(workspace)
+        armPenEscapeMonitor(model)
     }
 
     /// Pen commits on mouse-up. Tracking it here keeps a close from being dropped
@@ -418,6 +419,14 @@ final class VectorCanvas: NSView {
         refreshCursor()
         workspace?.touch()
         KeyProbe.bump(workspace)
+        armPenEscapeMonitor(model)
+    }
+
+    /// Re-register after the path is open so this monitor runs before the input method's.
+    private func armPenEscapeMonitor(_ model: EditorModel) {
+        let toolIsPen = model.tool == .pen || model.tool == .curvature
+        guard toolIsPen, !model.penNodes.isEmpty else { return }
+        PenEscapeMonitor.install()
     }
 
     override func mouseMoved(with event: NSEvent) {

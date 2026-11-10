@@ -318,6 +318,8 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
+            0.4.12（build 28）：工具栏右侧、窗口左缘和右侧停靠条共用同一份设备色绘制列表，实色填充都是后一次设备 RGB 填充，截图为 #2C62CB。从列里拖出面板时，12 pt 和 15.5 pt 不透明跟随且旧槽没有蓝框，蓝框和半透明一起出现在实测的 31 pt。钢笔路径未结束时，本地 keyDown 监视器处理键码 53 的 Esc（包括 HID 的 CGEvent）；对话框、面板输入框和文字编辑里的 Esc 保持原样。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
+
             0.4.11（build 27）：窗口变矮时，靠下的浮动面板保持屏幕位置，只有整块离开窗口才挪回来。工具栏右侧和窗口左缘的停靠条与右侧指示条一样用设备色 #2C62CB。从列里拖出面板时，15.5 pt 仍是不透明跟随，到实测的 31 pt 才变半透明。Esc 无论是 keyDown（包括没有字符的 CGEvent，键码 53）还是 cancelOperation，都会结束当前钢笔路径，拼音输入法打开时也一样。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
 
             0.4.10（build 26）：标签和组拖出与列脱离用同一条 7.3 pt 规则，7 pt 不动，10.4 pt 才跟着走。抽出标签后剩下的组保持内容宽度，面板内容裁在自己的框里。浮动标签拖回组的标签条会亮出整组蓝框，松手并成标签。窗口宽高一起变时属性列还在，浮动面板保持屏幕位置，不会被顶栏盖住。画布变窄时状态栏文字不再叠在一起。Esc、换工具或取消选择会结束当前路径，没选中时再点钢笔是新路径。选择全部后清除会删掉选中的路径。右侧指示条贴齐停靠列边缘，颜色是 #2C62CB。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。

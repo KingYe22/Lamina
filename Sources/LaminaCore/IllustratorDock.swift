@@ -57,8 +57,9 @@ public enum IllustratorDock {
     /// Movement starts just after the last stationary sample so both samples hold.
     public static let undockStationary = 7.3
     /// Column undock stays opaque at the 15.5 pt follow sample and turns into a
-    /// ghost at the 31 pt sample (outline over the vacated slot). The open
-    /// interval (15.5, 31) was not sampled, so the ghost starts at 31.
+    /// ghost at the 31 pt sample. The vacated-slot outline is that same sample:
+    /// 12 pt and 15.5 pt follow solid with no outline, and 31 pt is the ghost
+    /// plus the outline. The open interval (15.5, 31) was not sampled.
     /// An already-floating drag is a different sample: it ghosts as soon as an
     /// indicator is showing.
     public static let undockGhost = 31.0
@@ -116,6 +117,62 @@ public struct DockBarPaint: Equatable, Sendable {
     public static func device(alpha: Double) -> DockBarPaint {
         let parts = IllustratorDock.barDeviceComponents()
         return DockBarPaint(red: parts.r, green: parts.g, blue: parts.b, alpha: alpha)
+    }
+}
+
+/// The only drawing source for a dock bar.
+///
+/// The right column, the bar just right of the toolbar, and the window-edge
+/// bar are all `steps(for:)`. Each step is painted with `source`. A bar with
+/// no measured tint still gets a covered primer fill first: the right bar is
+/// already a later device-RGB fill (its tint is the earlier one), and that
+/// later fill is what a capture stores as #2C62CB. The first fill of a cleared
+/// transparent indicator is stored as #3D62C5.
+public enum DockBarDrawing {
+    public static let sourceName = "DockBarDrawing.device"
+    /// The right-column wash. The capture did not measure this alpha.
+    public static let tintAlpha = 0.20
+
+    public static func source(alpha: Double) -> DockBarPaint {
+        DockBarPaint.device(alpha: alpha)
+    }
+
+    /// Inset one point on every side, so the opaque fill covers it, including
+    /// any antialiased edge. It is a different rectangle from the bar, which
+    /// is the relationship the right bar's tint already has to that bar.
+    public static func coveredPrimer(for bar: DockFrame) -> DockFrame {
+        guard bar.width > 2, bar.height > 2 else {
+            return DockFrame(x: bar.x, y: bar.y, width: bar.width, height: max(bar.height - 1, 0))
+        }
+        return DockFrame(x: bar.x + 1, y: bar.y + 1, width: bar.width - 2, height: bar.height - 2)
+    }
+
+    public static func steps(for chrome: DockChrome) -> [DockBarFillStep] {
+        switch chrome {
+        case .bar(let bar, let tint):
+            let first = tint ?? coveredPrimer(for: bar)
+            return [
+                DockBarFillStep(rect: first, alpha: tintAlpha, source: sourceName),
+                DockBarFillStep(rect: bar, alpha: 1, source: sourceName)
+            ]
+        case .line(let line):
+            return [DockBarFillStep(rect: line, alpha: 1, source: sourceName)]
+        case .outline, .none:
+            return []
+        }
+    }
+}
+
+public struct DockBarFillStep: Equatable, Sendable {
+    public var rect: DockFrame
+    public var alpha: Double
+    /// `DockBarDrawing.sourceName`. Every bar step uses this, not a second colour.
+    public var source: String
+
+    public init(rect: DockFrame, alpha: Double, source: String) {
+        self.rect = rect
+        self.alpha = alpha
+        self.source = source
     }
 }
 
@@ -265,11 +322,20 @@ public struct PanelDragPath: Equatable, Sendable {
             return DockPlacement(frame: origin, chrome: .none, ghost: false, following: false, target: .stay)
         }
         let hit = resolve(pointer: pointer, scene: scene)
-        let ghost = wasDocked && !draggingToolbar
-            ? (hit.chrome != .none && travel + 1e-9 >= IllustratorDock.undockGhost)
-            : (hit.chrome != .none)
-        let target = up ? hit.target : .stay
-        return DockPlacement(frame: frame, chrome: up ? .none : hit.chrome, ghost: up ? false : ghost, following: true, target: target)
+        var chrome = hit.chrome
+        var target = hit.target
+        let columnUndock = wasDocked && !draggingToolbar
+        // The old slot's outline is the 31 pt ghost sample. At 12 and 15.5 the
+        // panel follows solid, and releasing there floats instead of restoring.
+        if columnUndock, case .restore = target, travel + 1e-9 < IllustratorDock.undockGhost {
+            chrome = .none
+            target = .float
+        }
+        let ghost = columnUndock
+            ? (chrome != .none && travel + 1e-9 >= IllustratorDock.undockGhost)
+            : (chrome != .none)
+        let placed = up ? target : .stay
+        return DockPlacement(frame: frame, chrome: up ? .none : chrome, ghost: up ? false : ghost, following: true, target: placed)
     }
 
     private struct Hit {

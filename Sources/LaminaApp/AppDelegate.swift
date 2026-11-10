@@ -75,6 +75,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         if let dir = ProcessInfo.processInfo.environment["LAMINA_SHOTS"] {
             captureShots(in: dir)
         }
+        PenEscapeMonitor.install()
+    }
+
+    /// keyDown key code 53. Returns nil only when it ends an open pen path.
+    func penEscapeMonitor(_ event: NSEvent) -> NSEvent? {
+        let model = workspace.active.model
+        let toolIsPen = model.tool == .pen || model.tool == .curvature
+        let dialogShowing = root?.dialog.isHidden == false
+        guard PenEscape.localMonitorConsumes(
+            keyCode: event.keyCode,
+            toolIsPen: toolIsPen,
+            hasOpenPath: !model.penNodes.isEmpty,
+            editingText: model.editingText != nil,
+            panelField: PanelField.fieldOwningFirstResponder(in: event.window ?? window) != nil,
+            dialog: dialogShowing
+        ) else { return event }
+        let ended = PenEscapeAction.endPath(
+            workspace: workspace,
+            keyCode: event.keyCode,
+            charactersEmpty: (event.characters ?? "").isEmpty,
+            cancelOperation: false
+        )
+        return ended ? nil : event
     }
 
     /// The shortcut table is compiled into the binary. A miss used to return ""
