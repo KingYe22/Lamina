@@ -173,6 +173,12 @@ final class FloatingPanels: NSView {
             WorkspaceMetrics.stroke.rect(in: bounds.height)
         ]
         for (panel, rect) in zip(panels, metrics) where !panel.adjustedByUser && panel.dockColumnID == nil && panel.superview === self && !panel.dragging {
+            guard let shell = superview else { continue }
+            let shellRect = rect.offsetBy(dx: frame.minX, dy: frame.minY)
+            // Only while the metric rect still lies in the window. Forcing it
+            // on a short window pushes the panel out and the outside window
+            // steals the shortcut-test click.
+            guard shell.bounds.insetBy(dx: -1, dy: -1).contains(shellRect) else { continue }
             if panel.frame != rect {
                 panel.frame = rect
                 panel.preferredSize = rect.size

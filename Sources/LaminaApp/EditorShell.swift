@@ -118,11 +118,11 @@ final class EditorShell: NSView, ToolbarGripHost {
         holdFloatingScreens()
         promoteOutsideFloaters()
         // Panels take their metric frames before the bar looks for open canvas.
-        // The first placement runs after hold, so a pre-placement window adjustment
-        // cannot leave 外观 and 对齐 off the metric grid.
         floaters.layoutSubtreeIfNeeded()
-        // A launch-time window change is not a user resize. Until the user drags,
-        // resizes, or docks, the metric frames are where the panels start.
+        // A launch-time slide is not a user resize. Panels the user has not
+        // dragged stay on the metric grid while that grid still fits the window.
+        // A shorter window leaves the held frame alone so a panel is not pushed
+        // out over the home screen.
         if !userResizedWindow {
             floaters.restoreUntouchedFrames()
         }
@@ -177,15 +177,8 @@ final class EditorShell: NSView, ToolbarGripHost {
             windowFrameChanged: changed
         )
         floatingHoldSettled = decision.settled
-        let sizeChanged = lastWindowFrame.map {
-            abs($0.width - newWindow.width) > 0.5 || abs($0.height - newWindow.height) > 0.5
-        } ?? false
-        // Moving the window already carries subviews with it. Applying the
-        // screen-hold formula again slides them inside the window. A live resize
-        // is the case that has to keep the screen point.
-        let holdResize = decision.move && (userResizedWindow || window.inLiveResize) && sizeChanged
         var notes: [String] = []
-        if holdResize, let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
+        if decision.move, let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
            oldWindow.width > 1, oldWindow.height > 1, bounds.width > 1, bounds.height > 1 {
             let windowBox = DockBox(x: 0, y: 0, width: Double(bounds.width), height: Double(bounds.height))
             notes.append(String(format: "winΔ=(%.1f,%.1f) host %.1f→%.1f",
@@ -249,7 +242,7 @@ final class EditorShell: NSView, ToolbarGripHost {
         } else {
             notes.append("move=false")
         }
-        if holdResize {
+        if decision.move {
             holdTrace = notes.joined(separator: " | ")
         } else if holdTrace.isEmpty {
             holdTrace = "move=false"
