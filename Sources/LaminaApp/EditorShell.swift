@@ -119,11 +119,12 @@ final class EditorShell: NSView, ToolbarGripHost {
         promoteOutsideFloaters()
         // Panels take their metric frames before the bar looks for open canvas.
         floaters.layoutSubtreeIfNeeded()
-        // A launch-time slide is not a user resize. Panels the user has not
-        // dragged stay on the metric grid while that grid still fits the window.
-        // A shorter window leaves the held frame alone so a panel is not pushed
-        // out over the home screen.
-        if !userResizedWindow {
+        // The design window is where 外观 and 对齐 are measured. A smaller
+        // window, including the shortcut test, keeps the held frames: forcing
+        // the metric rect there puts a panel over the home screen.
+        if !userResizedWindow,
+           bounds.width >= WorkspaceMetrics.windowWidth - 1,
+           bounds.height >= WorkspaceMetrics.windowHeight - 1 {
             floaters.restoreUntouchedFrames()
         }
         placeContextBar()
