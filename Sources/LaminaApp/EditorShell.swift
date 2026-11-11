@@ -611,28 +611,28 @@ final class EditorShell: NSView, ToolbarGripHost {
             let key = ObjectIdentifier(panel)
             if seen.contains(key) { continue }
             seen.insert(key)
-            let shellFrame: NSRect
+            let panelFrame: NSRect
             if panel.window === window {
-                shellFrame = shellFrame(of: panel)
+                panelFrame = shellFrame(of: panel)
             } else if let hostWindow = panel.window {
                 let screen = hostWindow.convertToScreen(panel.convert(panel.bounds, to: nil))
-                shellFrame = convert(window.convertFromScreen(screen), from: nil)
+                panelFrame = convert(window.convertFromScreen(screen), from: nil)
             } else {
                 continue
             }
             // Flush with the edge is still inside. Only a panel that actually hangs
             // out by more than 2 pt leaves the shell.
-            let hangsOut = shellFrame.minX < -2 || shellFrame.maxX > bounds.width + 2
-                || shellFrame.minY < -2 || shellFrame.maxY > bounds.height + 2
+            let hangsOut = panelFrame.minX < -2 || panelFrame.maxX > bounds.width + 2
+                || panelFrame.minY < -2 || panelFrame.maxY > bounds.height + 2
             if !hangsOut {
                 if panel.window !== window {
                     panel.removeFromSuperview()
-                    floaters.receiveFloating(panel, frameInShell: shellFrame)
+                    floaters.receiveFloating(panel, frameInShell: panelFrame)
                 }
                 if let host = outsidePanels.removeValue(forKey: key) { host.orderOut(nil) }
                 continue
             }
-            let screen = window.convertToScreen(convert(shellFrame, to: nil))
+            let screen = window.convertToScreen(convert(panelFrame, to: nil))
             hostOutside(panel, screen: screen)
         }
         for key in outsidePanels.keys where !seen.contains(key) {
