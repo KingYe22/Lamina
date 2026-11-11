@@ -289,6 +289,11 @@ final class FloatingPanels: NSView {
 
     func dockPanels() -> [FloatPanel] { panels }
 
+    /// Host-local frame of the generative card, when it is on screen.
+    func generativeFrame() -> NSRect? {
+        generative.isHidden ? nil : generative.frame
+    }
+
     func addFloating(_ panel: FloatPanel) {
         panel.workspace = workspace
         panel.host = self

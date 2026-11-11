@@ -37,9 +37,9 @@ final class EditorShell: NSView, ToolbarGripHost {
         floaters.workspace = workspace
         contextBar.workspace = workspace
         controlBar.workspace = workspace
-        // Canvas, then the properties dock, then floating panels so a panel can cover the
-        // dock when it snaps to the window's right edge. Docked chrome stays above the canvas.
-        for view in [canvas, shadowBand, dock, floaters, contextBar, toolbar, status, controlBar, tabs] as [NSView] {
+        // The context bar sits on the canvas, under every panel, so a panel tab stays clickable.
+        // Floating panels still cover the dock when one snaps to the window's right edge.
+        for view in [canvas, contextBar, shadowBand, dock, floaters, toolbar, status, controlBar, tabs] as [NSView] {
             addSubview(view)
         }
         edgeGuide.isHidden = true
@@ -108,17 +108,6 @@ final class EditorShell: NSView, ToolbarGripHost {
             height: Double(columnH)
         )
         floaters.frame = NSRect(x: leading, y: bodyY, width: floaterWidth, height: columnH)
-        // The bar sits in the shadow band, above panel titles and below the control strip.
-        // A bar on the canvas top covers the appearance and align title edges.
-        let barWidth: CGFloat = workspace.active.model.selection.isEmpty ? 220 : 360
-        let barHeight: CGFloat = 28
-        contextBar.frame = NSRect(
-            x: canvas.frame.minX + 8,
-            y: canvas.frame.maxY + 6,
-            width: min(barWidth, max(0, canvas.frame.width - 16)),
-            height: barHeight
-        )
-        contextBar.isHidden = false
         if !edgeGuide.isHidden {
             let thickness = CGFloat(DockSnap.guideThickness)
             let guideX: CGFloat = edgeGuide.frame.midX < bounds.midX ? 0 : max(0, bounds.width - thickness)
@@ -127,6 +116,7 @@ final class EditorShell: NSView, ToolbarGripHost {
         applyDockedFrames(solved, dockX: dockX, toolWidth: toolWidth, bodyY: bodyY)
         holdFloatingScreens()
         promoteOutsideFloaters()
+        placeContextBar()
         dock.needsDisplay = true
     }
 
@@ -531,6 +521,59 @@ final class EditorShell: NSView, ToolbarGripHost {
             columnBackgrounds = backgrounds
             needsDisplay = true
         }
+    }
+
+    /// Top-left of the canvas, beside the toolbar. If a panel already occupies that
+    /// corner, the bar steps down or right until it sits on open canvas.
+    private func placeContextBar() {
+        let selected = !workspace.active.model.selection.isEmpty
+        let height: CGFloat = 28
+        let canvasRect = canvas.frame
+        guard canvasRect.width > 80, canvasRect.height > height + 16 else {
+            contextBar.isHidden = true
+            return
+        }
+        contextBar.isHidden = false
+        let gap: CGFloat = 8
+        var x = canvasRect.minX + gap
+        var y = canvasRect.maxY - gap - height
+        var width = min(contextBar.contentWidth(selected: selected), canvasRect.maxX - gap - x)
+        var obstacles: [NSRect] = [dock.frame, toolbar.frame, tabs.frame, controlBar.frame, status.frame, shadowBand.frame]
+        for panel in floaters.dockPanels() where !panel.isHidden {
+            let frame = shellFrame(of: panel)
+            if frame.width > 2, frame.height > 2 { obstacles.append(frame) }
+        }
+        if let local = floaters.generativeFrame() {
+            obstacles.append(floaters.convert(local, to: self))
+        }
+        for _ in 0..<16 {
+            let rect = NSRect(x: x, y: y, width: width, height: height)
+            guard let hit = obstacles.first(where: { overlaps(rect, $0, gap: gap) }) else {
+                contextBar.frame = rect
+                return
+            }
+            var moved = false
+            let below = hit.minY - gap - height
+            if below <= y - 1, below >= canvasRect.minY + gap {
+                y = below
+                moved = true
+            } else {
+                let right = hit.maxX + gap
+                if right >= x + 1, right + 80 <= canvasRect.maxX {
+                    x = right
+                    y = canvasRect.maxY - gap - height
+                    width = min(contextBar.contentWidth(selected: selected), canvasRect.maxX - gap - x)
+                    moved = true
+                }
+            }
+            if !moved { break }
+        }
+        contextBar.frame = NSRect(x: canvasRect.minX + gap, y: canvasRect.minY + gap, width: width, height: height)
+    }
+
+    private func overlaps(_ rect: NSRect, _ obstacle: NSRect, gap: CGFloat) -> Bool {
+        let hit = rect.intersection(obstacle.insetBy(dx: -gap, dy: -gap))
+        return !hit.isNull && hit.width > 0.5 && hit.height > 0.5
     }
 
     private func hostOutside(_ panel: FloatPanel, screen: NSRect) {

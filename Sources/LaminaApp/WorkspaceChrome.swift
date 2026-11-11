@@ -330,6 +330,17 @@ final class ContextBar: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
     weak var workspace: Workspace?
 
+    /// Width of the Illustrator row: grip, and for a selection the AI mark, labels, swatches and •••.
+    func contentWidth(selected: Bool) -> CGFloat {
+        var width: CGFloat = 8
+        width += 16
+        if selected { width += 22 }
+        for name in selected ? IllustratorParity.contextSelected : IllustratorParity.contextEmpty {
+            width += segmentWidth(name) + 6
+        }
+        return width + 8
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         Theme.panel.setFill()
         NSBezierPath(roundedRect: bounds, xRadius: 6, yRadius: 6).fill()
@@ -337,41 +348,93 @@ final class ContextBar: NSView {
         let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 6, yRadius: 6)
         border.lineWidth = 1
         border.stroke()
-        let model = workspace?.active.model
-        let names = model?.selection.isEmpty == false ? IllustratorParity.contextSelected : IllustratorParity.contextEmpty
+        let selected = workspace?.active.model.selection.isEmpty == false
         var x: CGFloat = 8
-        let grip = NSRect(x: x, y: (bounds.height - 12) / 2, width: 8, height: 12)
+        drawGrip(NSRect(x: x, y: (bounds.height - 12) / 2, width: 10, height: 12))
+        x += 16
+        if selected { x = drawSpark(x) }
+        let names = selected ? IllustratorParity.contextSelected : IllustratorParity.contextEmpty
+        for name in names {
+            x = drawSegment(name, x: x) + 6
+        }
+    }
+
+    private func segmentWidth(_ name: String) -> CGFloat {
+        switch name {
+        case "填色", "描边", "边角", "•••":
+            return 18
+        default:
+            let font = Theme.ui(12, weight: .medium)
+            return (name as NSString).size(withAttributes: [.font: font]).width + 8
+        }
+    }
+
+    private func drawSegment(_ name: String, x: CGFloat) -> CGFloat {
+        switch name {
+        case "填色":
+            let rect = NSRect(x: x, y: (bounds.height - 14) / 2, width: 14, height: 14)
+            NSColor.white.setFill()
+            NSBezierPath(rect: rect).fill()
+            Theme.line.setStroke()
+            NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5)).stroke()
+            return x + 18
+        case "描边":
+            let rect = NSRect(x: x, y: (bounds.height - 14) / 2, width: 14, height: 14)
+            Theme.icon.setStroke()
+            let ring = NSBezierPath(rect: rect.insetBy(dx: 1, dy: 1))
+            ring.lineWidth = 1.5
+            ring.stroke()
+            return x + 18
+        case "边角":
+            Theme.icon.setStroke()
+            let path = NSBezierPath()
+            path.lineWidth = 1.5
+            let y = bounds.midY
+            path.move(to: NSPoint(x: x + 2, y: y - 6))
+            path.line(to: NSPoint(x: x + 2, y: y + 4))
+            path.curve(to: NSPoint(x: x + 12, y: y + 4), controlPoint1: NSPoint(x: x + 8, y: y + 4), controlPoint2: NSPoint(x: x + 12, y: y + 4))
+            path.stroke()
+            return x + 18
+        case "•••":
+            Theme.icon.setFill()
+            for index in 0..<3 {
+                NSBezierPath(ovalIn: NSRect(x: x + CGFloat(index) * 5, y: bounds.midY - 1.5, width: 3, height: 3)).fill()
+            }
+            return x + 18
+        default:
+            let font = Theme.ui(12, weight: .medium)
+            let size = (name as NSString).size(withAttributes: [.font: font])
+            (name as NSString).draw(at: NSPoint(x: x, y: (bounds.height - size.height) / 2), withAttributes: [
+                .font: font, .foregroundColor: Theme.text
+            ])
+            return x + size.width + 8
+        }
+    }
+
+    private func drawGrip(_ rect: NSRect) {
         Theme.color(0x9A9A9A).setFill()
         for column in 0..<2 {
             for row in 0..<3 {
-                NSRect(x: grip.minX + CGFloat(column) * 4, y: grip.minY + CGFloat(row) * 4, width: 2, height: 2).fill()
+                NSRect(x: rect.minX + CGFloat(column) * 4, y: rect.minY + CGFloat(row) * 4, width: 2, height: 2).fill()
             }
         }
-        x = grip.maxX + 8
-        for name in names {
-            x = label(name, x: x, weight: name == names[0] ? .semibold : .regular)
-        }
     }
 
-    private func label(_ text: String, x: CGFloat, weight: NSFont.Weight = .regular) -> CGFloat {
-        let font = Theme.ui(11, weight: weight)
-        let size = (text as NSString).size(withAttributes: [.font: font])
-        (text as NSString).draw(at: NSPoint(x: x, y: (bounds.height - size.height) / 2), withAttributes: [
-            .font: font, .foregroundColor: Theme.text
-        ])
-        return x + size.width + 8
-    }
-
-    private func divider(_ x: CGFloat) -> CGFloat {
-        Theme.line.setFill()
-        NSBezierPath(rect: NSRect(x: x, y: 6, width: 1, height: bounds.height - 12)).fill()
-        return x + 10
-    }
-
-    private func chip(_ draw: (NSRect) -> Void, title: String, x: CGFloat) -> CGFloat {
-        let icon = NSRect(x: x, y: (bounds.height - 14) / 2, width: 14, height: 14)
-        draw(icon)
-        return label(title, x: icon.maxX + 4)
+    private func drawSpark(_ x: CGFloat) -> CGFloat {
+        Theme.accent.setFill()
+        let center = NSPoint(x: x + 7, y: bounds.midY)
+        let star = NSBezierPath()
+        star.move(to: NSPoint(x: center.x, y: center.y + 6))
+        star.line(to: NSPoint(x: center.x + 1.6, y: center.y + 1.6))
+        star.line(to: NSPoint(x: center.x + 6, y: center.y))
+        star.line(to: NSPoint(x: center.x + 1.6, y: center.y - 1.6))
+        star.line(to: NSPoint(x: center.x, y: center.y - 6))
+        star.line(to: NSPoint(x: center.x - 1.6, y: center.y - 1.6))
+        star.line(to: NSPoint(x: center.x - 6, y: center.y))
+        star.line(to: NSPoint(x: center.x - 1.6, y: center.y + 1.6))
+        star.close()
+        star.fill()
+        return x + 22
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -386,16 +449,7 @@ final class ContextBar: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        let tool = workspace?.active.model.tool ?? .selection
-        if point.x < 90 {
-            RichTooltip.shared.show(from: self, localPoint: point, title: ToolTips.heading(tool), body: ToolTips.body(tool), tool: tool)
-        } else if point.x < 170 {
-            RichTooltip.shared.show(from: self, localPoint: point, title: "属性", body: "打开属性面板，查看当前选择的选项。")
-        } else if point.x < 230 {
-            RichTooltip.shared.show(from: self, localPoint: point, title: "对齐", body: "按所选对象或画板对齐、分布。")
-        } else {
-            RichTooltip.shared.show(from: self, localPoint: point, title: "路径查找器", body: "用形状模式合并、减去或相交路径。")
-        }
+        RichTooltip.shared.show(from: self, localPoint: point, title: "上下文任务栏", body: "在画布上操作当前选择。")
     }
 
     override func mouseExited(with event: NSEvent) { RichTooltip.shared.hide() }

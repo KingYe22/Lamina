@@ -192,4 +192,12 @@ final class IllustratorParityTests: XCTestCase {
         XCTAssertEqual(IllustratorParity.strokeWeights.first, 0.25)
         XCTAssertEqual(IllustratorParity.strokeWeights.last, 60)
     }
+
+    func testContextBarNamesTheIllustratorActions() {
+        XCTAssertEqual(
+            IllustratorParity.contextSelected,
+            ["生成矢量", "编辑路径", "填色", "描边", "边角", "•••"]
+        )
+        XCTAssertEqual(IllustratorParity.contextEmpty, ["生成矢量", "绘制（铅笔）"])
+    }
 }

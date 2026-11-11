@@ -349,6 +349,111 @@ def check_pen(path):
     return ok
 
 
+def fill_mask(image):
+    return np.max(np.abs(image.astype(np.int16) - PANEL_FILL), axis=2) <= 8
+
+
+def chip_runs(fill, y, x0, x1, boxes):
+    """Panel-fill runs on this row, outside the panel boxes."""
+    row = fill[y, x0:x1].copy()
+    for bx, by, bw, bh in boxes:
+        if by - 4 <= y < by + bh + 4:
+            left = max(0, bx - 4 - x0)
+            right = min(row.shape[0], bx + bw + 4 - x0)
+            if right > left:
+                row[left:right] = False
+    runs = []
+    start = None
+    for index, on in enumerate(row):
+        if on and start is None:
+            start = index
+        elif not on and start is not None:
+            runs.append((x0 + start, x0 + index))
+            start = None
+    if start is not None:
+        runs.append((x0 + start, x0 + row.shape[0]))
+    return [(left, right) for left, right in runs if 140 <= right - left <= 1000]
+
+
+def context_chips(image, y0, y1):
+    """Short panel-fill chips. The control bar is full width and is ignored.
+
+    Glyphs punch holes in a row, so a bar is the union of overlapping runs
+    and of bands separated by at most the text height.
+    """
+    height, width, _ = image.shape
+    toolbar_right = TOOL * SCALE
+    dock_x = (WINDOW_W - 312) * SCALE
+    boxes = [appearance_box(), align_box(), stroke_box()]
+    fill = fill_mask(image)
+    y0 = max(0, y0)
+    y1 = min(height, y1)
+    rows = []
+    for y in range(y0, y1):
+        runs = chip_runs(fill, y, toolbar_right + 4, min(width, dock_x), boxes)
+        if runs:
+            rows.append((y, min(run[0] for run in runs), max(run[1] for run in runs)))
+    chips = []
+    current = None
+    for y, left, right in rows:
+        overlaps = current is not None and not (right < current["left"] or left > current["right"])
+        if current is not None and y <= current["bottom"] + 30 and overlaps:
+            current["bottom"] = y
+            current["left"] = min(current["left"], left)
+            current["right"] = max(current["right"], right)
+        else:
+            if current is not None:
+                chips.append(current)
+            current = {"top": y, "bottom": y, "left": left, "right": right}
+    if current is not None:
+        chips.append(current)
+    return chips
+
+
+def check_context_bar(image):
+    """Contextual task bar on the canvas, top-left beside the toolbar.
+
+    The empty-selection workspace shot shows that chip on open pasteboard.
+    A chip in the shadow band above the panel column, or one that covers a
+    panel, title, or tab row, fails. Panel tabs stay clear of the chip.
+    """
+    column_top = int(panel_top_px(0))
+    toolbar_right = TOOL * SCALE
+    status_y = image.shape[0] - STATUS * SCALE
+    boxes = [appearance_box(), align_box(), stroke_box()]
+    # The control strip ends here. The shadow band runs from there down to the canvas.
+    shadow_top = int((TITLE_BAND + TAB) * SCALE + 37.5 * SCALE)
+    shadow = context_chips(image, shadow_top, column_top)
+    print(f"shadow-band chips {len(shadow)} column_top {column_top}")
+    ok = require(not shadow, f"context bar is not in the shadow band ({len(shadow)} chips)")
+    canvas_chips = context_chips(image, column_top + 2, status_y)
+    print(f"canvas chips {canvas_chips}")
+    bar = next((chip for chip in canvas_chips if chip["bottom"] - chip["top"] >= 36), None)
+    ok &= require(bar is not None, "context bar is on the canvas beside the toolbar")
+    if bar is None:
+        return ok
+    top, bottom = bar["top"], bar["bottom"]
+    left, right = bar["left"], bar["right"]
+    height_px = bottom - top + 1
+    ok &= require(40 <= height_px <= 80, f"context bar height {height_px}px")
+    ok &= require(toolbar_right <= left <= toolbar_right + 24 * SCALE, f"context bar left {left} beside toolbar {toolbar_right}")
+    ok &= require(top > column_top, f"context bar top {top} is below the shadow band {column_top}")
+    for name, box in (("appearance", boxes[0]), ("align", boxes[1]), ("stroke", boxes[2])):
+        bx, by, bw, bh = box
+        x_overlap = not (right <= bx or left >= bx + bw)
+        y_overlap = not (bottom < by or top >= by + bh)
+        # A chip tucked against a panel is still covering that title row.
+        y_close = top < by + bh + 8 and bottom > by - 8
+        ok &= require(not (x_overlap and (y_overlap or y_close)), f"context bar does not cover {name}")
+    tab_bottom = (TITLE_BAND + TAB) * SCALE
+    ok &= require(top > tab_bottom, f"context bar is below the document tabs ({top} > {tab_bottom})")
+    crop = image[top:bottom + 1, left:right + 1]
+    bright = int(np.sum(crop.min(axis=2) > 180))
+    print(f"context bar x={left}..{right} y={top}..{bottom} bright {bright}")
+    ok &= require(bright > 40, f"context bar text is drawn ({bright} light pixels)")
+    return ok
+
+
 def main():
     shot_dir = Path(sys.argv[1])
     workspace = load(shot_dir / "workspace.png")
@@ -359,9 +464,10 @@ def main():
     ok &= check_dock(load(shot_dir / "p0-dock-guide.png"), load(shot_dir / "p0-dock-snapped.png"))
     ok &= check_generative(workspace, load(shot_dir / "p0-generative.png"))
     ok &= check_pen(shot_dir / "pen-cursor.png")
+    ok &= check_context_bar(workspace)
     if not ok:
         raise SystemExit(1)
-    print("all five P0 checks passed")
+    print("all P0 checks passed")
 
 
 if __name__ == "__main__":
