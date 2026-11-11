@@ -684,29 +684,36 @@ final class FloatPanel: NSView {
     }
 
     private func drawTransform(_ rect: NSRect, ink: NSColor) {
+        _ = ink
         let labels = ["X", "Y", "W", "H"]
         let readout = workspace?.active.model.selectionReadout()
-        let values = [
-            readout.map { $0.x + " mm" } ?? "0 mm",
-            readout.map { $0.y + " mm" } ?? "0 mm",
-            readout.map { $0.width + " mm" } ?? "0 mm",
-            readout.map { $0.height + " mm" } ?? "0 mm"
-        ]
+        let xText = (readout?.x ?? "0") + " mm"
+        let yText = (readout?.y ?? "0") + " mm"
+        let wText = (readout?.width ?? "0") + " mm"
+        let hText = (readout?.height ?? "0") + " mm"
+        let values = [xText, yText, wText, hText]
+        let labelColor = Theme.color(0xC2C2C2)
+        let labelFont = Theme.ui(13)
         for index in 0..<4 {
             let y = rect.minY + CGFloat(index) * 28
-            (labels[index] as NSString).draw(at: NSPoint(x: rect.minX, y: y + 2), withAttributes: [
-                .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
+            let label = labels[index] as NSString
+            label.draw(at: NSPoint(x: rect.minX, y: y + 2), withAttributes: [
+                .font: labelFont, .foregroundColor: labelColor
             ])
-            PanelIcons.stepper(NSRect(x: rect.minX + 22, y: y, width: min(140, rect.width - 22), height: 20), title: "")
-            _ = values
-            _ = ink
+            let field = NSRect(x: rect.minX + 22, y: y, width: min(140, rect.width - 22), height: 20)
+            PanelIcons.stepper(field, title: values[index])
         }
         let extra = Theme.color(0xD1D1D1)
-        ("∠ 0°" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 120), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
-        ("倾斜 0°" as NSString).draw(at: NSPoint(x: rect.minX + 70, y: rect.minY + 120), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
+        let extraFont = Theme.ui(12)
+        let angle = "∠ 0°" as NSString
+        angle.draw(at: NSPoint(x: rect.minX, y: rect.minY + 120), withAttributes: [.font: extraFont, .foregroundColor: extra])
+        let shear = "倾斜 0°" as NSString
+        shear.draw(at: NSPoint(x: rect.minX + 70, y: rect.minY + 120), withAttributes: [.font: extraFont, .foregroundColor: extra])
         if let readout {
-            ("\(readout.name)属性" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 146), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
-            ("W \(readout.width) mm   H \(readout.height) mm" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 166), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
+            let name = "\(readout.name)属性" as NSString
+            name.draw(at: NSPoint(x: rect.minX, y: rect.minY + 146), withAttributes: [.font: extraFont, .foregroundColor: extra])
+            let size = "W \(readout.width) mm   H \(readout.height) mm" as NSString
+            size.draw(at: NSPoint(x: rect.minX, y: rect.minY + 166), withAttributes: [.font: extraFont, .foregroundColor: extra])
         }
         PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: rect.minY + 190), on: false, title: "缩放圆角")
         PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: rect.minY + 212), on: false, title: "缩放描边和效果")
