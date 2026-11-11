@@ -127,9 +127,11 @@ final class EditorShell: NSView, ToolbarGripHost {
         let host = floaters.frame
         let lines = floaters.dockPanels().map { panel -> String in
             let home = panel.superview === floaters ? "host" : (panel.superview === self ? "shell" : "other")
-            return "\(panel.tabs.map(\.rawValue).joined(separator: "+")) x=\(panel.frame.minX) y=\(panel.frame.minY) w=\(panel.frame.width) h=\(panel.frame.height) \(home) metric=\(panel.keepsMetricOrigin)"
+            let pos = panel.layer?.position
+            let metric = panel.metricFrame
+            return "\(panel.tabs.map(\.rawValue).joined(separator: "+")) frame=(\(panel.frame.minX),\(panel.frame.minY),\(panel.frame.width),\(panel.frame.height)) metric=(\(metric?.minX ?? -1),\(metric?.minY ?? -1)) keep=\(panel.keepsMetricOrigin) \(home) layer=(\(pos?.x ?? -1),\(pos?.y ?? -1))"
         }
-        return "host x=\(host.minX) y=\(host.minY) w=\(host.width) h=\(host.height) " + lines.joined(separator: " | ")
+        return "host=(\(host.minX),\(host.minY),\(host.width),\(host.height)) " + lines.joined(separator: " || ")
     }
 
     private var lastWindowFrame: NSRect?

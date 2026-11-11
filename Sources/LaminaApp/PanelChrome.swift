@@ -415,13 +415,15 @@ final class FloatPanel: NSView {
         layer?.masksToBounds = true
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 0
-        // Weight fields match 0.4.12. The transform fields stay out of the
-        // hierarchy until that tab is shown: adding them to a resting panel
-        // slid Appearance and Align 5 pt off the metric grid.
-        for field in [weightField, limitField] {
-            field.alignment = .center
-            field.font = Theme.ui(13)
-            addSubview(field)
+        // Only the panel that shows the field gets the control. A hidden
+        // zero-frame text field on Appearance and Align was enough, with the
+        // canvas bar under the floater host, to leave those layers 5 pt right.
+        if tabs.contains(.stroke) {
+            for field in [weightField, limitField] {
+                field.alignment = .center
+                field.font = Theme.ui(13)
+                addSubview(field)
+            }
         }
         for field in [xField, yField, wField, hField] {
             field.alignment = .center
@@ -528,6 +530,34 @@ final class FloatPanel: NSView {
         )
         let origin = NSPoint(x: kept.x, y: kept.y)
         if frame.origin != origin { super.setFrameOrigin(origin) }
+    }
+
+    private var syncingLayer = false
+
+    /// The frame can already be the metric while the layer is still 5 pt to the
+    /// right. Put the layer on the frame immediately before it is composited.
+    override func viewWillDraw() {
+        super.viewWillDraw()
+        guard !syncingLayer else { return }
+        syncingLayer = true
+        restoreRestingOrigin()
+        if keepsMetricOrigin, let layer {
+            let anchor = layer.anchorPoint
+            let size = layer.bounds.size
+            let origin = CGPoint(
+                x: layer.position.x - anchor.x * size.width,
+                y: layer.position.y - anchor.y * size.height
+            )
+            let dx = frame.minX - origin.x
+            let dy = frame.minY - origin.y
+            if abs(dx) > 0.5 || abs(dy) > 0.5 {
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                layer.position = CGPoint(x: layer.position.x + dx, y: layer.position.y + dy)
+                CATransaction.commit()
+            }
+        }
+        syncingLayer = false
     }
 
     override func draw(_ dirtyRect: NSRect) {
