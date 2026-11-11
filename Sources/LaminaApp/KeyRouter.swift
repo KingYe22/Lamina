@@ -270,6 +270,14 @@ enum KeyRouter {
            workspace.onAcceptDialog?() == true {
             return consume("Return", "创建文档")
         }
+        if (event.keyCode == VirtualKey.delete || event.keyCode == VirtualKey.forwardDelete),
+           model.editingText == nil, !isActivelyEditing(event) {
+            if !model.selection.isEmpty {
+                model.deleteSelection(recordUndo: true)
+                workspace.touch()
+            }
+            return consume("Delete", "清除")
+        }
         if event.keyCode == VirtualKey.returnKey, model.editingText == nil {
             if (model.tool == .pen || model.tool == .curvature), model.penNodes.count >= 2 {
                 model.finishPen()
@@ -289,13 +297,13 @@ enum KeyRouter {
                 return consume("文字", "结束编辑")
             }
             if event.keyCode == VirtualKey.delete || event.keyCode == VirtualKey.forwardDelete {
-                workspace.replaceEditingText { text in
-                    if !text.isEmpty { text.removeLast() }
-                }
+                model.deleteTextBackward()
+                workspace.touch()
                 return consume("文字", "删除")
             }
             if let chars = event.characters, !chars.isEmpty {
-                workspace.replaceEditingText { text in text += chars }
+                model.typeText(chars)
+                workspace.touch()
                 return consume("文字", "输入")
             }
         }

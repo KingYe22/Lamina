@@ -437,30 +437,49 @@ final class Workspace: ObservableObject {
         }
         let alert = NSAlert()
         alert.messageText = request.title
-        alert.informativeText = request.action
-        alert.addButton(withTitle: "确定")
-        alert.addButton(withTitle: "取消")
+        alert.informativeText = ""
+        alert.addButton(withTitle: request.confirmTitle)
+        alert.addButton(withTitle: request.cancelTitle)
+        if let alternate = request.alternateTitle {
+            alert.addButton(withTitle: alternate)
+        }
         let height = CGFloat(max(request.fields.count, 1)) * 28
-        let holder = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: height))
+        let holder = DialogAccessory(frame: NSRect(x: 0, y: 0, width: 420, height: height))
         var inputs: [(String, NSTextField)] = []
+        var checks: [(String, NSButton)] = []
         for (index, field) in request.fields.enumerated() {
             let y = height - CGFloat(index + 1) * 28 + 4
             let label = NSTextField(labelWithString: field.label)
-            label.frame = NSRect(x: 0, y: y, width: 148, height: 20)
-            let input = NSTextField(frame: NSRect(x: 154, y: y, width: 180, height: 22))
-            input.stringValue = field.value
+            label.frame = NSRect(x: 0, y: y, width: 180, height: 20)
             holder.addSubview(label)
-            holder.addSubview(input)
-            inputs.append((field.key, input))
+            if field.value.hasPrefix("check:") {
+                let box = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+                box.frame = NSRect(x: 188, y: y, width: 24, height: 22)
+                box.state = field.value == "check:1" ? .on : .off
+                holder.addSubview(box)
+                checks.append((field.key, box))
+            } else {
+                let input = DialogEntry(frame: NSRect(x: 188, y: y, width: 210, height: 22))
+                input.stringValue = field.value
+                input.onEscape = { NSApp.stopModal(withCode: .alertSecondButtonReturn) }
+                holder.addSubview(input)
+                inputs.append((field.key, input))
+            }
         }
         alert.accessoryView = holder
-        if alert.runModal() == .alertFirstButtonReturn {
-            var values: [String: String] = [:]
-            for (key, field) in inputs { values[key] = field.stringValue }
-            active.model.commitDialog(values)
-        } else {
+        let response = alert.runModal()
+        if response == .alertSecondButtonReturn {
             active.model.cancelDialog()
+            return
         }
+        var values: [String: String] = [:]
+        for (key, field) in inputs { values[key] = field.stringValue }
+        for (key, box) in checks { values[key] = box.state == .on ? "1" : "0" }
+        if response == .alertThirdButtonReturn {
+            values["__copy"] = "1"
+            values["__alternate"] = "1"
+        }
+        active.model.commitDialog(values)
     }
 
     private func bind(_ session: EditorSession) {
@@ -598,5 +617,41 @@ final class Workspace: ObservableObject {
     static let svgType = UTType(filenameExtension: "svg") ?? .xml
     static var readableTypes: [UTType] {
         [aiType, svgType, .pdf, .png, .jpeg, .tiff]
+    }
+}
+
+/// Accessory fields. Esc cancels the dialog instead of typing into the first field.
+final class DialogEntry: NSTextField, NSTextFieldDelegate {
+    var onEscape: (() -> Void)?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        delegate = self
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func becomeFirstResponder() -> Bool {
+        let ok = super.becomeFirstResponder()
+        currentEditor()?.selectAll(nil)
+        return ok
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            onEscape?()
+            return true
+        }
+        return false
+    }
+}
+
+final class DialogAccessory: NSView {
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == VirtualKey.escape {
+            NSApp.stopModal(withCode: .alertSecondButtonReturn)
+            return
+        }
+        super.keyDown(with: event)
     }
 }

@@ -20,6 +20,7 @@ struct DrawOptions {
     var selectedAnchors: Set<UUID> = []
     var tool: Tool = .selection
     var penNodes: [PathNode] = []
+    var penPreviewNodes: [PathNode] = []
     var hover = Vec2.zero
     var hint: EditorModel.InteractionHint = .none
     var showAnchors = true

@@ -191,7 +191,7 @@ final class VectorCanvas: NSView {
         options.selection = model.selection
         options.selectedAnchors = model.selectedAnchors
         options.tool = model.tool
-        options.penNodes = model.penNodes
+        options.penNodes = model.penPreviewNodes.count >= 2 ? model.penPreviewNodes : model.penNodes
         options.hover = model.hover
         options.hint = model.interactionHint
         options.showAnchors = model.showAnchors

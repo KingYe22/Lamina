@@ -527,7 +527,7 @@ public struct StrokeStyle: Equatable, Hashable, Sendable {
     /// Tablet samples recorded along a paintbrush stroke. Empty means a mouse stroke.
     public var samples: [StrokeSample]
 
-    public init(paint: Paint = .solid(.black), width: Double = 1, cap: LineCap = .butt, join: LineJoin = .miter, miterLimit: Double = 4, dash: [Double] = [], brush: BrushDefinition? = nil, profile: WidthProfile = .uniform, samples: [StrokeSample] = []) {
+    public init(paint: Paint = .solid(.black), width: Double = 1, cap: LineCap = .butt, join: LineJoin = .miter, miterLimit: Double = 10, dash: [Double] = [], brush: BrushDefinition? = nil, profile: WidthProfile = .uniform, samples: [StrokeSample] = []) {
         self.paint = paint
         self.width = width
         self.cap = cap
@@ -549,7 +549,7 @@ extension StrokeStyle: Codable {
         width = try c.decodeIfPresent(Double.self, forKey: .width) ?? 1
         cap = try c.decodeIfPresent(LineCap.self, forKey: .cap) ?? .butt
         join = try c.decodeIfPresent(LineJoin.self, forKey: .join) ?? .miter
-        miterLimit = try c.decodeIfPresent(Double.self, forKey: .miterLimit) ?? 4
+        miterLimit = try c.decodeIfPresent(Double.self, forKey: .miterLimit) ?? 10
         dash = try c.decodeIfPresent([Double].self, forKey: .dash) ?? []
         brush = try c.decodeIfPresent(BrushDefinition.self, forKey: .brush)
         profile = try c.decodeIfPresent(WidthProfile.self, forKey: .profile) ?? .uniform

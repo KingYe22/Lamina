@@ -11,6 +11,12 @@ func laminaConsumeEvent(_ eventPointer: UnsafeMutableRawPointer) -> Int32 {
         // Resign a panel field here, before the field editor or an input method sees Esc.
         // doCommandBy only schedules the resign, and Pinyin can swallow the key first.
         let code = event.keyCode
+        if event.modifierFlags.contains(.command), code == VirtualKey.ansiA,
+           let field = PanelField.fieldOwningFirstResponder(in: event.window ?? NSApp.keyWindow) {
+            field.currentEditor()?.selectAll(nil)
+            KeyProbe.bump(workspace)
+            return 1
+        }
         if code == VirtualKey.escape || code == VirtualKey.returnKey || code == VirtualKey.tab,
            let field = PanelField.fieldOwningFirstResponder(in: event.window ?? NSApp.keyWindow) {
             field.leave()

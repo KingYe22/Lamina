@@ -65,6 +65,10 @@ class PanelField: NSTextField, NSTextFieldDelegate {
         armed = true
         refusesFirstResponder = false
         window?.makeFirstResponder(self)
+        currentEditor()?.selectAll(nil)
+        DispatchQueue.main.async { [weak self] in
+            self?.currentEditor()?.selectAll(nil)
+        }
         super.mouseDown(with: event)
     }
 

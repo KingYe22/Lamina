@@ -15,10 +15,16 @@ public struct DialogRequest: Equatable, Sendable {
     public var action: String
     public var title: String
     public var fields: [DialogField]
-    public init(action: String, title: String, fields: [DialogField]) {
+    public var confirmTitle: String
+    public var cancelTitle: String
+    public var alternateTitle: String?
+    public init(action: String, title: String, fields: [DialogField], confirmTitle: String = "确定", cancelTitle: String = "取消", alternateTitle: String? = nil) {
         self.action = action
         self.title = title
         self.fields = fields
+        self.confirmTitle = confirmTitle
+        self.cancelTitle = cancelTitle
+        self.alternateTitle = alternateTitle
     }
 }
 
@@ -30,11 +36,11 @@ public enum DialogCatalog {
         case "移动对象":
             return form(action, "移动", [("dx", "水平", "10"), ("dy", "垂直", "0")])
         case "旋转对话框":
-            return form(action, "旋转", [("degrees", "角度", "30")])
+            return IllustratorParity.rotateDialog()
         case "对称对话框":
-            return form(action, "对称", [("axis", "轴 h/v", "h")])
+            return IllustratorParity.reflectDialog()
         case "缩放对话框":
-            return form(action, "缩放", [("percent", "百分比", "110")])
+            return IllustratorParity.scaleDialog()
         case "倾斜对话框":
             return form(action, "倾斜", [("shear", "倾斜", "20")])
         case "打开“分别变换”对话框":
