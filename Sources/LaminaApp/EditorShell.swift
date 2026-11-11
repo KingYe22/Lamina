@@ -183,10 +183,13 @@ final class EditorShell: NSView, ToolbarGripHost {
                     width: CGFloat(placed.width),
                     height: CGFloat(placed.height)
                 )
-                if abs(held.minX - panel.frame.minX) > 0.5 || abs(held.minY - panel.frame.minY) > 0.5 {
+                let before = panel.frame.origin
+                // Set the frame while a resting panel can still reject a small
+                // slide. Clearing the flag first is what left Appearance at +5 pt.
+                panel.frame = held
+                if abs(panel.frame.minX - before.x) > 0.5 || abs(panel.frame.minY - before.y) > 0.5 {
                     panel.keepsMetricOrigin = false
                 }
-                panel.frame = held
             }
         }
         lastWindowFrame = newWindow

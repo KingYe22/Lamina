@@ -165,11 +165,19 @@ final class FloatingPanels: NSView {
         reapplyRestingFrames()
     }
 
-    /// Puts a panel that has not been moved back on the metric origin.
+    /// A panel still within 12 pt of its metric origin, at the metric size, is put
+    /// back. 12 pt only separates that slide from a drag or a real hold. It is
+    /// not an Illustrator measurement.
     func reapplyRestingFrames() {
-        for panel in panels where panel.keepsMetricOrigin && panel.superview === self && !panel.dragging {
-            guard let metric = panel.metricFrame, panel.frame != metric else { continue }
-            panel.frame = metric
+        for panel in panels where panel.superview === self && !panel.dragging {
+            guard let metric = panel.metricFrame else { continue }
+            guard abs(panel.frame.width - metric.width) < 2,
+                  abs(panel.frame.height - metric.height) < 2 else { continue }
+            let dx = abs(panel.frame.minX - metric.minX)
+            let dy = abs(panel.frame.minY - metric.minY)
+            guard dx < 12, dy < 12, dx > 0.5 || dy > 0.5 else { continue }
+            panel.keepsMetricOrigin = true
+            panel.setFrameOrigin(metric.origin)
         }
     }
 
