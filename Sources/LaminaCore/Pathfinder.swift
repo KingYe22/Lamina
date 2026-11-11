@@ -23,9 +23,9 @@ public enum Pathfinder {
             }
         }
         let faces = arrangement(a, b)
-        let selected: [Ring] = faces.filter { face in
-            let insideA = Math2.polygonContains(face.sample, ring: a)
-            let insideB = Math2.polygonContains(face.sample, ring: b)
+        func accepts(_ sample: Vec2) -> Bool {
+            let insideA = Math2.polygonContains(sample, ring: a)
+            let insideB = Math2.polygonContains(sample, ring: b)
             switch op {
             case .unite, .merge, .crop:
                 return insideA || insideB
@@ -41,10 +41,17 @@ public enum Pathfinder {
                 return false
             }
         }
+        let selected: [Ring] = faces.filter { accepts($0.sample) }
         if op == .outline {
             return [a, b]
         }
-        var rings = merge(selected.map(\.points))
+        // A face walk can pinch through a vertex and trace two regions as one
+        // ring. Split those before merging, and keep a cycle only when its own
+        // interior still matches the boolean.
+        let pieces = selected.flatMap { simpleCycles($0.points) }.filter { ring in
+            Math2.signedArea(ring) > 0.25 && accepts(interiorPoint(ring))
+        }
+        var rings = merge(pieces)
         if op == .divide || op == .trim {
             rings = selected.map(\.points).filter { abs(Math2.signedArea($0)) > 0.5 }
         }
@@ -222,6 +229,31 @@ public enum Pathfinder {
         let proj = a + ab * t
         if proj.distance(to: p) > 1e-5 { return nil }
         return t
+    }
+
+    /// Breaks a ring that revisits a vertex into the simple cycles between visits.
+    private static func simpleCycles(_ ring: [Vec2]) -> [[Vec2]] {
+        guard ring.count >= 3 else { return [] }
+        func key(_ point: Vec2) -> String {
+            "\(Int((point.x * 10000).rounded())),\(Int((point.y * 10000).rounded()))"
+        }
+        var cycles: [[Vec2]] = []
+        var path: [Vec2] = []
+        var seen: [String: Int] = [:]
+        for point in ring {
+            let id = key(point)
+            if let start = seen[id] {
+                let cycle = Array(path[start...])
+                if cycle.count >= 3 { cycles.append(cycle) }
+                path.removeSubrange(start..<path.count)
+                seen = [:]
+                for (index, kept) in path.enumerated() { seen[key(kept)] = index }
+            }
+            path.append(point)
+            seen[id] = path.count - 1
+        }
+        if path.count >= 3 { cycles.append(path) }
+        return cycles
     }
 
     private static func interiorPoint(_ ring: [Vec2]) -> Vec2 {
