@@ -163,6 +163,24 @@ final class FloatingPanels: NSView {
         seatAnchoredPanels()
     }
 
+    /// Initial placement. A panel the user has dragged, resized, or docked keeps
+    /// the frame they left it at, whatever the distance.
+    func restoreUntouchedFrames() {
+        guard bounds.width > 400, bounds.height > 200 else { return }
+        let metrics = [
+            WorkspaceMetrics.appearance.rect(in: bounds.height),
+            WorkspaceMetrics.align.rect(in: bounds.height),
+            WorkspaceMetrics.stroke.rect(in: bounds.height)
+        ]
+        for (panel, rect) in zip(panels, metrics) where !panel.adjustedByUser && panel.dockColumnID == nil && panel.superview === self && !panel.dragging {
+            if panel.frame != rect {
+                panel.frame = rect
+                panel.preferredSize = rect.size
+                panel.expandedHeight = rect.height
+            }
+        }
+    }
+
     private var placedSize = NSSize.zero
 
     /// Sits to the right of Align and Stroke so it does not cover them.
@@ -177,6 +195,8 @@ final class FloatingPanels: NSView {
     /// Appearance panel parked `gap` points from the host's right edge.
     /// `applySnap` false leaves the guide up; true commits the zero-gap frame.
     func poseRightShoulder(applySnap: Bool) {
+        // The shoulder pose is a placement. A later layout must not pull it back.
+        panels.first(where: { $0.tabs == [.appearance] })?.adjustedByUser = true
         layoutSubtreeIfNeeded()
         guard bounds.width > 400, let panel = panels.first(where: { $0.tabs == [.appearance] }) else { return }
         let gap: CGFloat = 4
@@ -334,6 +354,7 @@ final class FloatingPanels: NSView {
 
     func split(_ panel: FloatPanel) {
         guard panel.tabs.count > 1, let kind = panel.tabs.firstIndex(of: panel.active) else { return }
+        panel.adjustedByUser = true
         let removed = panel.tabs.remove(at: kind)
         panel.active = panel.tabs[0]
         let born = FloatPanel(tabs: [removed])

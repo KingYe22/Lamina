@@ -114,12 +114,18 @@ final class EditorShell: NSView, ToolbarGripHost {
             edgeGuide.frame = NSRect(x: guideX, y: 0, width: thickness, height: bounds.height)
         }
         applyDockedFrames(solved, dockX: dockX, toolWidth: toolWidth, bodyY: bodyY)
+        if window?.inLiveResize == true { userResizedWindow = true }
         holdFloatingScreens()
         promoteOutsideFloaters()
         // Panels take their metric frames before the bar looks for open canvas.
         // The first placement runs after hold, so a pre-placement window adjustment
         // cannot leave 外观 and 对齐 off the metric grid.
         floaters.layoutSubtreeIfNeeded()
+        // A launch-time window change is not a user resize. Until the user drags,
+        // resizes, or docks, the metric frames are where the panels start.
+        if !userResizedWindow {
+            floaters.restoreUntouchedFrames()
+        }
         placeContextBar()
         dock.needsDisplay = true
     }
@@ -140,9 +146,17 @@ final class EditorShell: NSView, ToolbarGripHost {
 
     private var lastWindowFrame: NSRect?
     private var lastHostFrame: NSRect?
-    /// Last screen-hold pass, for the screenshot report. Not a dock measurement.
+    /// False until the user drags a window edge. `setContentSize` and `center()`
+    /// are not that, and must not slide the panels off the metric grid.
+    private var userResizedWindow = false
+    /// Last screen-hold pass that actually moved a panel, for the screenshot report.
     private var holdTrace = ""
     private var promoteTrace = ""
+
+    override func viewWillStartLiveResize() {
+        super.viewWillStartLiveResize()
+        userResizedWindow = true
+    }
     /// False until the window is on screen at a frame the display can hold.
     /// `center()` and the screen clamp run before that and must not walk panels.
     private var floatingHoldSettled = false
@@ -163,8 +177,15 @@ final class EditorShell: NSView, ToolbarGripHost {
             windowFrameChanged: changed
         )
         floatingHoldSettled = decision.settled
+        let sizeChanged = lastWindowFrame.map {
+            abs($0.width - newWindow.width) > 0.5 || abs($0.height - newWindow.height) > 0.5
+        } ?? false
+        // Moving the window already carries subviews with it. Applying the
+        // screen-hold formula again slides them inside the window. A live resize
+        // is the case that has to keep the screen point.
+        let holdResize = decision.move && (userResizedWindow || window.inLiveResize) && sizeChanged
         var notes: [String] = []
-        if decision.move, let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
+        if holdResize, let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
            oldWindow.width > 1, oldWindow.height > 1, bounds.width > 1, bounds.height > 1 {
             let windowBox = DockBox(x: 0, y: 0, width: Double(bounds.width), height: Double(bounds.height))
             notes.append(String(format: "winΔ=(%.1f,%.1f) host %.1f→%.1f",
@@ -228,7 +249,11 @@ final class EditorShell: NSView, ToolbarGripHost {
         } else {
             notes.append("move=false")
         }
-        holdTrace = notes.joined(separator: " | ")
+        if holdResize {
+            holdTrace = notes.joined(separator: " | ")
+        } else if holdTrace.isEmpty {
+            holdTrace = "move=false"
+        }
         lastWindowFrame = newWindow
         lastHostFrame = newHost
     }
