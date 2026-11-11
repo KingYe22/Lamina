@@ -201,37 +201,24 @@ final class IllustratorParityTests: XCTestCase {
         XCTAssertEqual(IllustratorParity.contextEmpty, ["生成矢量", "绘制（铅笔）"])
     }
 
-    func testRestingPanelStaysOnTheMetricOrigin() {
-        let appearance = RestingFrame.origin(
-            proposedX: 24, proposedY: 400, metricX: 19, metricY: 400,
-            proposedWidth: 302, proposedHeight: 243, metricWidth: 302, metricHeight: 243,
-            keepsMetric: true
+    /// A drop 5 pt off the metric origin stays there. Hold keeps that screen point;
+    /// it does not pull the panel back.
+    func testFivePointDropStaysWhereItWasReleased() {
+        let dropped = DockBox(x: 105, y: 562, width: 302, height: 243)
+        let held = FloatingScreen.reposition(
+            panelInWindow: dropped,
+            oldWindowOrigin: (40, 80),
+            newWindowOrigin: (40, 80),
+            windowBounds: DockBox(x: 0, y: 0, width: 1033, height: 970)
         )
-        XCTAssertEqual(appearance.x, 19, accuracy: 0.001)
-        XCTAssertEqual(appearance.y, 400, accuracy: 0.001)
-        let align = RestingFrame.origin(
-            proposedX: 327, proposedY: 360, metricX: 322, metricY: 360,
-            proposedWidth: 313, proposedHeight: 283, metricWidth: 313, metricHeight: 283,
-            keepsMetric: true
+        XCTAssertEqual(held.x, 105, accuracy: 0.001)
+        XCTAssertEqual(held.y, 562, accuracy: 0.001)
+        let shifted = FloatingScreen.reposition(
+            panelInWindow: dropped,
+            oldWindowOrigin: (40, 80),
+            newWindowOrigin: (35, 80),
+            windowBounds: DockBox(x: 0, y: 0, width: 1033, height: 970)
         )
-        XCTAssertEqual(align.x, 322, accuracy: 0.001)
-        let held = RestingFrame.origin(
-            proposedX: 24, proposedY: 400, metricX: 19, metricY: 400,
-            proposedWidth: 302, proposedHeight: 243, metricWidth: 302, metricHeight: 243,
-            keepsMetric: false
-        )
-        XCTAssertEqual(held.x, 24, accuracy: 0.001)
-        let dragged = RestingFrame.origin(
-            proposedX: 120, proposedY: 400, metricX: 19, metricY: 400,
-            proposedWidth: 302, proposedHeight: 243, metricWidth: 302, metricHeight: 243,
-            keepsMetric: true
-        )
-        XCTAssertEqual(dragged.x, 120, accuracy: 0.001)
-        let resized = RestingFrame.origin(
-            proposedX: 24, proposedY: 380, metricX: 19, metricY: 400,
-            proposedWidth: 302, proposedHeight: 200, metricWidth: 302, metricHeight: 243,
-            keepsMetric: true
-        )
-        XCTAssertEqual(resized.y, 380, accuracy: 0.001)
+        XCTAssertEqual(shifted.x, 110, accuracy: 0.001)
     }
 }

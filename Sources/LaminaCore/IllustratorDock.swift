@@ -548,29 +548,6 @@ public enum FloatingPlacement {
     }
 }
 
-/// A panel that has not been dragged, resized, docked, or held keeps the metric
-/// origin. `slack` only separates that resting panel from one placed somewhere
-/// else. It is not an Illustrator measurement.
-public enum RestingFrame {
-    public static func origin(
-        proposedX: Double, proposedY: Double,
-        metricX: Double, metricY: Double,
-        proposedWidth: Double, proposedHeight: Double,
-        metricWidth: Double, metricHeight: Double,
-        keepsMetric: Bool,
-        slack: Double = 12
-    ) -> (x: Double, y: Double) {
-        guard keepsMetric else { return (proposedX, proposedY) }
-        guard abs(proposedWidth - metricWidth) < 2, abs(proposedHeight - metricHeight) < 2 else {
-            return (proposedX, proposedY)
-        }
-        guard abs(proposedX - metricX) < slack, abs(proposedY - metricY) < slack else {
-            return (proposedX, proposedY)
-        }
-        return (metricX, metricY)
-    }
-}
-
 /// Properties-panel crop, locked to the design window.
 ///
 /// Subtracting the live dock origin slides the 属性 UI out of the column as soon

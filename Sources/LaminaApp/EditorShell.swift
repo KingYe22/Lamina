@@ -117,25 +117,32 @@ final class EditorShell: NSView, ToolbarGripHost {
         holdFloatingScreens()
         promoteOutsideFloaters()
         // Panels take their metric frames before the bar looks for open canvas.
+        // The first placement runs after hold, so a pre-placement window adjustment
+        // cannot leave 外观 and 对齐 off the metric grid.
         floaters.layoutSubtreeIfNeeded()
-        floaters.reapplyRestingFrames()
         placeContextBar()
         dock.needsDisplay = true
     }
 
     func restingFrameReport() -> String {
         let host = floaters.frame
-        let lines = floaters.dockPanels().map { panel -> String in
+        let expected = [
+            WorkspaceMetrics.appearance.rect(in: host.height),
+            WorkspaceMetrics.align.rect(in: host.height),
+            WorkspaceMetrics.stroke.rect(in: host.height)
+        ]
+        let lines = zip(floaters.dockPanels(), expected).map { panel, metric -> String in
             let home = panel.superview === floaters ? "host" : (panel.superview === self ? "shell" : "other")
-            let pos = panel.layer?.position
-            let metric = panel.metricFrame
-            return "\(panel.tabs.map(\.rawValue).joined(separator: "+")) frame=(\(panel.frame.minX),\(panel.frame.minY),\(panel.frame.width),\(panel.frame.height)) metric=(\(metric?.minX ?? -1),\(metric?.minY ?? -1)) keep=\(panel.keepsMetricOrigin) \(home) layer=(\(pos?.x ?? -1),\(pos?.y ?? -1))"
+            return "\(panel.tabs.map(\.rawValue).joined(separator: "+")) frame=(\(panel.frame.minX),\(panel.frame.minY)) metric=(\(metric.minX),\(metric.minY)) \(home)"
         }
-        return "host=(\(host.minX),\(host.minY),\(host.width),\(host.height)) " + lines.joined(separator: " || ")
+        return "host=(\(host.minX),\(host.minY),\(host.width),\(host.height)) " + lines.joined(separator: " || ") + " hold=[\(holdTrace)] promote=[\(promoteTrace)]"
     }
 
     private var lastWindowFrame: NSRect?
     private var lastHostFrame: NSRect?
+    /// Last screen-hold pass, for the screenshot report. Not a dock measurement.
+    private var holdTrace = ""
+    private var promoteTrace = ""
     /// False until the window is on screen at a frame the display can hold.
     /// `center()` and the screen clamp run before that and must not walk panels.
     private var floatingHoldSettled = false
@@ -156,9 +163,13 @@ final class EditorShell: NSView, ToolbarGripHost {
             windowFrameChanged: changed
         )
         floatingHoldSettled = decision.settled
+        var notes: [String] = []
         if decision.move, let oldWindow = lastWindowFrame, let oldHost = lastHostFrame,
            oldWindow.width > 1, oldWindow.height > 1, bounds.width > 1, bounds.height > 1 {
             let windowBox = DockBox(x: 0, y: 0, width: Double(bounds.width), height: Double(bounds.height))
+            notes.append(String(format: "winΔ=(%.1f,%.1f) host %.1f→%.1f",
+                                oldWindow.minX - newWindow.minX, oldWindow.minY - newWindow.minY,
+                                oldHost.minX, newHost.minX))
             for panel in floaters.dockPanels()
             where panel.dockColumnID == nil && !panel.dragging && !panel.embeddedInDock
                 && (panel.superview === floaters || panel.superview === self) {
@@ -169,29 +180,55 @@ final class EditorShell: NSView, ToolbarGripHost {
                     width: Double(panel.frame.width),
                     height: Double(panel.frame.height)
                 )
-                let placed = FloatingScreen.reposition(
-                    panelInWindow: oldInWindow,
-                    oldWindowOrigin: (Double(oldWindow.minX), Double(oldWindow.minY)),
-                    newWindowOrigin: (Double(newWindow.minX), Double(newWindow.minY)),
-                    windowBounds: windowBox
+                // A panel that remains inside the window keeps its screen point.
+                // One that would leave becomes its own window. Nothing pulls it
+                // back toward the metric origin.
+                let raw = NSRect(
+                    x: CGFloat(oldWindow.minX + oldInWindow.x - newWindow.minX),
+                    y: CGFloat(oldWindow.minY + oldInWindow.y - newWindow.minY),
+                    width: CGFloat(oldInWindow.width),
+                    height: CGFloat(oldInWindow.height)
                 )
-                let originX = inHost ? placed.x - Double(newHost.minX) : placed.x
-                let originY = inHost ? placed.y - Double(newHost.minY) : placed.y
-                let held = NSRect(
-                    x: CGFloat(originX),
-                    y: CGFloat(originY),
-                    width: CGFloat(placed.width),
-                    height: CGFloat(placed.height)
-                )
-                let before = panel.frame.origin
-                // Set the frame while a resting panel can still reject a small
-                // slide. Clearing the flag first is what left Appearance at +5 pt.
-                panel.frame = held
-                if abs(panel.frame.minX - before.x) > 0.5 || abs(panel.frame.minY - before.y) > 0.5 {
-                    panel.keepsMetricOrigin = false
+                let name = panel.tabs.map(\.rawValue).joined(separator: "+")
+                if bounds.insetBy(dx: -1, dy: -1).contains(raw) {
+                    let placed = FloatingScreen.reposition(
+                        panelInWindow: oldInWindow,
+                        oldWindowOrigin: (Double(oldWindow.minX), Double(oldWindow.minY)),
+                        newWindowOrigin: (Double(newWindow.minX), Double(newWindow.minY)),
+                        windowBounds: windowBox
+                    )
+                    let originX = inHost ? placed.x - Double(newHost.minX) : placed.x
+                    let originY = inHost ? placed.y - Double(newHost.minY) : placed.y
+                    let before = panel.frame.minX
+                    panel.frame = NSRect(
+                        x: CGFloat(originX),
+                        y: CGFloat(originY),
+                        width: CGFloat(placed.width),
+                        height: CGFloat(placed.height)
+                    )
+                    notes.append(String(format: "%@ %.1f→%.1f %@", name, before, panel.frame.minX, inHost ? "host" : "shell"))
+                } else {
+                    panel.departedShell = NSRect(
+                        x: CGFloat(oldInWindow.x),
+                        y: CGFloat(oldInWindow.y),
+                        width: CGFloat(oldInWindow.width),
+                        height: CGFloat(oldInWindow.height)
+                    )
+                    panel.departedWindowOrigin = oldWindow.origin
+                    let screen = NSRect(
+                        x: oldWindow.minX + CGFloat(oldInWindow.x),
+                        y: oldWindow.minY + CGFloat(oldInWindow.y),
+                        width: CGFloat(oldInWindow.width),
+                        height: CGFloat(oldInWindow.height)
+                    )
+                    hostOutside(panel, screen: screen)
+                    notes.append("\(name) outside")
                 }
             }
+        } else {
+            notes.append("move=false")
         }
+        holdTrace = notes.joined(separator: " | ")
         lastWindowFrame = newWindow
         lastHostFrame = newHost
     }
@@ -535,7 +572,6 @@ final class EditorShell: NSView, ToolbarGripHost {
             guard let panel = panels[id], !panel.dragging else { continue }
             let floating = DockLayer.layer(columnID: panel.dockColumnID, dragging: panel.dragging) == .floating
             place(panel, floating: floating)
-            panel.keepsMetricOrigin = false
             panel.frame = nsRect(box)
         }
         columnFrames = frames
@@ -618,6 +654,15 @@ final class EditorShell: NSView, ToolbarGripHost {
         }
         host.setFrame(screen, display: true)
         panel.frame = NSRect(origin: .zero, size: screen.size)
+        // The panel window's content view is not always at the window origin.
+        // Put the panel's bounds on `screen`, or the trip back into the shell
+        // shifts it by that inset.
+        let got = host.convertToScreen(panel.convert(panel.bounds, to: nil))
+        let dx = screen.origin.x - got.origin.x
+        let dy = screen.origin.y - got.origin.y
+        if abs(dx) > 0.5 || abs(dy) > 0.5 {
+            panel.setFrameOrigin(NSPoint(x: dx, y: dy))
+        }
         outsidePanels[key] = host
         if !host.isVisible { host.orderFront(nil) }
     }
@@ -628,6 +673,7 @@ final class EditorShell: NSView, ToolbarGripHost {
     private func promoteOutsideFloaters() {
         guard let window else { return }
         var seen = Set<ObjectIdentifier>()
+        var notes: [String] = []
         let candidates = subviews.compactMap { $0 as? FloatPanel } + floaters.dockPanels()
         for panel in candidates where panel.dockColumnID == nil && !panel.dragging && !panel.embeddedInDock && !panel.isHidden {
             let key = ObjectIdentifier(panel)
@@ -646,13 +692,21 @@ final class EditorShell: NSView, ToolbarGripHost {
             // out by more than 2 pt leaves the shell.
             let hangsOut = panelFrame.minX < -2 || panelFrame.maxX > bounds.width + 2
                 || panelFrame.minY < -2 || panelFrame.maxY > bounds.height + 2
+            let name = panel.tabs.map(\.rawValue).joined(separator: "+")
+            notes.append(String(format: "%@ shell=(%.1f,%.1f) %@", name, panelFrame.minX, panelFrame.maxY, hangsOut ? "out" : "in"))
             if !hangsOut {
                 if panel.window !== window {
                     panel.removeFromSuperview()
-                    floaters.receiveFloating(panel, frameInShell: panelFrame)
+                    let restored = returningFrame(panel, converted: panelFrame, window: window)
+                    floaters.receiveFloating(panel, frameInShell: restored)
+                    panel.departedShell = nil
                 }
                 if let host = outsidePanels.removeValue(forKey: key) { host.orderOut(nil) }
                 continue
+            }
+            if panel.window === window {
+                panel.departedShell = panelFrame
+                panel.departedWindowOrigin = window.frame.origin
             }
             let screen = window.convertToScreen(convert(panelFrame, to: nil))
             hostOutside(panel, screen: screen)
@@ -661,6 +715,18 @@ final class EditorShell: NSView, ToolbarGripHost {
             outsidePanels[key]?.orderOut(nil)
             outsidePanels.removeValue(forKey: key)
         }
+        promoteTrace = notes.joined(separator: " | ")
+    }
+
+    /// A panel that has not been dragged comes back to the shell frame it left,
+    /// shifted only by a real window-origin change. The screen conversion is kept
+    /// for a panel the user has moved, because that frame is no longer the one
+    /// it left with.
+    private func returningFrame(_ panel: FloatPanel, converted: NSRect, window: NSWindow) -> NSRect {
+        guard !panel.adjustedByUser, let saved = panel.departedShell else { return converted }
+        let dx = window.frame.origin.x - panel.departedWindowOrigin.x
+        let dy = window.frame.origin.y - panel.departedWindowOrigin.y
+        return saved.offsetBy(dx: -dx, dy: -dy)
     }
 
     /// Docked panels sit under the floater host. A floating or dragged panel sits above the status bar.

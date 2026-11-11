@@ -155,30 +155,12 @@ final class FloatingPanels: NSView {
                 WorkspaceMetrics.stroke.rect(in: bounds.height)
             ]
             for (panel, rect) in zip(panels, metrics) where panel.dockColumnID == nil && panel.superview === self && !panel.dragging {
-                panel.metricFrame = rect
                 panel.frame = rect
                 panel.preferredSize = rect.size
                 panel.expandedHeight = rect.height
             }
         }
         seatAnchoredPanels()
-        reapplyRestingFrames()
-    }
-
-    /// A panel still within 12 pt of its metric origin, at the metric size, is put
-    /// back. 12 pt only separates that slide from a drag or a real hold. It is
-    /// not an Illustrator measurement.
-    func reapplyRestingFrames() {
-        for panel in panels where panel.superview === self && !panel.dragging {
-            guard let metric = panel.metricFrame else { continue }
-            guard abs(panel.frame.width - metric.width) < 2,
-                  abs(panel.frame.height - metric.height) < 2 else { continue }
-            let dx = abs(panel.frame.minX - metric.minX)
-            let dy = abs(panel.frame.minY - metric.minY)
-            guard dx < 12, dy < 12, dx > 0.5 || dy > 0.5 else { continue }
-            panel.keepsMetricOrigin = true
-            panel.setFrameOrigin(metric.origin)
-        }
     }
 
     private var placedSize = NSSize.zero
@@ -197,7 +179,6 @@ final class FloatingPanels: NSView {
     func poseRightShoulder(applySnap: Bool) {
         layoutSubtreeIfNeeded()
         guard bounds.width > 400, let panel = panels.first(where: { $0.tabs == [.appearance] }) else { return }
-        panel.keepsMetricOrigin = false
         let gap: CGFloat = 4
         panel.frame.origin.x = bounds.width - panel.frame.width - gap
         let magnet = DockSnap.magnet(
@@ -217,10 +198,6 @@ final class FloatingPanels: NSView {
     func restoreMetricFrames() {
         placed = false
         placedSize = .zero
-        for panel in panels {
-            panel.keepsMetricOrigin = true
-            panel.metricFrame = nil
-        }
         showGuides([])
         needsLayout = true
         layoutSubtreeIfNeeded()
@@ -289,7 +266,6 @@ final class FloatingPanels: NSView {
         let host = dockBox(bounds)
         if let shoulder = rightShoulder {
             for panel in panels where panel.columnSeat == .right {
-                panel.keepsMetricOrigin = false
                 let seated = DockSnap.commitShoulder(
                     proposed: dockBox(panel.frame),
                     shoulder: shoulder,
@@ -301,7 +277,6 @@ final class FloatingPanels: NSView {
             }
         }
         for panel in panels where panel.columnSeat == .left {
-            panel.keepsMetricOrigin = false
             let seated = DockSnap.commitLeft(
                 proposed: dockBox(panel.frame),
                 host: host,
@@ -342,7 +317,6 @@ final class FloatingPanels: NSView {
             addSubview(panel, positioned: .below, relativeTo: guideOverlay)
         }
         if let shell = superview {
-            panel.keepsMetricOrigin = false
             panel.frame = convert(frameInShell, from: shell)
         }
     }
@@ -393,12 +367,13 @@ final class FloatPanel: NSView {
     private var scaleStrokes = false
     private var dashAlign = false
     var dragging = false
+    /// Drag, resize, or dock. Layout must not put the panel back where it started.
+    var adjustedByUser = false
+    /// Shell frame and window origin when the panel left the window.
+    var departedShell: NSRect?
+    var departedWindowOrigin = NSPoint.zero
     /// Mouse-up landed while a dock guide was lit. Layout keeps seating it.
     var columnSeat: DockAnchor = .none
-    /// False after a drag, resize, dock, or screen-position hold.
-    var keepsMetricOrigin = true
-    /// Host-local metric frame. Set once, when the panel is first placed.
-    var metricFrame: NSRect?
     var preferredSize = NSSize.zero
     var expandedHeight: CGFloat = 0
     var dockColumnID: String?
@@ -423,9 +398,8 @@ final class FloatPanel: NSView {
         layer?.masksToBounds = true
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 0
-        // Only the panel that shows the field gets the control. A hidden
-        // zero-frame text field on Appearance and Align was enough, with the
-        // canvas bar under the floater host, to leave those layers 5 pt right.
+        // Stroke weight and miter live on the stroke panel. The other panels
+        // draw those readouts; they do not carry hidden fields.
         if tabs.contains(.stroke) {
             for field in [weightField, limitField] {
                 field.alignment = .center
@@ -478,21 +452,6 @@ final class FloatPanel: NSView {
         return titleHeight
     }
 
-    override func setFrameOrigin(_ newOrigin: NSPoint) {
-        guard let metric = metricFrame else {
-            super.setFrameOrigin(newOrigin)
-            return
-        }
-        let kept = RestingFrame.origin(
-            proposedX: Double(newOrigin.x), proposedY: Double(newOrigin.y),
-            metricX: Double(metric.origin.x), metricY: Double(metric.origin.y),
-            proposedWidth: Double(bounds.width), proposedHeight: Double(bounds.height),
-            metricWidth: Double(metric.width), metricHeight: Double(metric.height),
-            keepsMetric: keepsMetricOrigin
-        )
-        super.setFrameOrigin(NSPoint(x: kept.x, y: kept.y))
-    }
-
     override func layout() {
         super.layout()
         let showStroke = !collapsed && !suppressContent && !embeddedInDock && active == .stroke && !strokeOptionsHidden
@@ -514,7 +473,6 @@ final class FloatPanel: NSView {
             weightField.textColor = ink
             limitField.textColor = ink
         }
-        restoreRestingOrigin()
     }
 
     private var transformFieldsInstalled = false
@@ -525,47 +483,6 @@ final class FloatPanel: NSView {
         for field in [xField, yField, wField, hField] where field.superview !== self {
             addSubview(field)
         }
-    }
-
-    private func restoreRestingOrigin() {
-        guard let metric = metricFrame else { return }
-        let kept = RestingFrame.origin(
-            proposedX: Double(frame.origin.x), proposedY: Double(frame.origin.y),
-            metricX: Double(metric.origin.x), metricY: Double(metric.origin.y),
-            proposedWidth: Double(bounds.width), proposedHeight: Double(bounds.height),
-            metricWidth: Double(metric.width), metricHeight: Double(metric.height),
-            keepsMetric: keepsMetricOrigin
-        )
-        let origin = NSPoint(x: kept.x, y: kept.y)
-        if frame.origin != origin { super.setFrameOrigin(origin) }
-    }
-
-    private var syncingLayer = false
-
-    /// The frame can already be the metric while the layer is still 5 pt to the
-    /// right. Put the layer on the frame immediately before it is composited.
-    override func viewWillDraw() {
-        super.viewWillDraw()
-        guard !syncingLayer else { return }
-        syncingLayer = true
-        restoreRestingOrigin()
-        if keepsMetricOrigin, let layer {
-            let anchor = layer.anchorPoint
-            let size = layer.bounds.size
-            let origin = CGPoint(
-                x: layer.position.x - anchor.x * size.width,
-                y: layer.position.y - anchor.y * size.height
-            )
-            let dx = frame.minX - origin.x
-            let dy = frame.minY - origin.y
-            if abs(dx) > 0.5 || abs(dy) > 0.5 {
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                layer.position = CGPoint(x: layer.position.x + dx, y: layer.position.y + dy)
-                CATransaction.commit()
-            }
-        }
-        syncingLayer = false
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -1383,7 +1300,7 @@ final class FloatPanel: NSView {
     /// Title, tab, and button drags all come through here. The pointer is handed
     /// to `PanelDragPath`, which is the measured Illustrator zone test.
     private func trackDrag(from event: NSEvent, first: NSEvent?) {
-        keepsMetricOrigin = false
+        adjustedByUser = true
         dragging = true
         let source = event.window ?? window
         guard let shell = editorShell else {
@@ -1426,7 +1343,7 @@ final class FloatPanel: NSView {
     }
 
     private func dragResize(_ event: NSEvent) {
-        keepsMetricOrigin = false
+        adjustedByUser = true
         let start = event.locationInWindow
         let height = frame.size.height
         let origin = frame.origin
