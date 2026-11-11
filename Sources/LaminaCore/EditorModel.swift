@@ -115,7 +115,18 @@ public final class EditorModel {
     public var fidelity = 2.5
     public var smoothness = 0.0
     public var blobDiameter = 16.0
-    public var eraserDiameter = 16.0
+    public var eraserDiameter = IllustratorParity.eraserDiameter
+    public var eraserAngle = 0.0
+    public var eraserRoundness = 100.0
+    public var shapeMemory = ShapeMemory()
+    public var shapeAnchor = Vec2.zero
+    public var documentGridSize = "中"
+    public var documentGridColor = "浅色"
+    public var simulatePaper = false
+    public var documentPreset = "中分辨率"
+    public var knockoutWhiteOverprint = true
+    private var placeholderText: Set<UUID> = []
+    public var silenceDeleteAnchorAlert = false
     public var wandTolerance = 0.0
     public var wandFill = true
     public var warpKind: WarpToolKind = .warp
@@ -185,8 +196,10 @@ public final class EditorModel {
 
     public var penRubberLive: Bool {
         let penLike = tool == .pen || tool == .curvature
-        return rubberBand && penLike && !penNodes.isEmpty && !penPullingHandle
+        return rubberBand && penLike && !penNodes.isEmpty && !penPullingHandle && penPreviewNodes.isEmpty
     }
+    /// Curvature rubber band: the curve the next click would create, including the cursor.
+    public var penPreviewNodes: [PathNode] = []
 
     private var undoStack: [Data] = []
     private var redoStack: [Data] = []
@@ -612,6 +625,7 @@ public final class EditorModel {
                 selection = chosen
             }
         case .create:
+            if openShapeClick(at: p) { break }
             commitCreate(to: p, shift: shift, option: option)
         case .lasso:
             if tool == .shapeBuilder {
@@ -687,6 +701,12 @@ public final class EditorModel {
     private func refreshPenChrome() {
         let penLike = tool == .pen || tool == .curvature
         penNewPathMark = tool == .pen && penNodes.isEmpty && drag == nil
+        if tool == .curvature, drag == nil, penNodes.count >= 1 {
+            penPreviewNodes = ToolBehaviors.curvature(penNodes + [.corner(hover)], toggle: nil)
+            penDistance = ""
+        } else {
+            penPreviewNodes = []
+        }
         guard penLike else {
             penAnchorLabel = false
             penNewPathMark = false
@@ -705,6 +725,10 @@ public final class EditorModel {
             nearForeignEnd: foreign.map { selection.contains($0.item) } ?? false
         )
         guard let last = penNodes.last else {
+            penDistance = ""
+            return
+        }
+        if tool == .curvature {
             penDistance = ""
             return
         }
@@ -764,10 +788,23 @@ public final class EditorModel {
             status = tool.title
             return true
         }
+        if chord.modifiers.isEmpty, chord.key == .delete, editingText == nil {
+            if !selection.isEmpty { deleteSelection(recordUndo: true) }
+            return true
+        }
         if let entry = Keymap.preferredEntry(for: chord, editingText: editingText != nil) {
             if Keymap.toolForTitle[entry.title] != nil, editingText != nil { return false }
+            if IllustratorParity.chordSuppressed(entry.action, chord) { return false }
             perform(entry.action)
             return true
+        }
+        if editingText == nil, let action = MenuCatalog.flattened().first(where: {
+            $0.children.isEmpty && !$0.isSeparator && MenuCatalog.menuChord(for: $0) == chord
+        })?.action {
+            if !IllustratorParity.chordSuppressed(action, chord) {
+                perform(action)
+                return true
+            }
         }
         if chord.modifiers.isEmpty, chord.key == .return, editingText == nil {
             requestToolOptions()
@@ -781,6 +818,7 @@ public final class EditorModel {
     }
 
     public func toolMatching(_ chord: KeyChord) -> Tool? {
+        if chord.modifiers.isEmpty, chord.key == .equal || chord.key == .plus { return .addAnchor }
         for (title, tool) in Keymap.toolForTitle {
             if Keymap.chords(forTitle: title).contains(chord) { return tool }
         }
@@ -875,8 +913,8 @@ public final class EditorModel {
         case "混合对象": makeBlend()
         case "完成向混合添加对象": releaseBlend()
         case "创建轮廓": createOutlines()
-        case "放大": zoom = min(64, zoom * 1.25); status = "\(Int(zoom * 100))%"
-        case "缩小": zoom = max(0.02, zoom / 1.25); status = "\(Int(zoom * 100))%"
+        case "放大": zoom = IllustratorZoom.next(zoom, out: false); status = IllustratorZoom.percentLabel(zoom)
+        case "缩小": zoom = IllustratorZoom.next(zoom, out: true); status = IllustratorZoom.percentLabel(zoom)
         case "放大 100%", "实际大小": zoom = 1; status = "100%"
         case "画板适合窗口大小", "适合窗口中的可成像区域": fitArtboard()
         case "在窗口中查看所有画板": fitAll()
@@ -955,7 +993,38 @@ public final class EditorModel {
         case "键盘快捷键说明", "打开“键盘快捷键”对话框": status = "键盘快捷键"; openPanels.insert("键盘快捷键")
         case "打开“偏好设置”对话框": status = "首选项"; openPanels.insert("首选项")
         case "打开“颜色设置”对话框": status = "颜色设置"; openPanels.insert("颜色设置")
-        case "打开“文档设置”对话框": status = "文档设置"; openPanels.insert("文档设置")
+        case "打开“文档设置”对话框":
+            pendingDialog = IllustratorParity.documentDialog()
+            status = "文档设置"
+            openPanels.insert("文档设置")
+        case "应用文档设置":
+            documentGridSize = textField("gridSize", documentGridSize)
+            documentGridColor = textField("gridColor", documentGridColor)
+            simulatePaper = dialogValues["paper"] == "1" || dialogValues["paper"] == "check:1"
+            documentPreset = textField("preset", documentPreset)
+            knockoutWhiteOverprint = dialogValues["knockout"] != "0" && dialogValues["knockout"] != "check:0"
+            status = "文档设置"
+        case "水平翻转":
+            reflectSelection(vertical: true)
+            status = "水平翻转"
+        case "垂直翻转":
+            reflectSelection(vertical: false)
+            status = "垂直翻转"
+        case "旋转对话框":
+            applyRotateDialog()
+        case "缩放对话框":
+            applyScaleDialog()
+        case "对称对话框":
+            applyReflectDialog()
+        case "单击矩形", "单击椭圆", "单击多边形", "单击星形", "单击直线段":
+            applyShapeDialog(action)
+        case "橡皮擦工具选项":
+            applyEraserDialog()
+        case "吸管选项":
+            status = "吸管选项"
+        case "删除锚点提示":
+            if dialogValues["silence"] == "1" || dialogValues["silence"] == "check:1" { silenceDeleteAnchorAlert = true }
+            status = "删除锚点"
         case "打开“文件信息”对话框": status = "文件信息"; openPanels.insert("文件信息")
         case "打开“存储为”对话框", "存储对文档所做的更改", "存储文档的副本", "打开文档", "关闭文档窗口", "打印", "将文件置入文档", "打包文档", "打开“导出为多种屏幕所用格式”对话框", "导出为", "打开“存储为 Web 所用格式”对话框", "恢复":
             status = action
@@ -1524,7 +1593,9 @@ public final class EditorModel {
             text.frame = area
             if !vertical { text.string = "区域文字" }
         }
-        return .text(text)
+        let item = ArtItem.text(text)
+        placeholderText.insert(text.id)
+        return item
     }
 
     private func insertNew(_ item: ArtItem) {
@@ -1785,7 +1856,12 @@ public final class EditorModel {
     }
 
     private func deleteAnchor(at p: Vec2) {
-        guard let hit = hitAnchor(p) else { return }
+        guard let hit = hitAnchor(p) else {
+            guard !silenceDeleteAnchorAlert else { return }
+            pendingDialog = IllustratorParity.deleteAnchorAlert()
+            status = pendingDialog?.title ?? ""
+            return
+        }
         beginChange()
         document.updateItem(hit.item) { item in
             if case .path(var object) = item {
@@ -2343,9 +2419,12 @@ public final class EditorModel {
 
     private func unlockAll() {
         beginChange()
+        var opened: [UUID] = []
         for item in allItems() where item.locked {
             document.updateItem(item.id) { $0.setLocked(false) }
+            opened.append(item.id)
         }
+        if !opened.isEmpty { selection = opened }
     }
 
     private func setHidden(_ hidden: Bool) {
@@ -2356,9 +2435,12 @@ public final class EditorModel {
 
     private func unhideAll() {
         beginChange()
+        var opened: [UUID] = []
         for item in document.flatItems(includingHidden: true) where item.hidden {
             document.updateItem(item.id) { $0.setHidden(false) }
+            opened.append(item.id)
         }
+        if !opened.isEmpty { selection = opened }
     }
 
     private func makeClip() {
@@ -2754,14 +2836,40 @@ public final class EditorModel {
             status = "吸管应用"
             return
         }
+        let sampledFill: Paint?
+        let sampledStroke: StrokeStyle?
         switch item {
         case .path(let o):
-            currentFill = o.appearance.fill
-            currentStroke = o.appearance.stroke
+            sampledFill = o.appearance.fill
+            sampledStroke = o.appearance.stroke
         case .text(let o):
-            currentFill = o.appearance.fill
-        default: break
+            sampledFill = o.appearance.fill
+            sampledStroke = o.appearance.stroke
+        default:
+            return
         }
+        let targets = selection.filter { $0 != id }
+        if !targets.isEmpty {
+            beginChange()
+            for target in targets {
+                document.updateItem(target) { art in
+                    switch art {
+                    case .path(var object):
+                        object.appearance.fill = sampledFill
+                        object.appearance.stroke = sampledStroke
+                        art = .path(object)
+                    case .text(var object):
+                        object.appearance.fill = sampledFill
+                        if sampledStroke != nil { object.appearance.stroke = sampledStroke }
+                        art = .text(object)
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+        currentFill = sampledFill
+        currentStroke = sampledStroke
         status = "吸管"
     }
 
@@ -3005,11 +3113,28 @@ public final class EditorModel {
         }
     }
 
+    public func typeText(_ string: String) {
+        appendText(string)
+    }
+
+    public func deleteTextBackward() {
+        guard let id = editingText else { return }
+        placeholderText.remove(id)
+        document.updateItem(id) { item in
+            if case .text(var text) = item, !text.string.isEmpty {
+                text.string.removeLast()
+                item = .text(text)
+            }
+        }
+    }
+
     private func appendText(_ string: String) {
         guard let id = editingText else { return }
+        let replacing = placeholderText.contains(id)
+        if replacing { placeholderText.remove(id) }
         document.updateItem(id) { item in
             if case .text(var text) = item {
-                text.string += string
+                text.string = replacing ? string : text.string + string
                 item = .text(text)
             }
         }
@@ -3036,8 +3161,21 @@ public final class EditorModel {
     }
 
     public func requestToolOptions() {
-        let diameter = tool == .blobBrush ? blobDiameter : tool == .eraser ? eraserDiameter : tool == .warp ? warpDiameter : symbolDiameter
-        pendingDialog = ToolBehaviors.optionsDialog(tool: tool, fidelity: fidelity, smoothness: smoothness, diameter: diameter, tolerance: wandTolerance)
+        switch tool {
+        case .rotate:
+            pendingDialog = IllustratorParity.rotateDialog()
+        case .scale:
+            pendingDialog = IllustratorParity.scaleDialog()
+        case .reflect:
+            pendingDialog = IllustratorParity.reflectDialog()
+        case .eyedropper:
+            pendingDialog = IllustratorParity.eyedropperDialog()
+        case .eraser:
+            pendingDialog = IllustratorParity.eraserDialog(diameter: eraserDiameter)
+        default:
+            let diameter = tool == .blobBrush ? blobDiameter : tool == .warp ? warpDiameter : symbolDiameter
+            pendingDialog = ToolBehaviors.optionsDialog(tool: tool, fidelity: fidelity, smoothness: smoothness, diameter: diameter, tolerance: wandTolerance)
+        }
         status = pendingDialog?.title ?? tool.title
     }
 
@@ -3357,7 +3495,7 @@ public final class EditorModel {
     private func finishZoom(from origin: Vec2, to p: Vec2, out: Bool) {
         let rect = Rect2(min: Vec2(min(origin.x, p.x), min(origin.y, p.y)), max: Vec2(max(origin.x, p.x), max(origin.y, p.y)))
         if rect.width < 3 && rect.height < 3 {
-            zoom = out ? max(0.02, zoom / 1.25) : min(64, zoom * 1.25)
+            zoom = IllustratorZoom.next(zoom, out: out)
         } else if rect.width > 1, rect.height > 1 {
             let zx = viewportSize.x / rect.width
             let zy = viewportSize.y / rect.height
@@ -3390,7 +3528,7 @@ public final class EditorModel {
                 created.append(copy.id)
             }
         }
-        selection = created
+        selection = []
         status = "路径橡皮擦"
     }
 
@@ -3427,7 +3565,7 @@ public final class EditorModel {
                     created.append(copy.id)
                 }
             }
-            selection = created
+            selection = []
             return
         }
         let ribbon = ToolBehaviors.eraserRibbon(stroke, diameter: eraserDiameter)
@@ -3446,7 +3584,7 @@ public final class EditorModel {
                 created.append(copy.id)
             }
         }
-        selection = created
+        selection = []
     }
 
     private func scribbleDelete(_ stroke: [Vec2]) -> Bool {
@@ -3488,6 +3626,189 @@ public final class EditorModel {
             area += ring[i].x * ring[j].y - ring[j].x * ring[i].y
         }
         return abs(area) * 0.5
+    }
+
+    /// A click with no drag opens the shape's size dialog. A drag still draws.
+    private func openShapeClick(at point: Vec2) -> Bool {
+        guard let request = IllustratorParity.shapeDialog(tool, memory: shapeMemory) else { return false }
+        guard gestureOrigin.distance(to: point) < 2 else { return false }
+        shapeAnchor = point
+        pendingDialog = request
+        status = request.title
+        return true
+    }
+
+    private func checked(_ key: String) -> Bool {
+        let raw = dialogValues[key] ?? ""
+        return raw == "1" || raw == "check:1" || raw == "true"
+    }
+
+    private func duplicateSelectionInPlace() {
+        guard !selection.isEmpty else { return }
+        copySelection()
+        paste(offset: .zero, place: .inPlace)
+    }
+
+    private func applyRotateDialog() {
+        if dialogValues["__copy"] == "1" { duplicateSelectionInPlace() }
+        let degrees = field("degrees", 0)
+        rotateSelection(degrees * .pi / 180)
+        status = "旋转"
+    }
+
+    private func applyScaleDialog() {
+        if dialogValues["__copy"] == "1" { duplicateSelectionInPlace() }
+        guard let center = selectionBounds()?.center else { status = "比例缩放"; return }
+        let uniform = (dialogValues["uniform"] ?? "1") != "0"
+        let hx = (uniform ? field("percent", 100) : field("horizontal", 100)) / 100
+        let vy = (uniform ? field("percent", 100) : field("vertical", 100)) / 100
+        beginChange()
+        let xform = Affine.scale(hx, vy, around: center)
+        for id in selection { document.updateItem(id) { $0.setTransform(xform.concatenated($0.transform)) } }
+        status = "比例缩放"
+    }
+
+    private func applyReflectDialog() {
+        if dialogValues["__copy"] == "1" { duplicateSelectionInPlace() }
+        let axis = dialogValues["axis"] ?? "v"
+        if axis == "a" {
+            guard let center = selectionBounds()?.center else { return }
+            let radians = field("angle", 90) * .pi / 180
+            let end = Vec2(center.x + cos(radians), center.y + sin(radians))
+            beginChange()
+            let xform = ToolBehaviors.reflection(axisStart: center, axisEnd: end)
+            for id in selection { document.updateItem(id) { $0.setTransform(xform.concatenated($0.transform)) } }
+        } else {
+            reflectSelection(vertical: axis == "h")
+        }
+        status = "镜像"
+    }
+
+    private func applyEraserDialog() {
+        if dialogValues["__alternate"] == "1" {
+            eraserAngle = 0
+            eraserRoundness = 100
+            eraserDiameter = IllustratorParity.eraserDiameter
+            status = "橡皮擦工具选项"
+            return
+        }
+        eraserAngle = field("angle", eraserAngle)
+        eraserRoundness = field("roundness", eraserRoundness)
+        eraserDiameter = field("diameter", eraserDiameter)
+        status = "橡皮擦工具选项"
+    }
+
+    private func applyShapeDialog(_ action: String) {
+        let center = shapeAnchor
+        switch action {
+        case "单击矩形":
+            let width = IllustratorUnits.parseMillimetres(textField("width", "")) ?? shapeMemory.rectWidth
+            var height = IllustratorUnits.parseMillimetres(textField("height", "")) ?? shapeMemory.rectHeight
+            if checked("link") { height = width }
+            shapeMemory.rectWidth = width
+            shapeMemory.rectHeight = height
+            let rect = Rect2(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
+            insertNew(.path(styled(PathObject(name: "矩形", path: PathBuilder.rectangle(rect)))))
+        case "单击椭圆":
+            let width = IllustratorUnits.parseMillimetres(textField("width", "")) ?? shapeMemory.ellipseWidth
+            var height = IllustratorUnits.parseMillimetres(textField("height", "")) ?? shapeMemory.ellipseHeight
+            if checked("link") { height = width }
+            shapeMemory.ellipseWidth = width
+            shapeMemory.ellipseHeight = height
+            let rect = Rect2(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
+            insertNew(.path(styled(PathObject(name: "椭圆", path: PathBuilder.ellipse(rect)))))
+        case "单击多边形":
+            let radius = IllustratorUnits.parseMillimetres(textField("radius", "")) ?? shapeMemory.polygonRadius
+            let sides = max(3, Int(field("sides", Double(shapeMemory.polygonSides))))
+            shapeMemory.polygonRadius = radius
+            shapeMemory.polygonSides = sides
+            polygonSides = sides
+            insertNew(.path(styled(PathObject(name: "多边形", path: PathBuilder.polygon(center: center, radius: radius, sides: sides)))))
+        case "单击星形":
+            let inner = IllustratorUnits.parseMillimetres(textField("radius1", "")) ?? shapeMemory.starRadius1
+            let outer = IllustratorUnits.parseMillimetres(textField("radius2", "")) ?? shapeMemory.starRadius2
+            let points = max(3, Int(field("points", Double(shapeMemory.starPoints))))
+            shapeMemory.starRadius1 = inner
+            shapeMemory.starRadius2 = outer
+            shapeMemory.starPoints = points
+            starPoints = points
+            let ratio = outer == 0 ? 0.5 : inner / outer
+            starInner = ratio
+            insertNew(.path(styled(PathObject(name: "星形", path: PathBuilder.star(center: center, radius: outer, points: points, innerRatio: ratio)))))
+        case "单击直线段":
+            let length = IllustratorUnits.parseMillimetres(textField("length", "")) ?? shapeMemory.lineLength
+            let angle = field("angle", shapeMemory.lineAngle) * .pi / 180
+            shapeMemory.lineLength = length
+            shapeMemory.lineAngle = field("angle", shapeMemory.lineAngle)
+            shapeMemory.lineFill = checked("fill")
+            let start = Vec2(center.x - cos(angle) * length / 2, center.y - sin(angle) * length / 2)
+            let tip = Vec2(start.x + cos(angle) * length, start.y + sin(angle) * length)
+            var object = styled(PathObject(name: "直线", path: PathBuilder.line(start, tip), appearance: Appearance(fill: nil, stroke: currentStroke ?? StrokeStyle())))
+            if shapeMemory.lineFill { object.appearance.fill = currentFill }
+            insertNew(.path(object))
+        default:
+            break
+        }
+        status = tool.title
+    }
+
+    public func selectionReadout() -> SelectionReadout? {
+        guard let box = selectionBounds(), box.width > 0 || box.height > 0 || selection.count == 1 else { return nil }
+        guard !selection.isEmpty else { return nil }
+        let stroke: String
+        if let width = currentStroke?.width {
+            stroke = abs(width - width.rounded()) < 0.05 ? "\(Int(width.rounded())) pt" : String(format: "%.2f pt", width)
+        } else {
+            stroke = "无"
+        }
+        let opacity: String
+        if selection.count == 1, let item = document.item(id: selection[0]) {
+            let value = itemOpacity(item)
+            opacity = abs(value - 1) < 0.001 ? "100%" : "\(Int((value * 100).rounded()))%"
+        } else {
+            opacity = "100%"
+        }
+        return SelectionReadout(
+            name: appearanceAttributes.targetName,
+            x: IllustratorUnits.formatMillimetres(box.minX),
+            y: IllustratorUnits.formatMillimetres(box.minY),
+            width: IllustratorUnits.formatMillimetres(box.width),
+            height: IllustratorUnits.formatMillimetres(box.height),
+            stroke: stroke,
+            opacity: opacity
+        )
+    }
+
+    public func applyGeometryField(_ key: String, text: String) {
+        guard let box = selectionBounds(), let points = IllustratorUnits.parseMillimetres(text) else { return }
+        switch key {
+        case "x":
+            nudgeSelection(Vec2(points - box.minX, 0))
+        case "y":
+            nudgeSelection(Vec2(0, points - box.minY))
+        case "w":
+            scaleSelection(toWidth: points, height: box.height, anchor: Vec2(box.minX, box.minY))
+        case "h":
+            scaleSelection(toWidth: box.width, height: points, anchor: Vec2(box.minX, box.minY))
+        default:
+            break
+        }
+        status = "变换"
+    }
+
+    private func scaleSelection(toWidth width: Double, height: Double, anchor: Vec2) {
+        guard let box = selectionBounds(), box.width > 0.01, box.height > 0.01 else { return }
+        beginChange()
+        let xform = Affine.scale(width / box.width, height / box.height, around: anchor)
+        for id in selection { document.updateItem(id) { $0.setTransform(xform.concatenated($0.transform)) } }
+    }
+
+    private func itemOpacity(_ item: ArtItem) -> Double {
+        switch item {
+        case .path(let object): return object.appearance.opacity
+        case .text(let object): return object.appearance.opacity
+        default: return 1
+        }
     }
 
     public func commitDialog(_ values: [String: String]) {

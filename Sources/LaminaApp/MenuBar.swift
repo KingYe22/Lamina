@@ -65,30 +65,8 @@ enum MenuBar {
         for menu in MenuCatalog.bar {
             main.addItem(top(menu, workspace: workspace, used: used))
         }
-        main.addItem(toolsMenu(used: used))
         NSApp.mainMenu = main
         refreshEnabled(workspace: workspace)
-    }
-
-    private static func toolsMenu(used: UsedKeyEquivalents) -> NSMenuItem {
-        let menu = LaminaMenu(title: "工具")
-        for (title, _) in Keymap.toolForTitle.sorted(by: { $0.key < $1.key }) {
-            let item = NSMenuItem(title: title, action: #selector(MenuBridge.fire(_:)), keyEquivalent: "")
-            item.target = MenuBridge.shared
-            item.representedObject = title
-            if let chord = Keymap.chords(forTitle: title).min(by: { $0.modifiers.rawValue < $1.modifiers.rawValue }),
-               let equivalent = ChordAppKit.menuEquivalent(chord) {
-                let token = equivalent.0 + String(equivalent.1.rawValue)
-                if used.tokens.insert(token).inserted {
-                    item.keyEquivalent = equivalent.0
-                    item.keyEquivalentModifierMask = equivalent.1
-                }
-            }
-            menu.addItem(item)
-        }
-        let item = NSMenuItem(title: "工具", action: nil, keyEquivalent: "")
-        item.submenu = menu
-        return item
     }
 
     static func refreshEnabled(workspace: Workspace) {

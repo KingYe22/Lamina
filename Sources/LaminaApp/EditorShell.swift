@@ -15,6 +15,7 @@ final class EditorShell: NSView, ToolbarGripHost {
     private let edgeGuide = DockEdgeGuide()
     private var toolbarDock: DockAnchor = .left
     private var toolbarPanel: NSPanel?
+    private var outsidePanels: [ObjectIdentifier: NSPanel] = [:]
     private var extraColumns: [DockedColumn] = []
     private var columnFrames: [String: NSRect] = [:]
     private var columnBackgrounds: [NSRect] = []
@@ -107,8 +108,9 @@ final class EditorShell: NSView, ToolbarGripHost {
             height: Double(columnH)
         )
         floaters.frame = NSRect(x: leading, y: bodyY, width: floaterWidth, height: columnH)
-        contextBar.frame = NSRect(x: canvas.frame.midX - 210, y: canvas.frame.maxY - 46, width: 420, height: 32)
-        contextBar.isHidden = workspace.active.model.selection.isEmpty
+        let barWidth: CGFloat = workspace.active.model.selection.isEmpty ? 220 : 360
+        contextBar.frame = NSRect(x: canvas.frame.minX + 8, y: canvas.frame.maxY - 36, width: barWidth, height: 28)
+        contextBar.isHidden = false
         if !edgeGuide.isHidden {
             let thickness = CGFloat(DockSnap.guideThickness)
             let guideX: CGFloat = edgeGuide.frame.midX < bounds.midX ? 0 : max(0, bounds.width - thickness)
@@ -116,6 +118,7 @@ final class EditorShell: NSView, ToolbarGripHost {
         }
         applyDockedFrames(solved, dockX: dockX, toolWidth: toolWidth, bodyY: bodyY)
         holdFloatingScreens()
+        promoteOutsideFloaters()
         dock.needsDisplay = true
     }
 
@@ -154,20 +157,36 @@ final class EditorShell: NSView, ToolbarGripHost {
                     width: Double(panel.frame.width),
                     height: Double(panel.frame.height)
                 )
-                let placed = FloatingScreen.reposition(
-                    panelInWindow: oldInWindow,
-                    oldWindowOrigin: (Double(oldWindow.minX), Double(oldWindow.minY)),
-                    newWindowOrigin: (Double(newWindow.minX), Double(newWindow.minY)),
-                    windowBounds: windowBox
+                let raw = NSRect(
+                    x: CGFloat(oldWindow.minX + oldInWindow.x - newWindow.minX),
+                    y: CGFloat(oldWindow.minY + oldInWindow.y - newWindow.minY),
+                    width: CGFloat(oldInWindow.width),
+                    height: CGFloat(oldInWindow.height)
                 )
-                let originX = inHost ? placed.x - Double(newHost.minX) : placed.x
-                let originY = inHost ? placed.y - Double(newHost.minY) : placed.y
-                panel.frame = NSRect(
-                    x: CGFloat(originX),
-                    y: CGFloat(originY),
-                    width: CGFloat(placed.width),
-                    height: CGFloat(placed.height)
-                )
+                if bounds.insetBy(dx: -1, dy: -1).contains(raw) {
+                    let placed = FloatingScreen.reposition(
+                        panelInWindow: oldInWindow,
+                        oldWindowOrigin: (Double(oldWindow.minX), Double(oldWindow.minY)),
+                        newWindowOrigin: (Double(newWindow.minX), Double(newWindow.minY)),
+                        windowBounds: windowBox
+                    )
+                    let originX = inHost ? placed.x - Double(newHost.minX) : placed.x
+                    let originY = inHost ? placed.y - Double(newHost.minY) : placed.y
+                    panel.frame = NSRect(
+                        x: CGFloat(originX),
+                        y: CGFloat(originY),
+                        width: CGFloat(placed.width),
+                        height: CGFloat(placed.height)
+                    )
+                } else {
+                    let screen = NSRect(
+                        x: oldWindow.minX + CGFloat(oldInWindow.x),
+                        y: oldWindow.minY + CGFloat(oldInWindow.y),
+                        width: CGFloat(oldInWindow.width),
+                        height: CGFloat(oldInWindow.height)
+                    )
+                    hostOutside(panel, screen: screen)
+                }
             }
         }
         lastWindowFrame = newWindow
@@ -328,7 +347,18 @@ final class EditorShell: NSView, ToolbarGripHost {
     }
 
     func lift(_ panel: FloatPanel) {
-        let frame = panel.superview === self ? panel.frame : (panel.superview?.convert(panel.frame, to: self) ?? panel.frame)
+        let frame: NSRect
+        if let hostWindow = panel.window, hostWindow !== window, let shellWindow = window {
+            let screen = hostWindow.convertToScreen(panel.convert(panel.bounds, to: nil))
+            frame = convert(shellWindow.convertFromScreen(screen), from: nil)
+            let key = ObjectIdentifier(panel)
+            outsidePanels[key]?.orderOut(nil)
+            outsidePanels.removeValue(forKey: key)
+        } else if panel.superview === self {
+            frame = panel.frame
+        } else {
+            frame = panel.superview?.convert(panel.frame, to: self) ?? panel.frame
+        }
         if panel.superview !== self {
             panel.removeFromSuperview()
         }
@@ -346,7 +376,7 @@ final class EditorShell: NSView, ToolbarGripHost {
             startPointer: scenePoint(windowPoint),
             floatingWidth: Double(size.width),
             floatingHeight: Double(size.height),
-            originGroupID: panel.dockColumnID == nil ? nil : panel.dockGroupID
+            originGroupID: panel.dragOriginGroupID ?? (panel.dockColumnID == nil ? nil : panel.dockGroupID)
         )
     }
 
@@ -513,8 +543,91 @@ final class EditorShell: NSView, ToolbarGripHost {
         }
     }
 
+    private func hostOutside(_ panel: FloatPanel, screen: NSRect) {
+        let key = ObjectIdentifier(panel)
+        let host = outsidePanels[key] ?? NSPanel(
+            contentRect: screen,
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        host.isFloatingPanel = true
+        host.level = .floating
+        host.hasShadow = true
+        host.backgroundColor = Theme.panel
+        host.hidesOnDeactivate = false
+        if panel.superview !== host.contentView {
+            panel.removeFromSuperview()
+            if host.contentView == nil { host.contentView = NSView() }
+            host.contentView?.addSubview(panel)
+        }
+        host.setFrame(screen, display: true)
+        panel.frame = NSRect(origin: .zero, size: screen.size)
+        outsidePanels[key] = host
+        if !host.isVisible { host.orderFront(nil) }
+    }
+
+    /// A floating panel that crosses the window edge becomes its own window, so the
+    /// app window cannot clip it or shove it onto the properties column.
+    private func promoteOutsideFloaters() {
+        guard let window else { return }
+        var seen = Set<ObjectIdentifier>()
+        let candidates = subviews.compactMap { $0 as? FloatPanel } + floaters.dockPanels()
+        for panel in candidates where panel.dockColumnID == nil && !panel.dragging && !panel.embeddedInDock && !panel.isHidden {
+            let key = ObjectIdentifier(panel)
+            if seen.contains(key) { continue }
+            seen.insert(key)
+            let shellFrame: NSRect
+            if panel.window === window {
+                shellFrame = panel.superview === self ? panel.frame : (panel.superview?.convert(panel.frame, to: self) ?? panel.frame)
+            } else if let hostWindow = panel.window {
+                let screen = hostWindow.convertToScreen(panel.convert(panel.bounds, to: nil))
+                shellFrame = convert(window.convertFromScreen(screen), from: nil)
+            } else {
+                continue
+            }
+            if bounds.insetBy(dx: -1, dy: -1).contains(shellFrame) {
+                if panel.window !== window {
+                    panel.removeFromSuperview()
+                    addSubview(panel, positioned: .above, relativeTo: status)
+                    panel.frame = shellFrame
+                }
+                if let host = outsidePanels.removeValue(forKey: key) { host.orderOut(nil) }
+                continue
+            }
+            let screen = window.convertToScreen(convert(shellFrame, to: nil))
+            let host = outsidePanels[key] ?? NSPanel(
+                contentRect: screen,
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            host.isFloatingPanel = true
+            host.level = .floating
+            host.hasShadow = true
+            host.backgroundColor = Theme.panel
+            host.hidesOnDeactivate = false
+            if panel.superview !== host.contentView {
+                panel.removeFromSuperview()
+                if host.contentView == nil { host.contentView = NSView() }
+                host.contentView?.addSubview(panel)
+            }
+            host.setFrame(screen, display: true)
+            panel.frame = NSRect(origin: .zero, size: screen.size)
+            outsidePanels[key] = host
+            if !host.isVisible { host.orderFront(nil) }
+        }
+        for key in outsidePanels.keys where !seen.contains(key) {
+            outsidePanels[key]?.orderOut(nil)
+            outsidePanels.removeValue(forKey: key)
+        }
+    }
+
     /// Docked panels sit under the floater host. A floating or dragged panel sits above the status bar.
     private func place(_ panel: FloatPanel, floating: Bool) {
+        if panel.window !== window, panel.window != nil, panel.dockColumnID == nil, !panel.dragging {
+            return
+        }
         if panel.superview !== self {
             panel.removeFromSuperview()
         }

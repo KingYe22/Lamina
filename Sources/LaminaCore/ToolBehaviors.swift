@@ -93,8 +93,9 @@ public enum ToolBehaviors {
         return best
     }
 
-    /// Screen-point radius of the pen's close hotspot. Illustrator uses about 4–6 pt.
-    public static let penCloseSlop: Double = 6
+    /// Screen-point radius of the pen's close hotspot.
+    /// Live Illustrator closes at 8 pt and adds an anchor at 10 pt.
+    public static let penCloseSlop: Double = 8
 
     /// Document-point radius at `zoom`. One screen point is `1/zoom` document points.
     public static func penCloseDistance(zoom: Double) -> Double {

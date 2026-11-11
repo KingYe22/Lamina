@@ -318,6 +318,8 @@ jobs:
             2. 把 Lamina.app 放进「应用程序」后，在终端运行：`xattr -cr /Applications/Lamina.app && open /Applications/Lamina.app`
             3. 先把 Lamina.app 拖进「应用程序」，再双击磁盘映像里的「打开 Lamina.command」（它会清除隔离标记并打开应用程序里的 Lamina）。
 
+            0.4.13（build 29）：Delete 和 Backspace 删除选区。属性面板跟随选区。⌥⌘P 和按钮打开文档设置。旋转、比例缩放和镜像各有自己的对话框。吸管把取样外观应用到选区。图层面板有行、展开和面板菜单。变换面板用毫米显示并可编辑选区的 X/Y/W/H。上下文任务栏停在工具栏旁，内容与 Illustrator 一致。菜单补上对比里点名的项。⌘⌥J 平均，⌘1 实际大小，缩放走固定档位。描边是空心框。单击形状工具打开尺寸对话框。橡皮擦切开的是独立路径。文字输入替换占位符。钢笔闭合半径 8 pt，10 pt 加锚点。从组里拖出选项卡时，旧槽蓝框和半透明在 31 pt 才出现。浮动面板超出窗口时单独成窗。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
+
             0.4.12（build 28）：工具栏右侧、窗口左缘和右侧停靠条共用同一份设备色绘制列表，实色填充都是后一次设备 RGB 填充，截图为 #2C62CB。从列里拖出面板时，12 pt 和 15.5 pt 不透明跟随且旧槽没有蓝框，蓝框和半透明一起出现在实测的 31 pt。钢笔路径未结束时，本地 keyDown 监视器处理键码 53 的 Esc（包括 HID 的 CGEvent）；对话框、面板输入框和文字编辑里的 Esc 保持原样。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。
 
             0.4.11（build 27）：窗口变矮时，靠下的浮动面板保持屏幕位置，只有整块离开窗口才挪回来。工具栏右侧和窗口左缘的停靠条与右侧指示条一样用设备色 #2C62CB。从列里拖出面板时，15.5 pt 仍是不透明跟随，到实测的 31 pt 才变半透明。Esc 无论是 keyDown（包括没有字符的 CGEvent，键码 53）还是 cancelOperation，都会结束当前钢笔路径，拼音输入法打开时也一样。安装包是 dist/Lamina.dmg 与 dist/Lamina.app.zip。

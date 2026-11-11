@@ -52,7 +52,7 @@ public enum KeyID: Hashable, Sendable {
         case .period: return "."
         case .slash: return "/"
         case .backslash: return "\\"
-        case .quote: return "'"
+        case .quote: return "\""
         case .backtick: return "`"
         case .leftBracket: return "["
         case .rightBracket: return "]"

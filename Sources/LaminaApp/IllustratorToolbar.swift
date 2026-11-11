@@ -36,7 +36,7 @@ final class IllustratorToolbar: NSView {
             [ToolSlotSpec(tools: [.lasso])]
         ]),
         ToolSection(title: "形状", rows: [
-            [ToolSlotSpec(tools: [.rectangle, .roundedRectangle, .star]), ToolSlotSpec(tools: [.ellipse, .line, .arc])],
+            [ToolSlotSpec(tools: [.rectangle, .star, .line]), ToolSlotSpec(tools: [.ellipse, .roundedRectangle, .arc])],
             [ToolSlotSpec(tools: [.polygon]), ToolSlotSpec(tools: [.shaper])]
         ]),
         ToolSection(title: "绘图", rows: [
@@ -72,6 +72,10 @@ final class IllustratorToolbar: NSView {
                     let button = ToolSlotButton(tools: spec.tools)
                     button.onSelect = { [weak self] tool in self?.choose(tool) }
                     button.onFlyout = { [weak self] button in self?.showFlyout(for: button) }
+                    button.onOptions = { [weak self] in
+                        self?.workspace?.active.model.requestToolOptions()
+                        self?.workspace?.touch()
+                    }
                     addSubview(button)
                     slots.append(button)
                 }
@@ -362,6 +366,7 @@ final class ToolSlotButton: NSView {
     var isCurrent = false
     var onSelect: ((Tool) -> Void)?
     var onFlyout: ((ToolSlotButton) -> Void)?
+    var onOptions: (() -> Void)?
 
     init(tools: [Tool]) {
         self.tools = tools
@@ -432,6 +437,11 @@ final class ToolSlotButton: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        if event.clickCount >= 2 {
+            onSelect?(tool)
+            onOptions?()
+            return
+        }
         if event.modifierFlags.contains(.option), tools.count > 1 {
             let index = (tools.firstIndex(of: tool) ?? 0) + 1
             tool = tools[index % tools.count]
@@ -476,13 +486,23 @@ final class ToolFlyoutView: NSView {
         border.stroke()
         for (index, tool) in tools.enumerated() {
             let y = 4 + CGFloat(index) * 28
+            let current = tool == tools[0]
+            if current {
+                NSColor(srgbRed: 0.08, green: 0.45, blue: 0.90, alpha: 1).setFill()
+                NSBezierPath(rect: NSRect(x: 4, y: y, width: bounds.width - 8, height: 26)).fill()
+            }
             let icon = NSRect(x: 8, y: y + 4, width: 18, height: 18)
-            ToolIcons.draw(tool, in: icon, color: Theme.icon)
+            ToolIcons.draw(tool, in: icon, color: current ? .white : Theme.icon)
             let title = ToolTips.heading(tool) as NSString
             title.draw(at: NSPoint(x: 32, y: y + 6), withAttributes: [
                 .font: Theme.ui(12),
-                .foregroundColor: Theme.text
+                .foregroundColor: current ? NSColor.white : Theme.text
             ])
+            if tool == .star {
+                ("›" as NSString).draw(at: NSPoint(x: bounds.width - 16, y: y + 4), withAttributes: [
+                    .font: Theme.ui(14), .foregroundColor: Theme.text
+                ])
+            }
         }
     }
 
@@ -509,9 +529,9 @@ final class ToolbarFooter: NSView {
     override var isFlipped: Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
 
-    /// Stroke sits up-left, behind. Fill sits down-right, in front. Same stack as Illustrator.
-    private var strokeWell: NSRect { NSRect(x: 0, y: 1, width: 44, height: 44) }
-    private var fillWell: NSRect { NSRect(x: 22, y: 23, width: 44.5, height: 44.5) }
+    /// Fill is the solid well, upper-left. Stroke is the hollow frame, lower-right.
+    private var fillWell: NSRect { NSRect(x: 0, y: 1, width: 44, height: 44) }
+    private var strokeWell: NSRect { NSRect(x: 22, y: 23, width: 44.5, height: 44.5) }
 
     func sync(_ model: EditorModel?) {
         guard let model else { return }
@@ -522,8 +542,8 @@ final class ToolbarFooter: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        paintWell(strokeWell, paint: strokePaint)
-        paintWell(fillWell, paint: fillPaint)
+        paintWell(fillWell, paint: fillPaint, hollow: false)
+        paintWell(strokeWell, paint: strokePaint, hollow: true)
 
         Theme.color(0xC2C2C2).setFill()
         TracedChrome.swapArrows().fill()
@@ -575,9 +595,24 @@ final class ToolbarFooter: NSView {
     }
 
     /// Color well. A missing paint is the red none slash, not a stand-in black or white.
-    private func paintWell(_ rect: NSRect, paint: Paint?) {
+    private func paintWell(_ rect: NSRect, paint: Paint?, hollow: Bool) {
         Theme.color(0x2E2E2E).setFill()
         NSBezierPath(rect: rect).fill()
+        if hollow {
+            let frame = rect.insetBy(dx: 7, dy: 7)
+            let ring = NSBezierPath(rect: rect.insetBy(dx: 3, dy: 3))
+            ring.append(NSBezierPath(rect: frame))
+            ring.windingRule = .evenOdd
+            if case .solid(let color) = paint {
+                color.nsColor.setFill()
+            } else if paint == nil {
+                NSColor.white.setFill()
+            } else {
+                Theme.color(0x2D2D2D).setFill()
+            }
+            ring.fill()
+            return
+        }
         let inner = rect.insetBy(dx: 1.5, dy: 1.5)
         guard let paint else {
             NSColor.white.setFill()

@@ -1032,7 +1032,7 @@ final class UXLockTests: XCTestCase {
         model.pointerDown(at: Vec2(40, 0), shift: false, option: false, command: false)
         model.pointerUp(at: Vec2(40, 0), shift: false, option: false, command: false)
         let near = Vec2(5, 0)
-        XCTAssertEqual(ToolBehaviors.penCloseSlop, 6, accuracy: 0.001)
+        XCTAssertEqual(ToolBehaviors.penCloseSlop, 8, accuracy: 0.001)
         model.pointerMove(to: near)
         XCTAssertEqual(model.penHoverCursor, .close)
         XCTAssertTrue(model.penAnchorLabel)
@@ -1050,11 +1050,11 @@ final class UXLockTests: XCTestCase {
             outside.pointerDown(at: point, shift: false, option: false, command: false)
             outside.pointerUp(at: point, shift: false, option: false, command: false)
         }
-        outside.pointerMove(to: Vec2(7, 0))
+        outside.pointerMove(to: Vec2(10, 0))
         XCTAssertEqual(outside.penHoverCursor, .pen)
         XCTAssertFalse(outside.penAnchorLabel)
-        outside.pointerDown(at: Vec2(7, 0), shift: false, option: false, command: false)
-        outside.pointerUp(at: Vec2(7, 0), shift: false, option: false, command: false)
+        outside.pointerDown(at: Vec2(10, 0), shift: false, option: false, command: false)
+        outside.pointerUp(at: Vec2(10, 0), shift: false, option: false, command: false)
         XCTAssertEqual(outside.penNodes.count, 4)
         XCTAssertTrue(outside.document.flatItems().isEmpty)
     }
@@ -1323,7 +1323,7 @@ final class UXLockTests: XCTestCase {
         XCTAssertTrue(PenCloseHit.screen(pointer: nearView, anchor: anchorView))
         let nearDoc = PenCloseHit.documentPoint(viewX: nearView.x, viewY: nearView.y, viewHeight: viewH, pan: pan, zoom: zoom)
         XCTAssertLessThanOrEqual(nearDoc.distance(to: anchor) * zoom, 6.01)
-        let farView = Vec2(anchorView.x + 7, anchorView.y)
+        let farView = Vec2(anchorView.x + 10, anchorView.y)
         XCTAssertFalse(PenCloseHit.screen(pointer: farView, anchor: anchorView))
         let roundTrip = PenCloseHit.viewPoint(
             document: PenCloseHit.documentPoint(viewX: 180, viewY: 240, viewHeight: viewH, pan: pan, zoom: zoom),
@@ -2178,6 +2178,46 @@ final class UXLockTests: XCTestCase {
         var scene = illustratorScene(toolbar: true)
         scene.groups[0].vacated = true
         return scene
+    }
+
+    func testTabOutOfItsOwnGroupWaitsUntilThirtyOne() {
+        var scene = illustratorScene(toolbar: true)
+        let group = DockGroupBox(
+            id: "pathfinder",
+            frame: DockFrame(x: -700, y: 200, width: 313, height: 283),
+            tabHeight: 34,
+            columnID: ""
+        )
+        scene.groups.append(group)
+        let start = Vec2(group.frame.x + 40, group.frame.minY + 16)
+        var drag = PanelDragPath(
+            wasDocked: false,
+            origin: group.frame,
+            startPointer: start,
+            floatingWidth: 180,
+            floatingHeight: 140,
+            originGroupID: group.id
+        )
+        let ten = drag.step(pointer: Vec2(start.x + 10, start.y), scene: scene, up: false)
+        XCTAssertTrue(ten.following)
+        XCTAssertFalse(ten.ghost)
+        XCTAssertEqual(ten.chrome, .none)
+        let released = drag.step(pointer: Vec2(start.x + 15.5, start.y), scene: scene, up: true)
+        XCTAssertEqual(released.target, .float)
+        var again = PanelDragPath(
+            wasDocked: false,
+            origin: group.frame,
+            startPointer: start,
+            floatingWidth: 180,
+            floatingHeight: 140,
+            originGroupID: group.id
+        )
+        let ghost = again.step(pointer: Vec2(start.x + 31, start.y), scene: scene, up: false)
+        XCTAssertTrue(ghost.ghost)
+        guard case .outline = ghost.chrome else { return XCTFail("31 pt outlines the old slot") }
+        let back = again.step(pointer: Vec2(start.x + 31, start.y), scene: scene, up: true)
+        guard case .join(let id) = back.target else { return XCTFail(String(describing: back.target)) }
+        XCTAssertEqual(id, group.id)
     }
 
     private func polylineLength(_ nodes: [PathNode]) -> Double {

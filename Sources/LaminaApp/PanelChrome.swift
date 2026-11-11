@@ -347,7 +347,14 @@ final class FloatPanel: NSView {
     var active: PanelKind
     var collapsed = false
     private let weightField = PanelField(text: "1")
-    private let limitField = PanelField(text: "4")
+    private let limitField = PanelField(text: "10")
+    private let xField = PanelField(text: "0 mm")
+    private let yField = PanelField(text: "0 mm")
+    private let wField = PanelField(text: "0 mm")
+    private let hField = PanelField(text: "0 mm")
+    /// Set while a tab is pulled out of its group, so the old slot waits for 31 pt.
+    var dragOriginGroupID: String?
+    private var strokeOptionsHidden = false
     private var alignTarget = 0
     private let alignTargets = ["对齐所选对象", "对齐画板", "关键对象"]
     private var strokeAlign = 0
@@ -381,13 +388,17 @@ final class FloatPanel: NSView {
         layer?.masksToBounds = true
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 0
-        for field in [weightField, limitField] {
+        for field in [weightField, limitField, xField, yField, wField, hField] {
             field.alignment = .center
             field.font = Theme.ui(13)
             addSubview(field)
         }
         weightField.onLeave = { [weak self] in self?.applyWeight() }
         limitField.onLeave = { [weak self] in self?.applyLimit() }
+        xField.onLeave = { [weak self] in self?.applyGeometry(self?.xField, key: "x") }
+        yField.onLeave = { [weak self] in self?.applyGeometry(self?.yField, key: "y") }
+        wField.onLeave = { [weak self] in self?.applyGeometry(self?.wField, key: "w") }
+        hField.onLeave = { [weak self] in self?.applyGeometry(self?.hField, key: "h") }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -398,6 +409,12 @@ final class FloatPanel: NSView {
         }
         if let limit = workspace?.active.model.currentStroke?.miterLimit {
             limitField.stringValue = "\(Int(limit))"
+        }
+        if let readout = workspace?.active.model.selectionReadout() {
+            if !xField.fieldIsEditing { xField.stringValue = readout.x + " mm" }
+            if !yField.fieldIsEditing { yField.stringValue = readout.y + " mm" }
+            if !wField.fieldIsEditing { wField.stringValue = readout.width + " mm" }
+            if !hField.fieldIsEditing { hField.stringValue = readout.height + " mm" }
         }
         needsDisplay = true
         needsLayout = true
@@ -417,9 +434,17 @@ final class FloatPanel: NSView {
 
     override func layout() {
         super.layout()
-        let showStroke = !collapsed && !suppressContent && !embeddedInDock && active == .stroke
+        let showStroke = !collapsed && !suppressContent && !embeddedInDock && active == .stroke && !strokeOptionsHidden
         weightField.isHidden = !showStroke
         limitField.isHidden = !showStroke
+        let showTransform = !collapsed && !suppressContent && !embeddedInDock && active == .transform
+        for field in [xField, yField, wField, hField] { field.isHidden = !showTransform }
+        if showTransform {
+            let fields = [xField, yField, wField, hField]
+            for (index, field) in fields.enumerated() {
+                field.frame = NSRect(x: 36, y: 28 + CGFloat(index) * 28, width: min(160, bounds.width - 48), height: 20)
+            }
+        }
         if showStroke {
             weightField.frame = NSRect(x: 78, y: 48, width: 64, height: 20)
             limitField.frame = NSRect(x: 248, y: 114, width: 40, height: 18)
@@ -501,10 +526,11 @@ final class FloatPanel: NSView {
         (shown.targetName as NSString).draw(at: place(33.5, 150), withAttributes: [
             .font: Theme.ui(13, weight: .semibold), .foregroundColor: ink
         ])
-        appearanceRow(top: 168.5, title: "描边", paint: shown.stroke?.paint, detail: strokeDetail(shown.stroke), ink: ink, dim: dim)
+        appearanceRow(top: 168.5, title: "描边:", paint: shown.stroke?.paint, detail: strokeDetail(shown.stroke), ink: ink, dim: dim, link: true)
         opacityLine(top: 198, indented: true, ink: dim)
-        appearanceRow(top: 230, title: "填色", paint: shown.fill, detail: "", ink: ink, dim: dim)
+        appearanceRow(top: 230, title: "填色:", paint: shown.fill, detail: "", ink: ink, dim: dim, link: false)
         opacityLine(top: 260.5, indented: true, ink: dim)
+        opacityLine(top: 290, indented: false, ink: dim)
         let centers: [CGFloat] = [41.75, 74.25, 108.5, 212.75, 247, 278]
         for (index, center) in centers.enumerated() {
             let point = place(center, 318)
@@ -520,7 +546,7 @@ final class FloatPanel: NSView {
         return String(format: "%.1f pt", stroke.width)
     }
 
-    private func appearanceRow(top: CGFloat, title: String, paint: Paint?, detail: String, ink: NSColor, dim: NSColor) {
+    private func appearanceRow(top: CGFloat, title: String, paint: Paint?, detail: String, ink: NSColor, dim: NSColor, link: Bool) {
         let eye = place(33.5, top)
         PanelIcons.eye(in: NSRect(x: eye.x, y: eye.y + 1, width: 16, height: 12), open: true)
         disclosure(at: place(67, top + 3), open: true, color: dim)
@@ -531,9 +557,9 @@ final class FloatPanel: NSView {
         let chip = NSRect(x: origin.x, y: origin.y, width: 13, height: 12)
         paintChip(chip, paint: paint)
         if !detail.isEmpty {
-            (detail as NSString).draw(at: place(164, top), withAttributes: [
-                .font: Theme.ui(13), .foregroundColor: dim
-            ])
+            var attributes: [NSAttributedString.Key: Any] = [.font: Theme.ui(13), .foregroundColor: dim]
+            if link { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+            (detail as NSString).draw(at: place(164, top), withAttributes: attributes)
         }
     }
 
@@ -659,15 +685,31 @@ final class FloatPanel: NSView {
 
     private func drawTransform(_ rect: NSRect, ink: NSColor) {
         let labels = ["X", "Y", "W", "H"]
-        let values = ["0", "0", "210", "297"]
+        let readout = workspace?.active.model.selectionReadout()
+        let values = [
+            readout.map { $0.x + " mm" } ?? "0 mm",
+            readout.map { $0.y + " mm" } ?? "0 mm",
+            readout.map { $0.width + " mm" } ?? "0 mm",
+            readout.map { $0.height + " mm" } ?? "0 mm"
+        ]
         for index in 0..<4 {
             let y = rect.minY + CGFloat(index) * 28
             (labels[index] as NSString).draw(at: NSPoint(x: rect.minX, y: y + 2), withAttributes: [
                 .font: Theme.ui(13), .foregroundColor: Theme.color(0xC2C2C2)
             ])
-            PanelIcons.stepper(NSRect(x: rect.minX + 22, y: y, width: min(140, rect.width - 22), height: 20), title: values[index])
+            PanelIcons.stepper(NSRect(x: rect.minX + 22, y: y, width: min(140, rect.width - 22), height: 20), title: "")
+            _ = values
             _ = ink
         }
+        let extra = Theme.color(0xD1D1D1)
+        ("∠ 0°" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 120), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
+        ("倾斜 0°" as NSString).draw(at: NSPoint(x: rect.minX + 70, y: rect.minY + 120), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
+        if let readout {
+            ("\(readout.name)属性" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 146), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
+            ("W \(readout.width) mm   H \(readout.height) mm" as NSString).draw(at: NSPoint(x: rect.minX, y: rect.minY + 166), withAttributes: [.font: Theme.ui(12), .foregroundColor: extra])
+        }
+        PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: rect.minY + 190), on: false, title: "缩放圆角")
+        PanelIcons.checkbox(at: NSPoint(x: rect.minX, y: rect.minY + 212), on: false, title: "缩放描边和效果")
     }
 
     private func drawAlign(_ rect: NSRect, ink: NSColor) {
@@ -749,7 +791,10 @@ final class FloatPanel: NSView {
         caption("粗细", at: place(362.5, 442.5), ink: bright)
         let weightBox = NSRect(x: place(410, 437).x, y: place(410, 437).y, width: 18, height: 22)
         stepperArrows(weightBox)
-        PanelIcons.popup(NSRect(x: place(490, 437).x, y: place(490, 437).y, width: 52, height: 22), title: "pt")
+        let weightLabel = workspace?.active.model.currentStroke.map { stroke -> String in
+            stroke.width == stroke.width.rounded() ? "\(Int(stroke.width)) pt" : String(format: "%.2f pt", stroke.width)
+        } ?? "1 pt"
+        PanelIcons.popup(NSRect(x: place(490, 437).x, y: place(490, 437).y, width: 72, height: 22), title: weightLabel)
 
         caption("端点", at: place(362.5, 475.5), ink: label)
         iconRow(3, x: place(412, 472).x, y: place(412, 472).y, selected: enabled ? capIndex(stroke?.cap) : -1, muted: !enabled) { PanelIcons.cap($0, in: $1) }
@@ -1013,6 +1058,23 @@ final class FloatPanel: NSView {
 
     private func showMenu() {
         let menu = NSMenu()
+        if active == .stroke {
+            menu.addItem(withTitle: strokeOptionsHidden ? "显示选项" : "隐藏选项", action: #selector(menuStrokeOptions), keyEquivalent: "")
+            for item in menu.items { item.target = self }
+            NSMenu.popUpContextMenu(menu, with: NSApp.currentEvent ?? NSEvent(), for: self)
+            return
+        }
+        if active == .transform {
+            for title in IllustratorParity.transformMenu {
+                if title == "-" { menu.addItem(.separator()); continue }
+                let item = NSMenuItem(title: title, action: #selector(menuTransform(_:)), keyEquivalent: "")
+                item.target = self
+                item.state = (title == "仅变换对象" || title == "使用符号的套版色点") ? .on : .off
+                menu.addItem(item)
+            }
+            NSMenu.popUpContextMenu(menu, with: NSApp.currentEvent ?? NSEvent(), for: self)
+            return
+        }
         menu.addItem(withTitle: "折叠", action: #selector(menuCollapse), keyEquivalent: "")
         menu.addItem(withTitle: "关闭", action: #selector(menuClose), keyEquivalent: "")
         if tabs.count > 1 {
@@ -1025,6 +1087,24 @@ final class FloatPanel: NSView {
         }
         for item in menu.items { item.target = self }
         NSMenu.popUpContextMenu(menu, with: NSApp.currentEvent ?? NSEvent(), for: self)
+    }
+
+    @objc private func menuStrokeOptions() {
+        strokeOptionsHidden.toggle()
+        needsLayout = true
+        needsDisplay = true
+    }
+
+    @objc private func menuTransform(_ sender: NSMenuItem) {
+        guard let model = workspace?.active.model else { return }
+        switch sender.title {
+        case "水平翻转": model.perform("水平翻转")
+        case "垂直翻转": model.perform("垂直翻转")
+        case "隐藏选项": strokeOptionsHidden.toggle()
+        default: model.status = sender.title
+        }
+        workspace?.touch()
+        needsDisplay = true
     }
 
     @objc private func menuCollapse() { applyCollapse(true) }
@@ -1113,6 +1193,7 @@ final class FloatPanel: NSView {
         needsDisplay = true
         shrinkToRemainingTabs()
         let born = FloatPanel(tabs: [tab])
+        born.dragOriginGroupID = dockGroupID
         born.workspace = workspace
         let shellFrame = superview?.convert(frame, to: editorShell) ?? frame
         host.addFloating(born)
@@ -1191,7 +1272,7 @@ final class FloatPanel: NSView {
             return
         }
         shell.lift(self)
-        var path = shell.makeDragPath(for: self, windowPoint: event.locationInWindow)
+        var path = shell.makeDragPath(for: self, windowPoint: shellPoint(event))
         var pending = first
         while true {
             let sample: NSEvent?
@@ -1203,15 +1284,23 @@ final class FloatPanel: NSView {
             }
             guard let sample else { break }
             let up = sample.type == .leftMouseUp
-            shell.dragStep(self, path: &path, windowPoint: sample.locationInWindow, up: up)
+            shell.dragStep(self, path: &path, windowPoint: shellPoint(sample), up: up)
             window?.displayIfNeeded()
             if up { break }
         }
         dragging = false
+        dragOriginGroupID = nil
         alphaValue = 1
         let ended = onDragEnd
         onDragEnd = nil
         ended?()
+    }
+
+    private func shellPoint(_ event: NSEvent) -> NSPoint {
+        guard let shell = editorShell, let shellWindow = shell.window else { return event.locationInWindow }
+        if event.window === shellWindow || event.window == nil { return event.locationInWindow }
+        let screen = event.window?.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)) ?? .zero
+        return shellWindow.convertFromScreen(screen).origin
     }
 
     private func dragResize(_ event: NSEvent) {
@@ -1264,6 +1353,11 @@ final class FloatPanel: NSView {
             if names.indices.contains(index) { _ = workspace.perform(names[index]) }
         case .stroke:
             let row = point.y - top
+            let valueMenu = place(490, 437)
+            if NSRect(x: valueMenu.x, y: valueMenu.y, width: 72, height: 22).contains(point) {
+                showStrokeWeights()
+                return
+            }
             if row > 22 && row < 46, point.x > 40 {
                 setCap(Int((point.x - 44) / 29), model: model)
             } else if row > 48 && row < 72, point.x > 40, point.x < bounds.width - 52 {
@@ -1317,6 +1411,35 @@ final class FloatPanel: NSView {
         var stroke = model.currentStroke ?? StrokeStyle()
         body(&stroke)
         model.applyStroke(stroke)
+    }
+
+    private func applyGeometry(_ field: PanelField?, key: String) {
+        guard let field, let model = workspace?.active.model else { return }
+        model.applyGeometryField(key, text: field.stringValue)
+        workspace?.touch()
+        sync()
+    }
+
+    private func showStrokeWeights() {
+        let menu = NSMenu()
+        let current = workspace?.active.model.currentStroke?.width
+        for weight in IllustratorParity.strokeWeights {
+            let title = weight == weight.rounded() ? "\(Int(weight)) pt" : String(format: "%.2f pt", weight)
+            let item = NSMenuItem(title: title, action: #selector(pickStrokeWeight(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = weight
+            if let current, abs(current - weight) < 0.001 { item.state = .on }
+            menu.addItem(item)
+        }
+        NSMenu.popUpContextMenu(menu, with: NSApp.currentEvent ?? NSEvent(), for: self)
+    }
+
+    @objc private func pickStrokeWeight(_ sender: NSMenuItem) {
+        guard let weight = sender.representedObject as? Double, let model = workspace?.active.model else { return }
+        mutateStroke(model) { $0.width = weight }
+        model.status = "描边 \(sender.title)"
+        workspace?.touch()
+        sync()
     }
 
     private func applyWeight() {

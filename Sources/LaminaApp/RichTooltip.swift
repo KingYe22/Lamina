@@ -36,7 +36,7 @@ enum ToolTips {
         case .spiral: return "拖移绘制螺旋线。"
         case .rectGrid: return "拖移绘制矩形网格。"
         case .polarGrid: return "拖移绘制同心圆和放射分割。"
-        case .rectangle: return "拖移绘制矩形。按住 Shift 绘制正方形，按住 Option 从中心绘制。"
+        case .rectangle: return "创建正方形和矩形"
         case .roundedRectangle: return "拖移绘制圆角矩形。按住 Shift 等比，按住 Option 从中心绘制。"
         case .ellipse: return "拖移绘制椭圆。按住 Shift 绘制正圆，按住 Option 从中心绘制。"
         case .polygon: return "拖移绘制多边形。拖动时按上下方向键增减边数。"
@@ -85,8 +85,8 @@ final class RichTooltip: NSView {
     func show(from view: NSView, localPoint: NSPoint, title: String, body: String, tool: Tool? = nil) {
         if let tool {
             let part = ToolTips.parts(tool)
-            self.title = part.name
-            self.shortcut = part.shortcut
+            self.title = tool.title
+            self.shortcut = part.shortcut?.replacingOccurrences(of: "工具", with: "")
             self.previewTool = tool
         } else {
             self.title = title
@@ -134,7 +134,8 @@ final class RichTooltip: NSView {
         shadow.shadowOffset = NSSize(width: 0, height: -3)
         shadow.shadowBlurRadius = 16
         shadow.set()
-        NSColor.white.setFill()
+        let cardFill = previewTool == nil ? NSColor.white : NSColor(srgbRed: 0.16, green: 0.16, blue: 0.17, alpha: 1)
+        cardFill.setFill()
         let cardPath = NSBezierPath(roundedRect: card, xRadius: 10, yRadius: 10)
         cardPath.fill()
         NSShadow().set()
@@ -154,7 +155,9 @@ final class RichTooltip: NSView {
         }
 
         let titleFont = Theme.ui(13, weight: .semibold)
-        let titleColor = NSColor(srgbRed: 0.12, green: 0.12, blue: 0.13, alpha: 1)
+        let titleColor = previewTool == nil
+            ? NSColor(srgbRed: 0.12, green: 0.12, blue: 0.13, alpha: 1)
+            : NSColor.white
         (title as NSString).draw(at: NSPoint(x: card.minX + 14, y: textTop - 4), withAttributes: [
             .font: titleFont, .foregroundColor: titleColor
         ])
@@ -163,7 +166,9 @@ final class RichTooltip: NSView {
         }
 
         let bodyFont = Theme.ui(12)
-        let bodyColor = NSColor(srgbRed: 0.28, green: 0.28, blue: 0.30, alpha: 1)
+        let bodyColor = previewTool == nil
+            ? NSColor(srgbRed: 0.28, green: 0.28, blue: 0.30, alpha: 1)
+            : NSColor(srgbRed: 0.86, green: 0.86, blue: 0.88, alpha: 1)
         let bodyBottom = card.minY + (previewTool == nil ? 12 : 42)
         let bodyRect = NSRect(
             x: card.minX + 14,

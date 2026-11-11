@@ -325,17 +325,32 @@ public struct PanelDragPath: Equatable, Sendable {
         var chrome = hit.chrome
         var target = hit.target
         let columnUndock = wasDocked && !draggingToolbar
-        // The old slot's outline is the 31 pt ghost sample. At 12 and 15.5 the
-        // panel follows solid, and releasing there floats instead of restoring.
-        if columnUndock, case .restore = target, travel + 1e-9 < IllustratorDock.undockGhost {
+        // The panel's own old slot — a column undock or a tab pulled out of its
+        // group — keeps the 31 pt sample. At 10 and 15.5 the panel follows
+        // solid, and releasing there floats. 31 pt is the ghost and the outline.
+        let ownSlot = Self.ownSlot(target: target, originGroupID: originGroupID)
+        if (columnUndock || ownSlot), case .restore = target, travel + 1e-9 < IllustratorDock.undockGhost {
             chrome = .none
             target = .float
         }
-        let ghost = columnUndock
+        if ownSlot, travel + 1e-9 < IllustratorDock.undockGhost {
+            chrome = .none
+            target = .float
+        }
+        let waitsForGhost = columnUndock || ownSlot
+        let ghost = waitsForGhost
             ? (chrome != .none && travel + 1e-9 >= IllustratorDock.undockGhost)
             : (chrome != .none)
         let placed = up ? target : .stay
         return DockPlacement(frame: frame, chrome: up ? .none : chrome, ghost: up ? false : ghost, following: true, target: placed)
+    }
+
+    private static func ownSlot(target: DockTarget, originGroupID: String?) -> Bool {
+        guard let originGroupID else { return false }
+        switch target {
+        case .join(let id), .restore(let id): return id == originGroupID
+        default: return false
+        }
     }
 
     private struct Hit {

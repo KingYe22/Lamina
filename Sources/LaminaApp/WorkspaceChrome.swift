@@ -261,10 +261,11 @@ final class IllustratorStatusBar: NSView {
         NSBezierPath(rect: NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1)).fill()
         guard let model = workspace?.active.model else { return }
         let hint = Self.hint(for: model.tool) as NSString
-        let zoom = String(format: "%.2f%%", model.zoom * 100)
+        let zoom = IllustratorZoom.percentLabel(model.zoom)
         let boards = max(model.document.artboards.count, 1)
         let index = min(model.document.activeArtboard + 1, boards)
-        let right = "\(zoom) ▾    0°    ‹ \(index) / \(boards) ›    \(model.tool.title)" as NSString
+        let degrees = Int((model.viewRotation * 180 / .pi).rounded())
+        let right = "\(zoom) ▾    \(degrees)° ▾    |◀  ◀  (\(index) ▾)  ▶  ▶|    \(model.tool.title)" as NSString
         let font = Theme.ui(11)
         let hintFont = Theme.ui(11)
         let placed = StatusBarLayout.place(
@@ -293,7 +294,19 @@ final class IllustratorStatusBar: NSView {
     override func mouseDown(with event: NSEvent) {
         guard let workspace else { return }
         let x = convert(event.locationInWindow, from: nil).x
-        if x > bounds.width - 160, x <= bounds.width - 70 {
+        let boards = max(workspace.active.model.document.artboards.count, 1)
+        let width = bounds.width
+        if x > width - 250, x <= width - 210 {
+            workspace.active.model.document.activeArtboard = 0
+            workspace.active.model.fitArtboard()
+        } else if x > width - 210, x <= width - 180 {
+            workspace.stepArtboard(-1)
+        } else if x > width - 140, x <= width - 110 {
+            workspace.stepArtboard(1)
+        } else if x > width - 110, x <= width - 80 {
+            workspace.active.model.document.activeArtboard = boards - 1
+            workspace.active.model.fitArtboard()
+        } else if x > width - 160, x <= width - 70 {
             workspace.perform("画板适合窗口大小")
         }
     }
@@ -325,15 +338,19 @@ final class ContextBar: NSView {
         border.lineWidth = 1
         border.stroke()
         let model = workspace?.active.model
-        let tool = model?.tool ?? .selection
-        let icon = NSRect(x: 8, y: (bounds.height - 16) / 2, width: 16, height: 16)
-        ToolIcons.draw(tool, in: icon, color: Theme.text)
-        var x = icon.maxX + 6
-        x = label(tool.title, x: x, weight: .semibold)
-        x = divider(x)
-        x = chip({ PanelIcons.sliders(in: $0) }, title: "属性", x: x)
-        x = chip({ PanelIcons.align(0, in: $0) }, title: "对齐", x: x)
-        _ = chip({ PanelIcons.pathfinder(0, in: $0) }, title: "路径查找器", x: x)
+        let names = model?.selection.isEmpty == false ? IllustratorParity.contextSelected : IllustratorParity.contextEmpty
+        var x: CGFloat = 8
+        let grip = NSRect(x: x, y: (bounds.height - 12) / 2, width: 8, height: 12)
+        Theme.color(0x9A9A9A).setFill()
+        for column in 0..<2 {
+            for row in 0..<3 {
+                NSRect(x: grip.minX + CGFloat(column) * 4, y: grip.minY + CGFloat(row) * 4, width: 2, height: 2).fill()
+            }
+        }
+        x = grip.maxX + 8
+        for name in names {
+            x = label(name, x: x, weight: name == names[0] ? .semibold : .regular)
+        }
     }
 
     private func label(_ text: String, x: CGFloat, weight: NSFont.Weight = .regular) -> CGFloat {
@@ -575,11 +592,19 @@ final class PropertiesDock: NSView {
             }
         }
         if adopted.contains(where: { $0.title == tab }) { return }
-        guard tab == "属性", let model = workspace?.active.model else {
-            let note = tab == "图层" ? layerText() : "\(tab) 为空"
-            (note as NSString).draw(at: NSPoint(x: 12, y: 48), withAttributes: [
+        guard let model = workspace?.active.model else { return }
+        if tab == "图层" {
+            drawLayers(model)
+            return
+        }
+        guard tab == "属性" else {
+            ("\(tab) 为空" as NSString).draw(at: NSPoint(x: 12, y: 48), withAttributes: [
                 .font: Theme.ui(12), .foregroundColor: Theme.dim
             ])
+            return
+        }
+        if let readout = model.selectionReadout() {
+            drawSelection(model, readout)
             return
         }
         let unit = Self.unitName(model.document.units)
@@ -826,9 +851,92 @@ final class PropertiesDock: NSView {
         }
     }
 
-    private func layerText() -> String {
-        guard let layers = workspace?.active.model.document.layers else { return "图层" }
-        return layers.map(\.name).joined(separator: "\n")
+    private var expandedLayers: Set<Int> = []
+
+    private func drawSelection(_ model: EditorModel, _ readout: SelectionReadout) {
+        inkText(readout.name, x: 653, top: 103, size: 14, weight: .semibold, color: Theme.color(0xD1D1D1))
+        inkText("变换", x: 653, top: 132, size: 13, weight: .semibold, color: Theme.color(0xD1D1D1))
+        inkText("X \(readout.x) mm    Y \(readout.y) mm", x: 653, top: 156, size: 12, weight: .regular, color: Theme.color(0xE8E8E8))
+        inkText("宽 \(readout.width) mm    高 \(readout.height) mm", x: 653, top: 178, size: 12, weight: .regular, color: Theme.color(0xE8E8E8))
+        inkText("角度 0°", x: 653, top: 200, size: 12, weight: .regular, color: Theme.color(0xE8E8E8))
+        inkText("外观", x: 653, top: 230, size: 13, weight: .semibold, color: Theme.color(0xD1D1D1))
+        inkText("填色", x: 653, top: 254, size: 12, weight: .regular, color: Theme.color(0xE8E8E8))
+        inkText("描边 \(readout.stroke)", x: 760, top: 254, size: 12, weight: .regular, color: Theme.color(0xE8E8E8))
+        inkText("不透明度 \(readout.opacity)", x: 653, top: 276, size: 12, weight: .regular, color: Theme.color(0xE8E8E8))
+        inkText("对齐", x: 653, top: 308, size: 13, weight: .semibold, color: Theme.color(0xD1D1D1))
+        inkText("快速操作", x: 653, top: 360, size: 13, weight: .semibold, color: Theme.color(0xD1D1D1))
+        let offset = cropRect(653, 384, 120, 26)
+        let expand = cropRect(781, 384, 120, 26)
+        quickButton(offset, draw: { _ in }, title: "偏移路径")
+        quickButton(expand, draw: { _ in }, title: "扩展形状")
+        _ = model
+    }
+
+    private func drawLayers(_ model: EditorModel) {
+        let search = cropRect(652, 52, 220, 22)
+        Theme.color(0x303030).setFill()
+        NSBezierPath(roundedRect: search, xRadius: 3, yRadius: 3).fill()
+        ("搜索所有" as NSString).draw(at: NSPoint(x: search.minX + 8, y: search.minY + 3), withAttributes: [
+            .font: Theme.ui(12), .foregroundColor: Theme.color(0x8A8A8A)
+        ])
+        var y = search.maxY + 10
+        let font = Theme.ui(12)
+        for (index, layer) in model.document.layers.enumerated() {
+            let open = expandedLayers.contains(index)
+            ("\(open ? "⌄" : "›")" as NSString).draw(at: NSPoint(x: 656, y: y), withAttributes: [.font: font, .foregroundColor: Theme.text])
+            ("👁" as NSString).draw(at: NSPoint(x: 674, y: y), withAttributes: [.font: font, .foregroundColor: Theme.text])
+            (layer.name as NSString).draw(at: NSPoint(x: 720, y: y), withAttributes: [.font: font, .foregroundColor: Theme.text])
+            ("○" as NSString).draw(at: NSPoint(x: bounds.width - 48, y: y), withAttributes: [.font: font, .foregroundColor: Theme.color(0x8A8A8A)])
+            Theme.color(0x1473E6).setFill()
+            NSBezierPath(rect: NSRect(x: bounds.width - 28, y: y + 2, width: 10, height: 10)).fill()
+            y += 22
+            if open {
+                for item in layer.items where !item.hidden {
+                    ("👁  □  <\(item.name)>" as NSString).draw(at: NSPoint(x: 690, y: y), withAttributes: [.font: font, .foregroundColor: Theme.text])
+                    y += 20
+                }
+            }
+        }
+        let footer = "\(model.document.layers.count) 个图层"
+        (footer as NSString).draw(at: NSPoint(x: 656, y: bounds.height - 28), withAttributes: [
+            .font: Theme.ui(11), .foregroundColor: Theme.dim
+        ])
+    }
+
+    private func modelLayersContain(_ row: Int) -> Bool {
+        guard let count = workspace?.active.model.document.layers.count else { return false }
+        return row >= 0 && row < count
+    }
+
+    private func showDockMenu() {
+        let menu = NSMenu()
+        if tab == "图层" {
+            for title in IllustratorParity.layerMenu {
+                if title == "-" { menu.addItem(.separator()); continue }
+                let item = NSMenuItem(title: title, action: #selector(layerMenu(_:)), keyEquivalent: "")
+                item.target = self
+                menu.addItem(item)
+            }
+        } else {
+            let item = NSMenuItem(title: "面板选项...", action: #selector(layerMenu(_:)), keyEquivalent: "")
+            item.target = self
+            menu.addItem(item)
+        }
+        NSMenu.popUpContextMenu(menu, with: NSApp.currentEvent ?? NSEvent(), for: self)
+    }
+
+    @objc private func layerMenu(_ sender: NSMenuItem) {
+        guard let workspace else { return }
+        switch sender.title {
+        case "新建图层...", "新建子图层...":
+            _ = workspace.perform("在打开“新建图层”对话框时添加图层")
+        case "删除所选图层":
+            _ = workspace.perform("删除图层")
+        default:
+            workspace.active.model.status = sender.title
+            workspace.touch()
+        }
+        needsDisplay = true
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -838,7 +946,10 @@ final class PropertiesDock: NSView {
                 trackAdopted(hit.panel, title: hit.title, event: event)
                 return
             }
-            if point.x > bounds.width - 28 { return }
+            if point.x > bounds.width - 28 {
+                showDockMenu()
+                return
+            }
             let spots: [CGFloat] = [652, 701, 751.5, 801, 860]
             for index in tabs.indices {
                 let start = crop(spots[index], 0).x
@@ -854,7 +965,23 @@ final class PropertiesDock: NSView {
             return
         }
         CanvasFocus.restore(in: window)
-        guard tab == "属性", let workspace else { return }
+        guard let workspace else { return }
+        if tab == "图层" {
+            let row = Int((point.y - 84) / 22)
+            if modelLayersContain(row) {
+                if expandedLayers.contains(row) { expandedLayers.remove(row) } else { expandedLayers.insert(row) }
+                needsDisplay = true
+            }
+            return
+        }
+        guard tab == "属性" else { return }
+        if let readout = workspace.active.model.selectionReadout() {
+            if cropRect(653, 384, 120, 26).contains(point) { _ = workspace.perform("偏移路径") }
+            else if cropRect(781, 384, 120, 26).contains(point) { _ = workspace.perform("扩展形状") }
+            _ = readout
+            workspace.touch()
+            return
+        }
         placeControls()
         let model = workspace.active.model
         if unitRect.contains(point) {

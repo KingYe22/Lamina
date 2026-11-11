@@ -134,7 +134,9 @@ public enum MenuCatalog {
     public static let appMenu = MenuNode(title: "墨线", children: [
         item("关于墨线", action: "关于墨线"),
         .separator,
-        item("首选项", lookup: "打开“偏好设置”对话框"),
+        sub("首选项", [
+            item("常规…", action: "打开“偏好设置”对话框", lookup: "打开“偏好设置”对话框", explicit: chord(.character("k"), cmd))
+        ]),
         .separator,
         item("退出", lookup: "退出应用程序")
     ])
@@ -162,8 +164,10 @@ public enum MenuCatalog {
         sub("最近打开的文件", [item("清除最近的文件", action: "清除最近的文件")]),
         .separator,
         item("关闭"),
+        item("关闭全部", action: "关闭全部"),
         item("存储"),
         item("存储为"),
+        item("存储为模板", action: "存储为模板"),
         item("存储副本"),
         item("恢复"),
         .separator,
@@ -171,11 +175,17 @@ public enum MenuCatalog {
         sub("导出", [
             item("导出为多种屏幕所用格式"),
             item("导出为…", action: "导出为"),
+            item("导出所选项目", action: "导出所选项目"),
             item("存储为Web所用格式")
         ]),
         item("打包"),
+        item("脚本", action: "脚本"),
+        item("在 Bridge 中浏览", action: "在 Bridge 中浏览"),
         .separator,
-        item("文档设置"),
+        item("文档设置", explicit: chord(.character("p"), [opt, cmd])),
+        item("版本历史记录", action: "版本历史记录"),
+        item("共享", action: "共享"),
+        item("邀请", action: "邀请"),
         sub("文档颜色模式", [
             item("RGB 颜色", action: "颜色模式 RGB"),
             item("CMYK 颜色", action: "颜色模式 CMYK")
@@ -196,16 +206,26 @@ public enum MenuCatalog {
         item("贴在后面"),
         item("就地粘贴"),
         item("在所有画板上粘贴"),
+        item("粘贴时不包含格式", action: "粘贴时不包含格式"),
         item("清除", action: "清除"),
         .separator,
         item("查找和替换", action: "查找和替换"),
+        item("查找下一个", action: "查找下一个"),
         item("拼写检查"),
+        item("编辑原稿", action: "编辑原稿"),
         sub("编辑颜色", [
-            item("反相", action: "反相颜色"),
+            item("重新着色图稿", action: "重新着色图稿"),
+            item("反相颜色", action: "反相颜色"),
             item("转换为灰度", action: "转换为灰度"),
+            item("前后混合", action: "前后混合"),
+            item("垂直混合", action: "垂直混合"),
+            item("水平混合", action: "水平混合"),
+            item("调整色彩平衡", action: "调整色彩平衡"),
             item("调整饱和度", action: "调整饱和度")
         ]),
+        item("指定配置文件", action: "指定配置文件"),
         item("颜色设置"),
+        item("我的设置", action: "我的设置"),
         item("键盘快捷键")
     ])
 
@@ -214,7 +234,7 @@ public enum MenuCatalog {
             item("再次变换"),
             item("移动"),
             item("旋转", action: "旋转对话框"),
-            item("对称", action: "对称对话框"),
+            item("镜像", action: "对称对话框"),
             item("缩放", action: "缩放对话框"),
             item("倾斜", action: "倾斜对话框"),
             item("分别变换"),
@@ -232,24 +252,35 @@ public enum MenuCatalog {
             item("水平右对齐", action: "水平右对齐"),
             item("垂直顶对齐", action: "垂直顶对齐"),
             item("垂直居中对齐", action: "垂直居中对齐"),
-            item("垂直底对齐", action: "垂直底对齐")
+            item("垂直底对齐", action: "垂直底对齐"),
+            item("水平与垂直居中对齐", action: "水平居中对齐")
         ]),
+        item("分布", action: "分布"),
         item("编组"),
         item("取消编组"),
+        item("取消全部编组", action: "取消全部编组"),
         sub("锁定", [
-            item("所选对象", action: "锁定所选对象", lookup: "锁定所选对象")
+            item("所选对象", action: "锁定所选对象", lookup: "锁定所选对象"),
+            item("上方所有图稿", action: "锁定上方所有图稿"),
+            item("其它图层", action: "锁定其它图层")
         ]),
         item("全部解锁"),
         sub("隐藏", [
-            item("所选对象", action: "隐藏所选对象", lookup: "隐藏所选对象")
+            item("所选对象", action: "隐藏所选对象", lookup: "隐藏所选对象"),
+            item("上方所有图稿", action: "隐藏上方所有图稿"),
+            item("其它图层", action: "隐藏其它图层")
         ]),
         item("显示全部"),
+        item("切片", action: "切片"),
+        item("文本绕排", action: "文本绕排"),
+        item("图表", action: "图表"),
+        item("透视", action: "透视"),
         item("扩展", action: "扩展"),
         item("扩展外观", action: "扩展外观"),
         item("栅格化", action: "栅格化"),
         sub("路径", [
             item("连接"),
-            item("平均"),
+            item("平均", explicit: chord(.character("j"), [opt, cmd])),
             item("轮廓化描边", action: "轮廓化描边"),
             item("偏移路径", action: "偏移路径"),
             item("简化", action: "简化")
@@ -302,9 +333,11 @@ public enum MenuCatalog {
             item("Helvetica", action: "字体 Helvetica"),
             item("Times", action: "字体 Times")
         ]),
-        sub("大小", [6, 8, 9, 10, 12, 14, 18, 24, 36, 48, 72].map { size in
+        sub("大小", [6, 7, 8, 9, 10, 11, 12, 14, 18, 21, 24, 36, 48, 60, 72].map { size in
             item("\(size) pt", action: "字号 \(size)")
-        }),
+        } + [item("其它", action: "字号 其它")]),
+        item("字形", action: "字形"),
+        item("类型转换", action: "类型转换"),
         item("区域文字选项", action: "区域文字选项"),
         sub("路径文字", [
             item("路径文字", action: "转为路径文字"),
@@ -323,18 +356,41 @@ public enum MenuCatalog {
         item("反向", action: "反向选择"),
         item("上方的下一个对象"),
         item("下方的下一个对象", explicit: chord(.leftBracket, [opt, cmd])),
+        item("启动全局编辑", action: "启动全局编辑"),
+        item("编辑所选对象", action: "编辑所选对象"),
+        item("更新选区", action: "更新选区"),
         sub("相同", [
+            item("外观", action: "相同外观"),
+            item("外观属性", action: "相同外观属性"),
+            item("混合模式", action: "相同混合模式"),
+            item("填色和描边", action: "相同填色和描边"),
             item("填充颜色", action: "相同填充颜色"),
+            item("不透明度", action: "相同不透明度"),
             item("描边颜色", action: "相同描边颜色"),
             item("描边宽度", action: "相同描边宽度"),
-            item("不透明度", action: "相同不透明度")
+            item("图形样式", action: "相同图形样式"),
+            item("符号实例", action: "相同符号实例"),
+            item("链接块系列", action: "相同链接块系列"),
+            item("字体", action: "相同字体"),
+            item("字体大小", action: "相同字体大小"),
+            item("文本填充颜色", action: "相同文本填充颜色"),
+            item("文本描边颜色", action: "相同文本描边颜色"),
+            item("文本填充描边颜色", action: "相同文本填充描边颜色"),
+            item("字符样式", action: "相同字符样式"),
+            item("段落样式", action: "相同段落样式")
         ]),
         sub("对象", [
             item("全部对象", action: "选择全部对象"),
-            item("文本对象", action: "选择文本对象"),
             item("同图层上的对象", action: "选择同图层"),
             item("方向手柄", action: "选择方向手柄"),
-            item("剪切蒙版", action: "选择剪切蒙版")
+            item("毛刷画笔描边", action: "选择毛刷画笔描边"),
+            item("画笔描边", action: "选择画笔描边"),
+            item("剪切蒙版", action: "选择剪切蒙版"),
+            item("游离点", action: "选择游离点"),
+            item("所有文本对象", action: "选择所有文本对象"),
+            item("点状文字", action: "选择点状文字"),
+            item("区域文字", action: "选择区域文字对象"),
+            item("文本对象", action: "选择文本对象")
         ]),
         item("存储所选对象", action: "存储所选对象")
     ])
@@ -343,15 +399,16 @@ public enum MenuCatalog {
         item("应用上一个效果"),
         item("上一个效果"),
         item("文档栅格效果设置", action: "文档栅格效果设置"),
-        sub("3D和材质", [
-            item("凸出与斜角", action: "效果 凸出"),
-            item("绕转", action: "效果 绕转")
+        sub("3D 和材质", [
+            item("凸出和斜角", action: "效果 凸出"),
+            item("绕转", action: "效果 绕转"),
+            item("3D 经典", action: "效果 3D 经典")
         ]),
-        sub("SVG滤镜", [
+        sub("SVG 滤镜", [
             item("高斯模糊", action: "SVG滤镜 高斯模糊"),
             item("投影", action: "SVG滤镜 投影")
         ]),
-        sub("变形", ["弧形", "拱形", "旗帜", "波形", "鱼眼", "膨胀", "扭转"].map { item($0, action: "变形 \($0)") }),
+        sub("变形", ["弧形", "拱形", "旗形", "波形", "鱼眼", "膨胀", "扭转"].map { item($0, action: "变形 \($0)") }),
         sub("扭曲和变换", [
             item("变换", action: "扭曲 变换"),
             item("扭拧", action: "扭曲 扭拧"),
@@ -361,7 +418,7 @@ public enum MenuCatalog {
         ]),
         item("栅格化", action: "栅格化"),
         sub("路径", [
-            item("位移路径", action: "效果 位移路径"),
+            item("偏移路径", action: "效果 位移路径"),
             item("轮廓化描边", action: "轮廓化描边")
         ]),
         sub("路径查找器", [
@@ -387,15 +444,23 @@ public enum MenuCatalog {
 
     public static let viewMenu = sub("视图", [
         item("轮廓"),
-        item("GPU预览"),
+        item("使用 GPU 查看", action: "在文档的 GPU 和 CPU 预览之间切换", lookup: "在文档的 GPU 和 CPU 预览之间切换"),
         item("叠印预览"),
         item("像素预览"),
+        item("校样设置", action: "校样设置"),
+        item("校样颜色", action: "校样颜色"),
         .separator,
-        item("放大"),
+        item("放大", explicit: chord(.plus, cmd)),
         item("缩小"),
         item("画板适合窗口大小", action: "画板适合窗口大小", explicit: chord(.character("0"), cmd)),
         item("全部适合窗口大小"),
-        item("实际大小"),
+        item("实际大小", explicit: chord(.character("1"), cmd)),
+        item("旋转视图", action: "旋转视图"),
+        item("屏幕模式", action: "屏幕模式"),
+        item("裁切视图", action: "裁切视图"),
+        item("显示切片", action: "显示切片"),
+        item("新建视图", action: "新建视图"),
+        item("编辑视图", action: "编辑视图"),
         .separator,
         item("隐藏边缘", action: "隐藏边缘", explicit: chord(.character("h"), cmd)),
         item("隐藏画板"),
@@ -419,11 +484,23 @@ public enum MenuCatalog {
     ])
 
     public static let windowMenu = sub("窗口", [
+        item("新建窗口", action: "新建窗口"),
+        sub("排列", [
+            item("层叠", action: "排列 层叠"),
+            item("平铺", action: "排列 平铺"),
+            item("全部合并", action: "排列 全部合并")
+        ]),
+        item("控制", action: "控制"),
+        item("应用程序栏", action: "应用程序栏"),
+        item("上下文任务栏", action: "上下文任务栏"),
         sub("工作区", [
             item("基本功能", action: "工作区 基本功能"),
+            item("快速入门", action: "工作区 快速入门"),
             item("传统基本功能", action: "工作区 传统基本功能"),
             item("排版", action: "工作区 排版"),
+            item("版面", action: "工作区 版面"),
             item("绘画", action: "工作区 绘画"),
+            item("上色", action: "工作区 上色"),
             item("描摹", action: "工作区 描摹"),
             item("重置基本功能", action: "工作区 重置")
         ]),
@@ -474,6 +551,7 @@ public enum MenuCatalog {
 
     /// Chord shown in the menu. Prefers the menu spec's explicit chord, then the first menu-eligible chord of the lookup entry.
     public static func menuChord(for node: MenuNode, keymap: UserKeymap = UserKeymap()) -> KeyChord? {
+        if IllustratorParity.hiddenShortcutTitles.contains(node.title) { return nil }
         if let explicit = node.explicit { return explicit }
         let key = node.lookup ?? node.action
         if let custom = keymap.overrides[key] { return custom }
