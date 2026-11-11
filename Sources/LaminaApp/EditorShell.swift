@@ -114,16 +114,13 @@ final class EditorShell: NSView, ToolbarGripHost {
             edgeGuide.frame = NSRect(x: guideX, y: 0, width: thickness, height: bounds.height)
         }
         applyDockedFrames(solved, dockX: dockX, toolWidth: toolWidth, bodyY: bodyY)
-        if window?.inLiveResize == true { userResizedWindow = true }
         holdFloatingScreens()
         promoteOutsideFloaters()
         // Panels take their metric frames before the bar looks for open canvas.
         floaters.layoutSubtreeIfNeeded()
-        // The design window is where 外观 and 对齐 are measured. A smaller
-        // window, including the shortcut test, keeps the held frames: forcing
-        // the metric rect there puts a panel over the home screen.
-        if !userResizedWindow,
-           bounds.width >= WorkspaceMetrics.windowWidth - 1,
+        // The design window is where 外观 and 对齐 are measured. Anywhere else,
+        // including the shortcut test's shorter window, the held frames stay.
+        if bounds.width >= WorkspaceMetrics.windowWidth - 1,
            bounds.height >= WorkspaceMetrics.windowHeight - 1 {
             floaters.restoreUntouchedFrames()
         }
@@ -147,17 +144,9 @@ final class EditorShell: NSView, ToolbarGripHost {
 
     private var lastWindowFrame: NSRect?
     private var lastHostFrame: NSRect?
-    /// False until the user drags a window edge. `setContentSize` and `center()`
-    /// are not that, and must not slide the panels off the metric grid.
-    private var userResizedWindow = false
     /// Last screen-hold pass that actually moved a panel, for the screenshot report.
     private var holdTrace = ""
     private var promoteTrace = ""
-
-    override func viewWillStartLiveResize() {
-        super.viewWillStartLiveResize()
-        userResizedWindow = true
-    }
     /// False until the window is on screen at a frame the display can hold.
     /// `center()` and the screen clamp run before that and must not walk panels.
     private var floatingHoldSettled = false
