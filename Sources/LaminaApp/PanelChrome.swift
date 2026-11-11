@@ -155,12 +155,22 @@ final class FloatingPanels: NSView {
                 WorkspaceMetrics.stroke.rect(in: bounds.height)
             ]
             for (panel, rect) in zip(panels, metrics) where panel.dockColumnID == nil && panel.superview === self && !panel.dragging {
+                panel.metricFrame = rect
                 panel.frame = rect
                 panel.preferredSize = rect.size
                 panel.expandedHeight = rect.height
             }
         }
         seatAnchoredPanels()
+        reapplyRestingFrames()
+    }
+
+    /// Puts a panel that has not been moved back on the metric origin.
+    func reapplyRestingFrames() {
+        for panel in panels where panel.keepsMetricOrigin && panel.superview === self && !panel.dragging {
+            guard let metric = panel.metricFrame, panel.frame != metric else { continue }
+            panel.frame = metric
+        }
     }
 
     private var placedSize = NSSize.zero
@@ -179,6 +189,7 @@ final class FloatingPanels: NSView {
     func poseRightShoulder(applySnap: Bool) {
         layoutSubtreeIfNeeded()
         guard bounds.width > 400, let panel = panels.first(where: { $0.tabs == [.appearance] }) else { return }
+        panel.keepsMetricOrigin = false
         let gap: CGFloat = 4
         panel.frame.origin.x = bounds.width - panel.frame.width - gap
         let magnet = DockSnap.magnet(
@@ -198,6 +209,10 @@ final class FloatingPanels: NSView {
     func restoreMetricFrames() {
         placed = false
         placedSize = .zero
+        for panel in panels {
+            panel.keepsMetricOrigin = true
+            panel.metricFrame = nil
+        }
         showGuides([])
         needsLayout = true
         layoutSubtreeIfNeeded()
@@ -266,6 +281,7 @@ final class FloatingPanels: NSView {
         let host = dockBox(bounds)
         if let shoulder = rightShoulder {
             for panel in panels where panel.columnSeat == .right {
+                panel.keepsMetricOrigin = false
                 let seated = DockSnap.commitShoulder(
                     proposed: dockBox(panel.frame),
                     shoulder: shoulder,
@@ -277,6 +293,7 @@ final class FloatingPanels: NSView {
             }
         }
         for panel in panels where panel.columnSeat == .left {
+            panel.keepsMetricOrigin = false
             let seated = DockSnap.commitLeft(
                 proposed: dockBox(panel.frame),
                 host: host,
@@ -317,6 +334,7 @@ final class FloatingPanels: NSView {
             addSubview(panel, positioned: .below, relativeTo: guideOverlay)
         }
         if let shell = superview {
+            panel.keepsMetricOrigin = false
             panel.frame = convert(frameInShell, from: shell)
         }
     }
@@ -369,6 +387,10 @@ final class FloatPanel: NSView {
     var dragging = false
     /// Mouse-up landed while a dock guide was lit. Layout keeps seating it.
     var columnSeat: DockAnchor = .none
+    /// False after a drag, resize, dock, or screen-position hold.
+    var keepsMetricOrigin = true
+    /// Host-local metric frame. Set once, when the panel is first placed.
+    var metricFrame: NSRect?
     var preferredSize = NSSize.zero
     var expandedHeight: CGFloat = 0
     var dockColumnID: String?
@@ -393,10 +415,19 @@ final class FloatPanel: NSView {
         layer?.masksToBounds = true
         layer?.backgroundColor = NSColor.clear.cgColor
         layer?.cornerRadius = 0
-        for field in [weightField, limitField, xField, yField, wField, hField] {
+        // Weight fields match 0.4.12. The transform fields stay out of the
+        // hierarchy until that tab is shown: adding them to a resting panel
+        // slid Appearance and Align 5 pt off the metric grid.
+        for field in [weightField, limitField] {
             field.alignment = .center
             field.font = Theme.ui(13)
             addSubview(field)
+        }
+        for field in [xField, yField, wField, hField] {
+            field.alignment = .center
+            field.font = Theme.ui(13)
+            field.isHidden = true
+            field.autoresizingMask = []
         }
         weightField.onLeave = { [weak self] in self?.applyWeight() }
         limitField.onLeave = { [weak self] in self?.applyLimit() }
@@ -437,12 +468,28 @@ final class FloatPanel: NSView {
         return titleHeight
     }
 
+    override func setFrameOrigin(_ newOrigin: NSPoint) {
+        guard let metric = metricFrame else {
+            super.setFrameOrigin(newOrigin)
+            return
+        }
+        let kept = RestingFrame.origin(
+            proposedX: Double(newOrigin.x), proposedY: Double(newOrigin.y),
+            metricX: Double(metric.origin.x), metricY: Double(metric.origin.y),
+            proposedWidth: Double(bounds.width), proposedHeight: Double(bounds.height),
+            metricWidth: Double(metric.width), metricHeight: Double(metric.height),
+            keepsMetric: keepsMetricOrigin
+        )
+        super.setFrameOrigin(NSPoint(x: kept.x, y: kept.y))
+    }
+
     override func layout() {
         super.layout()
         let showStroke = !collapsed && !suppressContent && !embeddedInDock && active == .stroke && !strokeOptionsHidden
         weightField.isHidden = !showStroke
         limitField.isHidden = !showStroke
         let showTransform = !collapsed && !suppressContent && !embeddedInDock && active == .transform
+        if showTransform { installTransformFields() }
         for field in [xField, yField, wField, hField] { field.isHidden = !showTransform }
         if showTransform {
             let fields = [xField, yField, wField, hField]
@@ -457,6 +504,30 @@ final class FloatPanel: NSView {
             weightField.textColor = ink
             limitField.textColor = ink
         }
+        restoreRestingOrigin()
+    }
+
+    private var transformFieldsInstalled = false
+
+    private func installTransformFields() {
+        guard !transformFieldsInstalled else { return }
+        transformFieldsInstalled = true
+        for field in [xField, yField, wField, hField] where field.superview !== self {
+            addSubview(field)
+        }
+    }
+
+    private func restoreRestingOrigin() {
+        guard let metric = metricFrame else { return }
+        let kept = RestingFrame.origin(
+            proposedX: Double(frame.origin.x), proposedY: Double(frame.origin.y),
+            metricX: Double(metric.origin.x), metricY: Double(metric.origin.y),
+            proposedWidth: Double(bounds.width), proposedHeight: Double(bounds.height),
+            metricWidth: Double(metric.width), metricHeight: Double(metric.height),
+            keepsMetric: keepsMetricOrigin
+        )
+        let origin = NSPoint(x: kept.x, y: kept.y)
+        if frame.origin != origin { super.setFrameOrigin(origin) }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -1274,6 +1345,7 @@ final class FloatPanel: NSView {
     /// Title, tab, and button drags all come through here. The pointer is handed
     /// to `PanelDragPath`, which is the measured Illustrator zone test.
     private func trackDrag(from event: NSEvent, first: NSEvent?) {
+        keepsMetricOrigin = false
         dragging = true
         let source = event.window ?? window
         guard let shell = editorShell else {
@@ -1316,6 +1388,7 @@ final class FloatPanel: NSView {
     }
 
     private func dragResize(_ event: NSEvent) {
+        keepsMetricOrigin = false
         let start = event.locationInWindow
         let height = frame.size.height
         let origin = frame.origin

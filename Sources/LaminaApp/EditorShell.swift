@@ -116,8 +116,20 @@ final class EditorShell: NSView, ToolbarGripHost {
         applyDockedFrames(solved, dockX: dockX, toolWidth: toolWidth, bodyY: bodyY)
         holdFloatingScreens()
         promoteOutsideFloaters()
+        // Panels take their metric frames before the bar looks for open canvas.
+        floaters.layoutSubtreeIfNeeded()
+        floaters.reapplyRestingFrames()
         placeContextBar()
         dock.needsDisplay = true
+    }
+
+    func restingFrameReport() -> String {
+        let host = floaters.frame
+        let lines = floaters.dockPanels().map { panel -> String in
+            let home = panel.superview === floaters ? "host" : (panel.superview === self ? "shell" : "other")
+            return "\(panel.tabs.map(\.rawValue).joined(separator: "+")) x=\(panel.frame.minX) y=\(panel.frame.minY) w=\(panel.frame.width) h=\(panel.frame.height) \(home) metric=\(panel.keepsMetricOrigin)"
+        }
+        return "host x=\(host.minX) y=\(host.minY) w=\(host.width) h=\(host.height) " + lines.joined(separator: " | ")
     }
 
     private var lastWindowFrame: NSRect?
@@ -163,12 +175,16 @@ final class EditorShell: NSView, ToolbarGripHost {
                 )
                 let originX = inHost ? placed.x - Double(newHost.minX) : placed.x
                 let originY = inHost ? placed.y - Double(newHost.minY) : placed.y
-                panel.frame = NSRect(
+                let held = NSRect(
                     x: CGFloat(originX),
                     y: CGFloat(originY),
                     width: CGFloat(placed.width),
                     height: CGFloat(placed.height)
                 )
+                if abs(held.minX - panel.frame.minX) > 0.5 || abs(held.minY - panel.frame.minY) > 0.5 {
+                    panel.keepsMetricOrigin = false
+                }
+                panel.frame = held
             }
         }
         lastWindowFrame = newWindow
@@ -514,6 +530,7 @@ final class EditorShell: NSView, ToolbarGripHost {
             guard let panel = panels[id], !panel.dragging else { continue }
             let floating = DockLayer.layer(columnID: panel.dockColumnID, dragging: panel.dragging) == .floating
             place(panel, floating: floating)
+            panel.keepsMetricOrigin = false
             panel.frame = nsRect(box)
         }
         columnFrames = frames

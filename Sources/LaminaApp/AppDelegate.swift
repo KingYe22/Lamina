@@ -290,6 +290,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         parkArtboard(model)
         root.editor.sync()
         root.displayIfNeeded()
+        let resting = "resting \(root.editor.restingFrameReport())\n"
+        try? FileHandle.standardError.write(contentsOf: Data(resting.utf8))
         writePNG(root, to: dir.appendingPathComponent("workspace.png"))
         captureP0Proofs(in: dir, model: model)
         centerArtboard(model)
